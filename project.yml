@@ -1,0 +1,87 @@
+name: FlashDesk
+options:
+  bundleIdPrefix: com.xiaoyu
+  deploymentTarget:
+    macOS: '14.0'
+  developmentLanguage: zh-Hans
+  createIntermediateGroups: true
+  xcodeVersion: '26.0'
+packages:
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    exactVersion: 2.10.0
+settings:
+  base:
+    SWIFT_VERSION: '6.0'
+    MACOSX_DEPLOYMENT_TARGET: '14.0'
+    MARKETING_VERSION: '0.1.0'
+    CURRENT_PROJECT_VERSION: 1
+    SPARKLE_PUBLIC_ED_KEY: 'NgorrvaZPObmbOUEmKbbCvPbPqcD+kcw7E2NRTfxlKI='
+    CODE_SIGN_IDENTITY: '-'
+    CODE_SIGN_STYLE: Manual
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+    SWIFT_STRICT_CONCURRENCY: complete
+targets:
+  FlashDesk:
+    type: application
+    platform: macOS
+    dependencies:
+      - package: Sparkle
+        product: Sparkle
+    sources:
+      - path: FlashDesk
+        excludes: ['Resources', 'Generated']
+      - path: FlashDesk/Generated/FlashDeskCore.swift
+      - path: FlashDesk/Resources/FlashDesk.icon
+        type: file
+        buildPhase: resources
+      - path: FlashDesk/Resources/Licenses/Sparkle.txt
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.xiaoyu.flashdesk
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: FlashDesk/Resources/Info.plist
+        ENABLE_APP_SANDBOX: NO
+        ENABLE_HARDENED_RUNTIME: YES
+        COMBINE_HIDPI_IMAGES: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: FlashDesk
+        HEADER_SEARCH_PATHS: '$(inherited) $(SRCROOT)/FlashDesk/Generated'
+        SWIFT_INCLUDE_PATHS: '$(inherited) $(SRCROOT)/FlashDesk/Generated'
+        LIBRARY_SEARCH_PATHS: '$(inherited) $(BUILT_PRODUCTS_DIR)'
+        OTHER_LDFLAGS: '$(inherited) -lflashdesk_core -framework IOKit -framework CoreFoundation -framework Security -framework SystemConfiguration -liconv -lresolv -lc++'
+      configs:
+        Debug:
+          ENABLE_HARDENED_RUNTIME: NO
+    preBuildScripts:
+      - name: Build Rust Core and generate UniFFI bindings
+        script: '"${SRCROOT}/script/build_rust.sh"'
+        basedOnDependencyAnalysis: false
+        outputFiles:
+          - '$(BUILT_PRODUCTS_DIR)/libflashdesk_core.a'
+  FlashDeskTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources: [FlashDeskTests]
+    dependencies:
+      - target: FlashDesk
+      - package: Sparkle
+        product: Sparkle
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.xiaoyu.flashdesk.tests
+        GENERATE_INFOPLIST_FILE: YES
+        HEADER_SEARCH_PATHS: '$(inherited) $(SRCROOT)/FlashDesk/Generated'
+        SWIFT_INCLUDE_PATHS: '$(inherited) $(SRCROOT)/FlashDesk/Generated'
+schemes:
+  FlashDesk:
+    build:
+      targets:
+        FlashDesk: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets: [FlashDeskTests]
+    archive:
+      config: Release

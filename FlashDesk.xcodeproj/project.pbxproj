@@ -1,0 +1,668 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		02087EA88F9391FA245050FC /* WorkspaceModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = C69DBA017FD5DB3C23EB03CE /* WorkspaceModels.swift */; };
+		02DF582AA8D96D41D1A46385 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 477DD85AEDE6FCD1F6921738 /* ContentView.swift */; };
+		0CD31FD7D1EC4A3D5EE850FA /* ExportDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 569F2F3BE1F6AFA7CF617E5A /* ExportDocument.swift */; };
+		144BA2C5F5167D2C7A8249E4 /* WorkbenchOperations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1904249043AA897B2E8D33EA /* WorkbenchOperations.swift */; };
+		1C0FCA369C8435EAAD90B0F9 /* MemoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 046A475EB700FEAE036A9568 /* MemoryView.swift */; };
+		28876DD0B82E3DD741A3BA06 /* UpdateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47C38A173F257381B955A77A /* UpdateTests.swift */; };
+		31BDBB8AF7DC3B5CF0590FF0 /* UpdateService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6ECEC1FE24D10381215A60F6 /* UpdateService.swift */; };
+		3354097E36FBE15EF8831292 /* WindowLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FCF7C06363831A12F7A43F5 /* WindowLayoutTests.swift */; };
+		36D6FE044F58105EA553F123 /* WorkbenchCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5243CF4E0F5C30C69FB03F04 /* WorkbenchCommands.swift */; };
+		5760651D9CAED0F1D0CD754B /* SaveProfileSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B65A03823596EC8FF209D0F /* SaveProfileSheet.swift */; };
+		5A46808E748F62DBAB7984E6 /* ChipPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A99D86ACA20D93C45B57D40 /* ChipPicker.swift */; };
+		5DA6080DA903B97027445446 /* CoreIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC29B0F063FA27FCE15663E7 /* CoreIntegrationTests.swift */; };
+		671D09D811C27CDB268ABC1C /* TargetSetupSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B5E77445C0C69317F0F684D /* TargetSetupSheet.swift */; };
+		6ECA7675C35D2E48EA5C7972 /* FlashDeskApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01F4036369D8EF5861E4F564 /* FlashDeskApp.swift */; };
+		8DDB90E9D3CE2890C27CB196 /* FlashDeskCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84F807082F01CEE67594A7EA /* FlashDeskCore.swift */; };
+		8F2220EA70848AC63E08DEE9 /* Sparkle.txt in Resources */ = {isa = PBXBuildFile; fileRef = BA716DEBD37DF38BB5E2CD1B /* Sparkle.txt */; };
+		934CA2A77B41C3D418CB5D34 /* RustService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A620891E40EF1C65444FE2B /* RustService.swift */; };
+		94C8C076A710CA7F88475F5D /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 8023402D29BF9C0295723987 /* Sparkle */; };
+		A368C953C25F6C29963A01DD /* FirmwareLayoutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B935F0E6832C92B1784E1C2 /* FirmwareLayoutView.swift */; };
+		A6DDAFFD613712E1D7B26E15 /* LogsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BB0C98D732365029F21B7C4 /* LogsView.swift */; };
+		C232839C53A2BDACA1B4F3F3 /* Formatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB55020249FDA9F67BCD2FC4 /* Formatting.swift */; };
+		C63B2C8BD6C0C817EB2417DA /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 5E9B0A5A2251E6A6E0C1A12C /* Sparkle */; };
+		D34472C8A440AF6A70C4DB7D /* FlashDesk.icon in Resources */ = {isa = PBXBuildFile; fileRef = 470B4BB1CF54142AC07D8619 /* FlashDesk.icon */; };
+		E4A056D966943E7CA8F333A7 /* ProgrammingInspector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72B87324D2A384BE58AFF294 /* ProgrammingInspector.swift */; };
+		E6D921C5AE243285B4FEE4B9 /* FlashView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A5FC861BEE6B20C91D3B303 /* FlashView.swift */; };
+		F35F77FE040327F9CC9C8439 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14384D295C65B1DC5243EB70 /* SettingsView.swift */; };
+		F393CB654662075668E088D0 /* WorkbenchStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D69CC2EC85EF8DF673A9AA9 /* WorkbenchStore.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		BC7BAC94F392BF8D807CD414 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3730E7BB946F7D3A3BD7BF46 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = AF77CC599218154C734D8695;
+			remoteInfo = FlashDesk;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		01F4036369D8EF5861E4F564 /* FlashDeskApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlashDeskApp.swift; sourceTree = "<group>"; };
+		046A475EB700FEAE036A9568 /* MemoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryView.swift; sourceTree = "<group>"; };
+		0A620891E40EF1C65444FE2B /* RustService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RustService.swift; sourceTree = "<group>"; };
+		14384D295C65B1DC5243EB70 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		1904249043AA897B2E8D33EA /* WorkbenchOperations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkbenchOperations.swift; sourceTree = "<group>"; };
+		1A99D86ACA20D93C45B57D40 /* ChipPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChipPicker.swift; sourceTree = "<group>"; };
+		1B935F0E6832C92B1784E1C2 /* FirmwareLayoutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirmwareLayoutView.swift; sourceTree = "<group>"; };
+		2B5E77445C0C69317F0F684D /* TargetSetupSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TargetSetupSheet.swift; sourceTree = "<group>"; };
+		3BB0C98D732365029F21B7C4 /* LogsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogsView.swift; sourceTree = "<group>"; };
+		470B4BB1CF54142AC07D8619 /* FlashDesk.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = FlashDesk.icon; sourceTree = "<group>"; };
+		477DD85AEDE6FCD1F6921738 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		47C38A173F257381B955A77A /* UpdateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateTests.swift; sourceTree = "<group>"; };
+		4FCF7C06363831A12F7A43F5 /* WindowLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowLayoutTests.swift; sourceTree = "<group>"; };
+		5243CF4E0F5C30C69FB03F04 /* WorkbenchCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkbenchCommands.swift; sourceTree = "<group>"; };
+		569F2F3BE1F6AFA7CF617E5A /* ExportDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportDocument.swift; sourceTree = "<group>"; };
+		5D69CC2EC85EF8DF673A9AA9 /* WorkbenchStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkbenchStore.swift; sourceTree = "<group>"; };
+		6ECEC1FE24D10381215A60F6 /* UpdateService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateService.swift; sourceTree = "<group>"; };
+		72B87324D2A384BE58AFF294 /* ProgrammingInspector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProgrammingInspector.swift; sourceTree = "<group>"; };
+		7A5FC861BEE6B20C91D3B303 /* FlashView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlashView.swift; sourceTree = "<group>"; };
+		84F807082F01CEE67594A7EA /* FlashDeskCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlashDeskCore.swift; sourceTree = "<group>"; };
+		8B65A03823596EC8FF209D0F /* SaveProfileSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveProfileSheet.swift; sourceTree = "<group>"; };
+		8DCA87BCB189B1BE0B59DFE4 /* FlashDeskTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FlashDeskTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		BA716DEBD37DF38BB5E2CD1B /* Sparkle.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = Sparkle.txt; sourceTree = "<group>"; };
+		C69DBA017FD5DB3C23EB03CE /* WorkspaceModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceModels.swift; sourceTree = "<group>"; };
+		D2B8FB7D3B2A65FA1C8B7343 /* FlashDesk.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FlashDesk.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		FB55020249FDA9F67BCD2FC4 /* Formatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Formatting.swift; sourceTree = "<group>"; };
+		FC29B0F063FA27FCE15663E7 /* CoreIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreIntegrationTests.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		696A1E95E43F32090CF10BA5 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				94C8C076A710CA7F88475F5D /* Sparkle in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AD64EF2AF07B02E6CEA784C8 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C63B2C8BD6C0C817EB2417DA /* Sparkle in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		1884D73BF52DE74C8CFC9E52 /* Licenses */ = {
+			isa = PBXGroup;
+			children = (
+				BA716DEBD37DF38BB5E2CD1B /* Sparkle.txt */,
+			);
+			path = Licenses;
+			sourceTree = "<group>";
+		};
+		1B7A154752624351EC5D0736 /* Stores */ = {
+			isa = PBXGroup;
+			children = (
+				1904249043AA897B2E8D33EA /* WorkbenchOperations.swift */,
+				5D69CC2EC85EF8DF673A9AA9 /* WorkbenchStore.swift */,
+			);
+			path = Stores;
+			sourceTree = "<group>";
+		};
+		1E2AAFDC3397F2C8AF1BFACF /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				470B4BB1CF54142AC07D8619 /* FlashDesk.icon */,
+				1884D73BF52DE74C8CFC9E52 /* Licenses */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		5C19C4417C255FCC039FC1D4 /* Support */ = {
+			isa = PBXGroup;
+			children = (
+				569F2F3BE1F6AFA7CF617E5A /* ExportDocument.swift */,
+				FB55020249FDA9F67BCD2FC4 /* Formatting.swift */,
+			);
+			path = Support;
+			sourceTree = "<group>";
+		};
+		6E512F49A12120E561F75612 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				D2B8FB7D3B2A65FA1C8B7343 /* FlashDesk.app */,
+				8DCA87BCB189B1BE0B59DFE4 /* FlashDeskTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		77638CF804675D104AC19F90 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				01F4036369D8EF5861E4F564 /* FlashDeskApp.swift */,
+				5243CF4E0F5C30C69FB03F04 /* WorkbenchCommands.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		8F95C560E5DDA6AF6CFC7DA7 /* FlashDeskTests */ = {
+			isa = PBXGroup;
+			children = (
+				FC29B0F063FA27FCE15663E7 /* CoreIntegrationTests.swift */,
+				47C38A173F257381B955A77A /* UpdateTests.swift */,
+				4FCF7C06363831A12F7A43F5 /* WindowLayoutTests.swift */,
+			);
+			path = FlashDeskTests;
+			sourceTree = "<group>";
+		};
+		912A31C6D98BE8D00DAF47E2 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				C69DBA017FD5DB3C23EB03CE /* WorkspaceModels.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		9ADAE75EDADF75D3546E7746 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				1A99D86ACA20D93C45B57D40 /* ChipPicker.swift */,
+				477DD85AEDE6FCD1F6921738 /* ContentView.swift */,
+				1B935F0E6832C92B1784E1C2 /* FirmwareLayoutView.swift */,
+				7A5FC861BEE6B20C91D3B303 /* FlashView.swift */,
+				3BB0C98D732365029F21B7C4 /* LogsView.swift */,
+				046A475EB700FEAE036A9568 /* MemoryView.swift */,
+				72B87324D2A384BE58AFF294 /* ProgrammingInspector.swift */,
+				8B65A03823596EC8FF209D0F /* SaveProfileSheet.swift */,
+				14384D295C65B1DC5243EB70 /* SettingsView.swift */,
+				2B5E77445C0C69317F0F684D /* TargetSetupSheet.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		AB3DD42F88BD2CCD113BBA09 /* FlashDesk */ = {
+			isa = PBXGroup;
+			children = (
+				77638CF804675D104AC19F90 /* App */,
+				CB9576E8857572418D0BC004 /* Generated */,
+				912A31C6D98BE8D00DAF47E2 /* Models */,
+				1E2AAFDC3397F2C8AF1BFACF /* Resources */,
+				F48898035C4F5DEC367C26B8 /* Services */,
+				1B7A154752624351EC5D0736 /* Stores */,
+				5C19C4417C255FCC039FC1D4 /* Support */,
+				9ADAE75EDADF75D3546E7746 /* Views */,
+			);
+			path = FlashDesk;
+			sourceTree = "<group>";
+		};
+		B6006912C3C40A249A269B02 = {
+			isa = PBXGroup;
+			children = (
+				AB3DD42F88BD2CCD113BBA09 /* FlashDesk */,
+				8F95C560E5DDA6AF6CFC7DA7 /* FlashDeskTests */,
+				6E512F49A12120E561F75612 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		CB9576E8857572418D0BC004 /* Generated */ = {
+			isa = PBXGroup;
+			children = (
+				84F807082F01CEE67594A7EA /* FlashDeskCore.swift */,
+			);
+			path = Generated;
+			sourceTree = "<group>";
+		};
+		F48898035C4F5DEC367C26B8 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				0A620891E40EF1C65444FE2B /* RustService.swift */,
+				6ECEC1FE24D10381215A60F6 /* UpdateService.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		AF77CC599218154C734D8695 /* FlashDesk */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 9F889D9F0BC8979DE181AC57 /* Build configuration list for PBXNativeTarget "FlashDesk" */;
+			buildPhases = (
+				9439A9711563EEC9CFC03FAE /* Build Rust Core and generate UniFFI bindings */,
+				E2FA842C8CB0BB3CA93C6E4E /* Sources */,
+				E641365A62DF223BE87262FF /* Resources */,
+				AD64EF2AF07B02E6CEA784C8 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = FlashDesk;
+			packageProductDependencies = (
+				5E9B0A5A2251E6A6E0C1A12C /* Sparkle */,
+			);
+			productName = FlashDesk;
+			productReference = D2B8FB7D3B2A65FA1C8B7343 /* FlashDesk.app */;
+			productType = "com.apple.product-type.application";
+		};
+		C0739811739BFB58855F1928 /* FlashDeskTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 619F1E48F7EDB2D743597410 /* Build configuration list for PBXNativeTarget "FlashDeskTests" */;
+			buildPhases = (
+				EE748133A4E3752504321D74 /* Sources */,
+				696A1E95E43F32090CF10BA5 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				693C1E0DF30D6857F5ACCC3A /* PBXTargetDependency */,
+			);
+			name = FlashDeskTests;
+			packageProductDependencies = (
+				8023402D29BF9C0295723987 /* Sparkle */,
+			);
+			productName = FlashDeskTests;
+			productReference = 8DCA87BCB189B1BE0B59DFE4 /* FlashDeskTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		3730E7BB946F7D3A3BD7BF46 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 2600;
+				TargetAttributes = {
+					AF77CC599218154C734D8695 = {
+						ProvisioningStyle = Manual;
+					};
+					C0739811739BFB58855F1928 = {
+						ProvisioningStyle = Manual;
+					};
+				};
+			};
+			buildConfigurationList = B7D7610A8034FFD96DB1F875 /* Build configuration list for PBXProject "FlashDesk" */;
+			developmentRegion = "zh-Hans";
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				"zh-Hans",
+			);
+			mainGroup = B6006912C3C40A249A269B02;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				2D8351A180FF8EBB47334DB0 /* XCRemoteSwiftPackageReference "Sparkle" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 6E512F49A12120E561F75612 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				AF77CC599218154C734D8695 /* FlashDesk */,
+				C0739811739BFB58855F1928 /* FlashDeskTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		E641365A62DF223BE87262FF /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D34472C8A440AF6A70C4DB7D /* FlashDesk.icon in Resources */,
+				8F2220EA70848AC63E08DEE9 /* Sparkle.txt in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		9439A9711563EEC9CFC03FAE /* Build Rust Core and generate UniFFI bindings */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Build Rust Core and generate UniFFI bindings";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(BUILT_PRODUCTS_DIR)/libflashdesk_core.a",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${SRCROOT}/script/build_rust.sh\"";
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		E2FA842C8CB0BB3CA93C6E4E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5A46808E748F62DBAB7984E6 /* ChipPicker.swift in Sources */,
+				02DF582AA8D96D41D1A46385 /* ContentView.swift in Sources */,
+				0CD31FD7D1EC4A3D5EE850FA /* ExportDocument.swift in Sources */,
+				A368C953C25F6C29963A01DD /* FirmwareLayoutView.swift in Sources */,
+				6ECA7675C35D2E48EA5C7972 /* FlashDeskApp.swift in Sources */,
+				8DDB90E9D3CE2890C27CB196 /* FlashDeskCore.swift in Sources */,
+				E6D921C5AE243285B4FEE4B9 /* FlashView.swift in Sources */,
+				C232839C53A2BDACA1B4F3F3 /* Formatting.swift in Sources */,
+				A6DDAFFD613712E1D7B26E15 /* LogsView.swift in Sources */,
+				1C0FCA369C8435EAAD90B0F9 /* MemoryView.swift in Sources */,
+				E4A056D966943E7CA8F333A7 /* ProgrammingInspector.swift in Sources */,
+				934CA2A77B41C3D418CB5D34 /* RustService.swift in Sources */,
+				5760651D9CAED0F1D0CD754B /* SaveProfileSheet.swift in Sources */,
+				F35F77FE040327F9CC9C8439 /* SettingsView.swift in Sources */,
+				671D09D811C27CDB268ABC1C /* TargetSetupSheet.swift in Sources */,
+				31BDBB8AF7DC3B5CF0590FF0 /* UpdateService.swift in Sources */,
+				36D6FE044F58105EA553F123 /* WorkbenchCommands.swift in Sources */,
+				144BA2C5F5167D2C7A8249E4 /* WorkbenchOperations.swift in Sources */,
+				F393CB654662075668E088D0 /* WorkbenchStore.swift in Sources */,
+				02087EA88F9391FA245050FC /* WorkspaceModels.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		EE748133A4E3752504321D74 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5DA6080DA903B97027445446 /* CoreIntegrationTests.swift in Sources */,
+				28876DD0B82E3DD741A3BA06 /* UpdateTests.swift in Sources */,
+				3354097E36FBE15EF8831292 /* WindowLayoutTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		693C1E0DF30D6857F5ACCC3A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = AF77CC599218154C734D8695 /* FlashDesk */;
+			targetProxy = BC7BAC94F392BF8D807CD414 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		1CA1D2ECC7C1AA8C239519D4 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = FlashDesk;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				HEADER_SEARCH_PATHS = "$(inherited) $(SRCROOT)/FlashDesk/Generated";
+				INFOPLIST_FILE = FlashDesk/Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				LIBRARY_SEARCH_PATHS = "$(inherited) $(BUILT_PRODUCTS_DIR)";
+				OTHER_LDFLAGS = "$(inherited) -lflashdesk_core -framework IOKit -framework CoreFoundation -framework Security -framework SystemConfiguration -liconv -lresolv -lc++";
+				PRODUCT_BUNDLE_IDENTIFIER = com.xiaoyu.flashdesk;
+				SDKROOT = macosx;
+				SWIFT_INCLUDE_PATHS = "$(inherited) $(SRCROOT)/FlashDesk/Generated";
+			};
+			name = Debug;
+		};
+		32AC27C8AAA0877E55BA6590 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SPARKLE_PUBLIC_ED_KEY = "NgorrvaZPObmbOUEmKbbCvPbPqcD+kcw7E2NRTfxlKI=";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		473C91F33E3F88A9C7DB4776 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = FlashDesk;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				HEADER_SEARCH_PATHS = "$(inherited) $(SRCROOT)/FlashDesk/Generated";
+				INFOPLIST_FILE = FlashDesk/Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				LIBRARY_SEARCH_PATHS = "$(inherited) $(BUILT_PRODUCTS_DIR)";
+				OTHER_LDFLAGS = "$(inherited) -lflashdesk_core -framework IOKit -framework CoreFoundation -framework Security -framework SystemConfiguration -liconv -lresolv -lc++";
+				PRODUCT_BUNDLE_IDENTIFIER = com.xiaoyu.flashdesk;
+				SDKROOT = macosx;
+				SWIFT_INCLUDE_PATHS = "$(inherited) $(SRCROOT)/FlashDesk/Generated";
+			};
+			name = Release;
+		};
+		B8C01415FAE405A19B4B9868 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = "$(inherited) $(SRCROOT)/FlashDesk/Generated";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.xiaoyu.flashdesk.tests;
+				SDKROOT = macosx;
+				SWIFT_INCLUDE_PATHS = "$(inherited) $(SRCROOT)/FlashDesk/Generated";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/FlashDesk.app/Contents/MacOS/FlashDesk";
+			};
+			name = Debug;
+		};
+		FE10D7CB92D6430CAD310D8F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SPARKLE_PUBLIC_ED_KEY = "NgorrvaZPObmbOUEmKbbCvPbPqcD+kcw7E2NRTfxlKI=";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		FEA62BDF853DA44050065C47 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = "$(inherited) $(SRCROOT)/FlashDesk/Generated";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.xiaoyu.flashdesk.tests;
+				SDKROOT = macosx;
+				SWIFT_INCLUDE_PATHS = "$(inherited) $(SRCROOT)/FlashDesk/Generated";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/FlashDesk.app/Contents/MacOS/FlashDesk";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		619F1E48F7EDB2D743597410 /* Build configuration list for PBXNativeTarget "FlashDeskTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B8C01415FAE405A19B4B9868 /* Debug */,
+				FEA62BDF853DA44050065C47 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		9F889D9F0BC8979DE181AC57 /* Build configuration list for PBXNativeTarget "FlashDesk" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1CA1D2ECC7C1AA8C239519D4 /* Debug */,
+				473C91F33E3F88A9C7DB4776 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		B7D7610A8034FFD96DB1F875 /* Build configuration list for PBXProject "FlashDesk" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				32AC27C8AAA0877E55BA6590 /* Debug */,
+				FE10D7CB92D6430CAD310D8F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		2D8351A180FF8EBB47334DB0 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = exactVersion;
+				version = 2.10.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		5E9B0A5A2251E6A6E0C1A12C /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 2D8351A180FF8EBB47334DB0 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
+		};
+		8023402D29BF9C0295723987 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 2D8351A180FF8EBB47334DB0 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 3730E7BB946F7D3A3BD7BF46 /* Project object */;
+}

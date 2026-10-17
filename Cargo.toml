@@ -1,0 +1,18 @@
+[workspace]
+members = ["crates/flashdesk-core", "crates/flashdesk-bindgen"]
+default-members = ["crates/flashdesk-core"]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+authors = ["tangxiangong <tangxiangong@gmail.com>"]
+
+[workspace.dependencies]
+uniffi = "=0.32.2"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "debuginfo"

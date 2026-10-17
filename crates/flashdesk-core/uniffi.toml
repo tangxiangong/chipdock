@@ -1,0 +1,10 @@
+[bindings.swift]
+module_name = "FlashDeskCore"
+ffi_module_name = "FlashDeskCoreFFI"
+generate_module_map = true
+generate_codable_conformance = true
+
+[bindings.swift.custom_types.AppTimestamp]
+type_name = "Date"
+lift = "Date(timeIntervalSinceReferenceDate: {})"
+lower = "{}.timeIntervalSinceReferenceDate"

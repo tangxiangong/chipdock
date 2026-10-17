@@ -1,0 +1,17 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+
+# Local tools and design notes
+.vscode/
+.codex/
+docs/superpowers/
+.superpowers/
+.ast-bro/
+
+# Rust and Xcode build products
+/target/
+/.build/
+**/xcuserdata/
+*.xcuserstate

@@ -1,0 +1,114 @@
+name: macOS
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-26
+            arch: arm64
+          - runner: macos-26-intel
+            arch: x86_64
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: swatinem/rust-cache@v2
+      - name: Check shell scripts
+        run: |
+          for SCRIPT_FILE in script/*.sh; do
+            bash -n "$SCRIPT_FILE"
+          done
+      - name: Check Rust formatting
+        run: cargo fmt --all -- --check
+      - name: Lint Rust
+        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+      - name: Test Rust and Swift/UniFFI backend without hardware
+        run: ./script/test_backend.sh
+      - name: Test update signature and metadata validation
+        run: ./script/test_updates.sh
+      - name: Test native app and update checking
+        run: |
+          xcodebuild -project FlashDesk.xcodeproj -scheme FlashDesk \
+            -configuration Debug -destination 'platform=macOS' \
+            -derivedDataPath .build/Xcode -clonedSourcePackagesDirPath .build/SourcePackages \
+            -resultBundlePath .build/TestResults/FlashDesk.xcresult SWIFT_TREAT_WARNINGS_AS_ERRORS=YES test
+      - name: Verify generated bindings are current
+        run: git diff --exit-code -- FlashDesk/Generated
+      - name: Upload Xcode test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: xcode-test-results-${{ matrix.arch }}
+          path: .build/TestResults/FlashDesk.xcresult
+          if-no-files-found: ignore
+          include-hidden-files: true
+
+  release:
+    if: github.event_name == 'release' && !github.event.release.prerelease && startsWith(github.event.release.tag_name, 'v')
+    needs: validate
+    runs-on: macos-26
+    timeout-minutes: 45
+    environment: release
+    concurrency:
+      group: flashdesk-update-feed
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin, x86_64-apple-darwin
+      - uses: swatinem/rust-cache@v2
+      - name: Require update signing key
+        env:
+          SPARKLE_PRIVATE_ED_KEY: ${{ secrets.SPARKLE_PRIVATE_ED_KEY }}
+        run: test -n "$SPARKLE_PRIVATE_ED_KEY"
+      - name: Verify release tag matches Rust version
+        run: |
+          CORE_VERSION="$(cargo metadata --format-version 1 --no-deps --locked | \
+            python3 -c 'import json, sys; print(next(p["version"] for p in json.load(sys.stdin)["packages"] if p["name"] == "flashdesk-core"))')"
+          if [[ "$RELEASE_TAG" != "v$CORE_VERSION" ]]; then
+            echo "error: Release tag $RELEASE_TAG does not match Rust version v$CORE_VERSION" >&2
+            exit 1
+          fi
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+      - name: Build universal native app
+        run: |
+          xcodebuild -project FlashDesk.xcodeproj -scheme FlashDesk \
+            -configuration Release -destination 'generic/platform=macOS' \
+            -derivedDataPath .build/Release -clonedSourcePackagesDirPath .build/SourcePackages \
+            ONLY_ACTIVE_ARCH=NO CURRENT_PROJECT_VERSION="$BUILD_NUMBER" build
+        env:
+          BUILD_NUMBER: ${{ github.run_number }}
+      - name: Sign, verify and publish Sparkle update
+        run: |
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json body --jq .body > .build/ReleaseNotes.md
+          ./script/package_release.sh --publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_NOTES_FILE: .build/ReleaseNotes.md
+          SPARKLE_PRIVATE_ED_KEY: ${{ secrets.SPARKLE_PRIVATE_ED_KEY }}
