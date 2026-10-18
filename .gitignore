@@ -15,3 +15,9 @@ docs/superpowers/
 /.build/
 **/xcuserdata/
 *.xcuserstate
+
+# Visual Studio and .NET build products
+.vs/
+*.user
+windows/**/bin/
+windows/**/obj/
