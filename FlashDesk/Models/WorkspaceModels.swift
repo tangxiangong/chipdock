@@ -6,9 +6,16 @@ enum EraseStrategy: String, CaseIterable, Identifiable {
     var id: Self { self }
     var title: String {
         switch self {
-        case .automatic: "自动擦除所需扇区"
+        case .automatic: "按需擦除"
         case .full: "整片擦除"
         case .skip: "跳过擦除"
+        }
+    }
+    var detail: String {
+        switch self {
+        case .automatic: "仅擦除固件覆盖的扇区"
+        case .full: "写入前擦除整个 Flash，其他数据会丢失"
+        case .skip: "不擦除，目标区域须已擦除"
         }
     }
 }

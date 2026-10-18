@@ -6,8 +6,6 @@ struct LogsView: View {
     @Bindable var store: WorkbenchStore
     @State private var query = ""
     @State private var errorsOnly = false
-    @State private var selection: UUID?
-    @State private var showExporter = false
 
     private var entries: [ActivityEntry] {
         store.logs.filter { entry in
@@ -16,61 +14,84 @@ struct LogsView: View {
         }
     }
 
-    private var exportData: Data {
-        Data(store.logs.map { entry in
-            "\(entry.date.ISO8601Format())\t\(entry.level.rawValue)\t\(entry.operation)\t\(entry.message)\(entry.detail.isEmpty ? "" : "\n\(entry.detail)")"
-        }.joined(separator: "\n").utf8)
-    }
+    private var errorCount: Int { store.logs.filter { $0.level == .error }.count }
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 12) {
-                TextField("搜索日志", text: $query).textFieldStyle(.roundedBorder)
-                    .accessibilityLabel("搜索日志")
-                Toggle("仅错误", isOn: $errorsOnly).toggleStyle(.checkbox)
-                Button("导出…", systemImage: "square.and.arrow.up") { showExporter = true }.disabled(store.logs.isEmpty)
-                Button("清空", systemImage: "trash") { store.logs.removeAll(); selection = nil }.disabled(store.logs.isEmpty)
-            }
-            .padding(20)
-            Divider()
-            if entries.isEmpty {
-                ContentUnavailableView(query.isEmpty ? "暂无日志" : "无匹配日志", systemImage: "list.bullet.rectangle")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                Table(entries, selection: $selection) {
-                    TableColumn("时间") { entry in
-                        Text(entry.date, format: .dateTime.hour().minute().second()).monospacedDigit().foregroundStyle(.secondary)
-                    }
-                    .width(78)
-                    TableColumn("操作", value: \.operation).width(70)
-                    TableColumn("内容") { entry in
-                        Label(entry.message, systemImage: entry.level == .error ? "exclamationmark.circle" : (entry.level == .success ? "checkmark.circle" : "info.circle"))
-                            .foregroundStyle(entry.level == .error ? Color.red : .primary)
-                            .lineLimit(2)
-                            .help(entry.detail.isEmpty ? entry.message : entry.detail)
-                    }
+            HStack(spacing: 8) {
+                Text("日志").font(.title3)
+                if errorCount > 0 {
+                    Text("\(errorCount)")
+                        .font(.system(size: 10, weight: .semibold)).monospacedDigit()
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 5).padding(.vertical, 1)
+                        .background(Color.red, in: Capsule())
+                        .help("\(errorCount) 条错误")
                 }
-                .contextMenu(forSelectionType: UUID.self) { ids in
-                    Button("复制") {
-                        let text = store.logs.filter { ids.contains($0.id) }.map { "\($0.message)\n\($0.detail)" }.joined(separator: "\n")
+                Spacer()
+                SearchField(prompt: "筛选", text: $query)
+                    .frame(width: 170)
+                    .accessibilityLabel("筛选日志")
+                Toggle(isOn: $errorsOnly) { Image(systemName: "exclamationmark.circle") }
+                    .toggleStyle(.button).buttonStyle(.borderless)
+                    .help("仅显示错误")
+                Group {
+                    Button("复制全部", systemImage: "doc.on.doc") {
                         NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(text, forType: .string)
+                        NSPasteboard.general.setString(store.logExportText, forType: .string)
                     }
-                    .disabled(ids.isEmpty)
+                    .help("复制全部日志")
+                    Button("导出…", systemImage: "square.and.arrow.up") {
+                        store.requestExport(PendingExport(data: Data(store.logExportText.utf8), contentType: .plainText,
+                                                          filename: "FlashDesk.log", operation: "导出日志"))
+                    }
+                        .help("导出日志")
+                    Button("清空", systemImage: "trash") { store.logs.removeAll() }
+                        .help("清空日志")
                 }
+                .labelStyle(.iconOnly).buttonStyle(.borderless)
+                .disabled(store.logs.isEmpty)
             }
-            if let selected = store.logs.first(where: { $0.id == selection }), !selected.detail.isEmpty {
-                Divider()
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            Divider()
+            ScrollViewReader { proxy in
                 ScrollView {
-                    Text(selected.detail).font(.system(.caption, design: .monospaced)).textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading).padding(16)
+                    LazyVStack(alignment: .leading, spacing: 1) {
+                        ForEach(entries) { entry in LogLine(entry: entry).id(entry.id) }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .frame(maxHeight: 140)
+                .overlay {
+                    if entries.isEmpty {
+                        Text(store.logs.isEmpty ? "暂无日志" : "没有匹配的日志").foregroundStyle(.secondary)
+                    }
+                }
+                .onAppear { if let last = entries.last { proxy.scrollTo(last.id, anchor: .bottom) } }
+                .onChange(of: store.logs.count) {
+                    if let last = entries.last { proxy.scrollTo(last.id, anchor: .bottom) }
+                }
             }
         }
-        .fileExporter(isPresented: $showExporter, document: ExportDocument(data: exportData),
-                      contentType: .plainText, defaultFilename: "FlashDesk.log") { result in
-            if case .failure(let error) = result { store.report(error, operation: "导出日志") }
+    }
+}
+
+private struct LogLine: View {
+    var entry: ActivityEntry
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            (Text(entry.date, format: .dateTime.hour(.twoDigits(amPM: .omitted)).minute().second()).foregroundStyle(.tertiary)
+                + Text("  [\(entry.operation)]  ").foregroundStyle(.secondary)
+                + Text(entry.message).foregroundStyle(entry.level == .info ? Color.primary : entry.level.tint))
+            if !entry.detail.isEmpty {
+                Text(entry.detail).foregroundStyle(.secondary).padding(.leading, 76)
+            }
         }
+        .font(Theme.mono)
+        .textSelection(.enabled)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

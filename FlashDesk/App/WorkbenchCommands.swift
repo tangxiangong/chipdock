@@ -9,10 +9,12 @@ struct WorkbenchCommands: Commands {
             Button("打开固件…", systemImage: "doc.badge.plus") { store.showImporter = true }
                 .keyboardShortcut("o")
                 .disabled(store.isBusy)
-            Menu("最近使用") {
+            Menu("打开最近使用的") {
                 ForEach(store.recentFiles, id: \.path) { file in
                     Button(URL(fileURLWithPath: file.path).lastPathComponent) { store.openRecent(file) }
                 }
+                Divider()
+                Button("清除菜单") { Task { await store.clearRecentFiles() } }
             }
             .disabled(store.isBusy || store.recentFiles.isEmpty)
         }
@@ -26,7 +28,7 @@ struct WorkbenchCommands: Commands {
             Button("扫描探针", systemImage: "arrow.clockwise") { Task { await store.scanProbes() } }
                 .keyboardShortcut("r")
                 .disabled(store.isBusy)
-            Button("连接目标", systemImage: "cable.connector") { Task { await store.connect() } }
+            Button("连接目标", systemImage: "link") { Task { await store.connect() } }
                 .keyboardShortcut("k")
                 .disabled(!store.canConnect)
             Button("断开目标") { store.disconnect() }
@@ -58,18 +60,11 @@ struct WorkbenchCommands: Commands {
                 .disabled(store.isBusy || store.connection == nil)
         }
         CommandGroup(after: .toolbar) {
-            Button(store.showMemory ? "隐藏内存面板" : "显示内存面板", systemImage: "square.grid.3x3") {
-                store.showMemory.toggle()
-            }
-            .keyboardShortcut("m", modifiers: [.command, .option])
-            Button(store.showConsole ? "隐藏活动面板" : "显示活动面板", systemImage: "terminal") {
-                store.showConsole.toggle()
-            }
-            .keyboardShortcut("y", modifiers: [.command, .option])
-            Button(store.showInspector ? "隐藏烧录设置" : "显示烧录设置", systemImage: "slider.horizontal.3") {
-                store.showInspector.toggle()
-            }
-            .keyboardShortcut("i", modifiers: [.command, .option])
+            Button(store.showLogs ? "隐藏日志" : "显示日志", systemImage: "text.alignleft") { store.showLogs.toggle() }
+                .keyboardShortcut("j")
+            Button(store.showMemory ? "隐藏内存" : "显示内存", systemImage: "memorychip") { store.showMemory.toggle() }
+                .keyboardShortcut("m", modifiers: [.command, .option])
+            Divider()
         }
         CommandGroup(replacing: .help) {
             Link("FlashDesk 源代码", destination: URL(string: "https://github.com/tangxiangong/flashdesk")!)

@@ -13,29 +13,33 @@ struct ChipPicker: View {
     private var displayed: [String] { query.isEmpty ? candidates : results }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack {
-                Text(candidates.isEmpty ? "选择芯片" : "选择识别到的目标").font(.title2.weight(.semibold))
-                Spacer()
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(candidates.isEmpty ? "选择芯片" : "选择识别到的目标").font(.headline)
+                Text(candidates.isEmpty ? "搜索 probe-rs 支持的芯片型号。" : "目标无法唯一识别，请从候选型号中选择。")
+                    .font(.callout).foregroundStyle(.secondary)
+            }
+            HStack(spacing: 8) {
+                SearchField(prompt: "搜索芯片型号，例如 STM32F407", text: $query)
+                    .accessibilityLabel("搜索芯片型号")
                 if searching { ProgressView().controlSize(.small) }
             }
-            TextField("搜索芯片型号", text: $query).textFieldStyle(.roundedBorder)
-                .accessibilityLabel("搜索芯片型号")
             if let error = searchError { Text(error).font(.caption).foregroundStyle(.red) }
             List(selection: $selection) {
                 if query.isEmpty && candidates.isEmpty {
                     Label("自动识别", systemImage: "sparkle.magnifyingglass").tag("")
                 }
                 ForEach(displayed, id: \.self) { name in
-                    Label(name, systemImage: "cpu").font(.system(.body, design: .monospaced)).tag(name)
+                    Label(name, systemImage: "cpu").font(.body.monospaced()).tag(name)
                 }
             }
+            .listStyle(.bordered)
+            .alternatingRowBackgrounds()
             .overlay {
                 if !query.isEmpty && displayed.isEmpty && !searching && searchError == nil {
                     ContentUnavailableView.search(text: query)
                 }
             }
-            .border(.separator.opacity(0.5))
             HStack {
                 if !displayed.isEmpty { Text("\(displayed.count) 个目标").font(.caption).foregroundStyle(.secondary) }
                 Spacer()
@@ -52,7 +56,7 @@ struct ChipPicker: View {
             }
         }
         .padding(24)
-        .frame(width: 510, height: 450)
+        .frame(width: 500, height: 480)
         .onAppear { selection = candidates.first ?? store.chip }
         .task(id: query) { await search() }
     }

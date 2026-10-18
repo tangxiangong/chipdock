@@ -37,9 +37,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     weak var store: WorkbenchStore?
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guard store?.isBusy == true else { return .terminateNow }
-        store?.status = "请等待当前操作完成后退出"
-        NSSound.beep()
+        guard let store, let operation = store.operation else { return .terminateNow }
+        let alert = NSAlert()
+        alert.messageText = "“\(operation.rawValue)”正在进行"
+        alert.informativeText = "中断可能使芯片处于不完整的状态。请等待操作完成后再退出 FlashDesk。"
+        alert.addButton(withTitle: "好")
+        alert.runModal()
         return .terminateCancel
     }
 }

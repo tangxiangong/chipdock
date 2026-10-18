@@ -59,7 +59,6 @@ extension WorkbenchStore {
     func selectFirmware(_ url: URL) {
         guard !isBusy else { return }
         firmwareURL = url
-        if isBin { showInspector = true }
         scheduleFirmwareAnalysis()
     }
 
@@ -117,6 +116,14 @@ extension WorkbenchStore {
     func openRecent(_ file: RecentFirmware) {
         if let address = file.baseAddress { binBaseAddress = addressLabel(address) }
         selectFirmware(URL(fileURLWithPath: file.path))
+    }
+
+    func clearRecentFiles() async {
+        let directory = storageDirectory
+        do {
+            try await rust.run { try $0.saveRecentFiles(directory: directory, files: []) }
+            recentFiles = []
+        } catch { report(error, operation: "清除最近使用") }
     }
 
     func applyProfile(_ profile: SavedProfile) {

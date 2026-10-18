@@ -14,13 +14,14 @@ final class WorkbenchStore {
     @ObservationIgnored var analysisRevision = UUID()
 
     var showMemory = false
-    var showInspector = false
+    var showLogs = false { didSet { if showLogs { unseenErrors = 0 } } }
+    var unseenErrors = 0
     var showTargetSetup = false
-    var showConsole = false
     var showImporter = false
     var showChipPicker = false
     var showSaveProfile = false
     var confirmErase = false
+    var pendingExport: PendingExport?
     var failure: UserFacingError?
     var status = "准备就绪"
     var operation: WorkbenchOperation?
@@ -131,8 +132,22 @@ final class WorkbenchStore {
         }
     }
 
+    var logExportText: String {
+        logs.map { entry in
+            "\(entry.date.ISO8601Format())\t\(entry.level.rawValue)\t\(entry.operation)\t\(entry.message)\(entry.detail.isEmpty ? "" : "\n\(entry.detail)")"
+        }.joined(separator: "\n")
+    }
+
+    /// Closes the popovers first so the save panel is not dismissed with them.
+    func requestExport(_ export: PendingExport) {
+        showLogs = false
+        showMemory = false
+        Task { pendingExport = export }
+    }
+
     func appendLog(_ operation: String, _ message: String, level: ActivityEntry.Level = .info, detail: String = "") {
         logs.append(ActivityEntry(operation: operation, level: level, message: message, detail: detail))
+        if level == .error && !showLogs { unseenErrors += 1 }
         if logs.count > 2000 { logs.removeFirst(logs.count - 2000) }
     }
 
@@ -171,7 +186,6 @@ final class WorkbenchStore {
         if operation == .flash || operation == .erase {
             _ = rust.takeEvents()
             latestEvent = nil
-            showConsole = true
         }
         let poller = Task { @MainActor [weak self] in
             while !Task.isCancelled {

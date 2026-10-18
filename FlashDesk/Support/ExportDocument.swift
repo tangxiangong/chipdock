@@ -13,3 +13,12 @@ struct ExportDocument: FileDocument {
         FileWrapper(regularFileWithContents: data)
     }
 }
+
+/// A save panel request raised from a popover. The panel is presented by the
+/// window instead, because a transient popover closes as soon as it loses focus.
+struct PendingExport {
+    var data: Data
+    var contentType: UTType
+    var filename: String
+    var operation: String
+}

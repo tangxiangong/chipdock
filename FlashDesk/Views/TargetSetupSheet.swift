@@ -4,76 +4,108 @@ struct TargetSetupSheet: View {
     @Bindable var store: WorkbenchStore
     @Environment(\.dismiss) private var dismiss
 
+    private let speedPresets: [UInt32] = [100, 1000, 4000, 10000, 24000]
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            HStack(spacing: 14) {
-                Image(systemName: "point.3.connected.trianglepath.dotted")
-                    .font(.system(size: 30, weight: .light)).foregroundStyle(Color.accentColor)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 5) {
-                    Text("目标配置").font(.title2.weight(.semibold))
-                    Text(store.connection == nil ? "未连接" : store.targetName).foregroundStyle(.secondary)
-                }
+        VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("目标配置").font(.headline)
+                Text(store.connection == nil ? "未连接" : "已连接 \(store.targetName)")
+                    .font(.caption).foregroundStyle(store.connection == nil ? Color.secondary : Color.green)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding([.horizontal, .top], 20)
+
             Form {
-                LabeledContent("调试探针") {
+                Section {
                     HStack {
                         Picker("调试探针", selection: $store.selectedProbe) {
                             Text("自动选择").tag("")
                             ForEach(store.probes) { Text($0.displayName).tag($0.identifier) }
                         }
-                        .labelsHidden()
-                        Button { Task { await store.scanProbes() } } label: { Image(systemName: "arrow.triangle.2.circlepath") }
-                            .help("扫描调试探针")
+                        Button("扫描探针", systemImage: "arrow.clockwise") { Task { await store.scanProbes() } }
+                            .labelStyle(.iconOnly)
+                            .help("扫描调试探针（⌘R）")
+                    }
+                } header: {
+                    Text("探针")
+                } footer: {
+                    if store.hasScanned {
+                        Text(store.probes.isEmpty ? "未发现调试探针，请检查 USB 连接。" : "已发现 \(store.probes.count) 个调试探针。")
+                            .font(.caption).foregroundStyle(store.probes.isEmpty ? Color.orange : Color.secondary)
                     }
                 }
-                LabeledContent("芯片") {
-                    Button(store.chip.isEmpty ? "自动识别…" : store.chip) { store.showChipPicker = true }
-                        .buttonStyle(.link)
+
+                Section("目标芯片") {
+                    LabeledContent("芯片") {
+                        Button { store.showChipPicker = true } label: {
+                            HStack(spacing: 4) {
+                                Text(store.chip.isEmpty ? "自动识别" : store.chip).font(.body.monospaced())
+                                Image(systemName: "chevron.up.chevron.down").font(.caption2)
+                            }
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                    Picker("协议", selection: $store.wireProtocol) {
+                        Text("SWD").tag(WireProtocol.swd)
+                        Text("JTAG").tag(WireProtocol.jtag)
+                    }
+                    .pickerStyle(.segmented)
+                    LabeledContent("速度") {
+                        HStack(spacing: 6) {
+                            TextField("速度", text: $store.speed)
+                                .multilineTextAlignment(.trailing)
+                                .monospacedDigit()
+                                .labelsHidden()
+                                .frame(width: 80)
+                            Text("kHz").foregroundStyle(.secondary)
+                            Menu {
+                                ForEach(speedPresets, id: \.self) { value in
+                                    Button("\(value) kHz") { store.speed = String(value) }
+                                }
+                            } label: { Image(systemName: "chevron.down") }
+                            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+                        }
+                    }
+                    Toggle("复位下连接", isOn: $store.connectUnderReset)
                 }
-                Picker("协议", selection: $store.wireProtocol) {
-                    Text("SWD").tag(WireProtocol.swd)
-                    Text("JTAG").tag(WireProtocol.jtag)
+
+                if let information = store.targetInformation {
+                    Section("已识别") {
+                        LabeledContent("型号", value: information.deviceType)
+                        if let cpu = information.cpu { LabeledContent("内核", value: cpu) }
+                        if let bytes = information.flashSizeBytes { LabeledContent("Flash", value: byteCountLabel(bytes)) }
+                    }
                 }
-                .pickerStyle(.segmented)
-                TextField("速度 (kHz)", text: $store.speed).monospacedDigit()
-                Toggle("复位下连接", isOn: $store.connectUnderReset)
             }
-            .formStyle(.columns)
+            .formStyle(.grouped)
+            .scrollDisabled(true)
             .disabled(store.isBusy)
-            if store.hasScanned {
-                Label("\(store.probes.count) 个可用探针", systemImage: "cable.connector")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-            if let information = store.targetInformation {
-                Divider()
-                HStack {
-                    if let cpu = information.cpu { Label(cpu, systemImage: "cpu") }
-                    Spacer()
-                    if let bytes = information.flashSizeBytes { Text("Flash \(byteCountLabel(bytes))") }
-                }
-                .font(.callout).foregroundStyle(.secondary)
-            }
-            Divider()
+            .fixedSize(horizontal: false, vertical: true)
+
             HStack {
-                if store.isBusy { ProgressView().controlSize(.small) }
                 if store.connection != nil {
-                    Button("断开", role: .destructive) { store.disconnect() }.disabled(store.isBusy)
+                    Button("断开", systemImage: "xmark.circle", role: .destructive) { store.disconnect() }.disabled(store.isBusy)
                 }
                 Spacer()
+                if store.isBusy { ProgressView().controlSize(.small).padding(.trailing, 4) }
                 Button("取消", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction)
-                Button("连接") {
+                Button {
                     Task {
                         await store.connect()
                         if store.connection != nil { dismiss() }
                     }
+                } label: {
+                    Label(store.connection == nil ? "连接" : "重新连接", systemImage: "link")
                 }
                 .keyboardShortcut(.defaultAction)
                 .disabled(!store.canConnect)
             }
+            .padding(.horizontal, 24)
+            .padding(.bottom, 20)
+            .padding(.top, 4)
         }
-        .padding(28)
-        .frame(width: 500)
+        .frame(width: 480)
         .sheet(isPresented: $store.showChipPicker) { ChipPicker(store: store) }
     }
 }
