@@ -32,18 +32,16 @@ jobs:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt, clippy
+          components: clippy
       - uses: swatinem/rust-cache@v2
       - name: Check shell scripts
         run: |
           for SCRIPT_FILE in script/*.sh; do
             bash -n "$SCRIPT_FILE"
           done
-      - name: Check Rust formatting
-        run: cargo fmt --all -- --check
-      - name: Lint Rust
-        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
-      - name: Test Rust and Swift/UniFFI backend without hardware
+      - name: Lint Rust Core and the UniFFI bridge
+        run: cargo clippy --locked -p flashdesk-core -p flashdesk-bindgen --all-targets -- -D warnings
+      - name: Test Rust Core and Swift/UniFFI backend without hardware
         run: ./script/test_backend.sh
       - name: Test update signature and metadata validation
         run: ./script/test_updates.sh

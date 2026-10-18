@@ -9,7 +9,8 @@ TEST_BUILD_DIR="$PROJECT_ROOT/.build/BackendTests"
 BINDINGS_DIR="$TEST_BUILD_DIR/Bindings"
 mkdir -p "$BINDINGS_DIR"
 
-cargo test --manifest-path "$PROJECT_ROOT/Cargo.toml" --workspace --all-targets --all-features --locked
+# macOS ships the UniFFI bridge; the Interoptopus crates are tested on Windows.
+cargo test --manifest-path "$PROJECT_ROOT/Cargo.toml" --package flashdesk-core --package flashdesk-bindgen --all-targets --locked
 cargo build --manifest-path "$PROJECT_ROOT/Cargo.toml" --package flashdesk-core --lib --locked
 cargo run --manifest-path "$PROJECT_ROOT/Cargo.toml" --package flashdesk-bindgen --locked -- \
     generate --library "$CARGO_TARGET_DIR/debug/libflashdesk_core.dylib" --language swift --out-dir "$BINDINGS_DIR"

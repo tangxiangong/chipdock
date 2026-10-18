@@ -1,0 +1,157 @@
+name: Windows
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-2025
+            arch: x64
+            platform: x64
+            target: x86_64-pc-windows-msvc
+          - runner: windows-11-arm
+            arch: arm64
+            platform: ARM64
+            target: aarch64-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+          components: clippy
+      - uses: swatinem/rust-cache@v2
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Check PowerShell scripts
+        shell: pwsh
+        run: |
+          foreach ($Script in Get-ChildItem windows/scripts/*.ps1) {
+            $Errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($Script.FullName, [ref]$null, [ref]$Errors) | Out-Null
+            if ($Errors) { $Errors | ForEach-Object { Write-Error "$($Script.Name): $_" }; exit 1 }
+          }
+      - name: Require one version for the Rust Core and the app
+        shell: pwsh
+        run: |
+          $Core = ((cargo metadata --format-version 1 --no-deps --locked | ConvertFrom-Json).packages | Where-Object name -eq 'flashdesk-core').version
+          $App = ([xml](Get-Content -Raw windows/FlashDesk/FlashDesk.csproj)).SelectSingleNode('//Version').InnerText
+          if ($Core -ne $App) { throw "FlashDesk.csproj version $App does not match flashdesk-core $Core" }
+      - name: Lint Rust Core and the Interoptopus bridge
+        run: cargo clippy --locked -p flashdesk-core -p flashdesk-csharp -p flashdesk-csharp-bindgen --all-targets --all-features -- -D warnings
+      - name: Test Rust Core and the C# bridge exports without hardware
+        run: cargo test --locked -p flashdesk-core -p flashdesk-csharp --all-targets --all-features
+      - name: Generate C# bindings and compile WinUI
+        run: dotnet build windows/FlashDesk.sln -c Debug -p:Platform=${{ matrix.platform }}
+      - name: Verify generated bindings are current
+        # Regenerate explicitly: a restored Cargo cache can leave MSBuild's incremental check satisfied.
+        shell: bash
+        run: |
+          cargo run --locked -p flashdesk-csharp-bindgen -- windows/FlashDesk/Generated
+          git diff --exit-code -- windows/FlashDesk/Generated
+      - name: Test update verification and the Rust/C# bridge
+        run: dotnet run --project windows/Tests/FlashDesk.Tests.csproj -c Debug -- target/${{ matrix.target }}/debug/flashdesk_csharp.dll
+      - name: Compile the release update tool
+        run: dotnet build windows/UpdateTool/FlashDesk.UpdateTool.csproj -c Release
+      - name: Verify WinUI publish resources
+        run: dotnet publish windows/FlashDesk/FlashDesk.csproj -c Debug -p:Platform=${{ matrix.platform }} -o target/publish-check
+
+  build-release:
+    name: Build release (${{ matrix.arch }})
+    if: github.event_name == 'release' && !github.event.release.prerelease && startsWith(github.event.release.tag_name, 'v')
+    needs: validate
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - runner: windows-2025
+            arch: x64
+            platform: x64
+            target: x86_64-pc-windows-msvc
+          - runner: windows-11-arm
+            arch: arm64
+            platform: ARM64
+            target: aarch64-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Build EXE, MSI and Velopack update package
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          BUILD_NUMBER: ${{ github.run_number }}
+          ARCH: ${{ matrix.platform }}
+        run: |
+          $Notes = Join-Path $env:RUNNER_TEMP 'ReleaseNotes.md'
+          gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --json body --jq .body | Set-Content -Encoding utf8NoBOM $Notes
+          if ($LASTEXITCODE -ne 0) { throw 'Could not read the release notes.' }
+          ./windows/scripts/publish.ps1 -Architecture $env:ARCH -Version $env:RELEASE_TAG.Substring(1) `
+            -BuildNumber $env:BUILD_NUMBER -ReleaseNotes $Notes -OutputDirectory dist/windows-${{ matrix.arch }}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-windows-${{ matrix.arch }}
+          path: dist/windows-${{ matrix.arch }}/*
+          if-no-files-found: error
+
+  publish:
+    name: Publish release
+    needs: build-release
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: release
+    # Shared with the macOS release job: both advance assets on the update-feed release.
+    concurrency:
+      group: flashdesk-update-feed
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: release-windows-*
+          path: dist
+      - name: Require update signing key
+        env:
+          WINDOWS_UPDATE_PRIVATE_KEY: ${{ secrets.WINDOWS_UPDATE_PRIVATE_KEY }}
+        run: test -n "$WINDOWS_UPDATE_PRIVATE_KEY"
+      - name: Sign, verify and publish Velopack updates
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          WINDOWS_UPDATE_PRIVATE_KEY: ${{ secrets.WINDOWS_UPDATE_PRIVATE_KEY }}
+        run: |
+          Rename-Item dist/release-windows-x64 windows-x64
+          Rename-Item dist/release-windows-arm64 windows-arm64
+          ./windows/scripts/publish-release.ps1 -Version $env:RELEASE_TAG.Substring(1) -AssetsDirectory dist
