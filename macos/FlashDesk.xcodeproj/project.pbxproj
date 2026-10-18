@@ -340,7 +340,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "\"${SRCROOT}/script/build_rust.sh\"";
+			shellScript = "\"${SRCROOT}/../script/build_rust.sh\"";
 		};
 /* End PBXShellScriptBuildPhase section */
 

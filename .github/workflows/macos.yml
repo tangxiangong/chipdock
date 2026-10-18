@@ -49,12 +49,12 @@ jobs:
         run: ./script/test_updates.sh
       - name: Test native app and update checking
         run: |
-          xcodebuild -project FlashDesk.xcodeproj -scheme FlashDesk \
+          xcodebuild -project macos/FlashDesk.xcodeproj -scheme FlashDesk \
             -configuration Debug -destination 'platform=macOS' \
             -derivedDataPath .build/Xcode -clonedSourcePackagesDirPath .build/SourcePackages \
             -resultBundlePath .build/TestResults/FlashDesk.xcresult SWIFT_TREAT_WARNINGS_AS_ERRORS=YES test
       - name: Verify generated bindings are current
-        run: git diff --exit-code -- FlashDesk/Generated
+        run: git diff --exit-code -- macos/FlashDesk/Generated
       - name: Upload Xcode test results
         if: always()
         uses: actions/upload-artifact@v7
@@ -97,7 +97,7 @@ jobs:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
       - name: Build universal native app
         run: |
-          xcodebuild -project FlashDesk.xcodeproj -scheme FlashDesk \
+          xcodebuild -project macos/FlashDesk.xcodeproj -scheme FlashDesk \
             -configuration Release -destination 'generic/platform=macOS' \
             -derivedDataPath .build/Release -clonedSourcePackagesDirPath .build/SourcePackages \
             ONLY_ACTIVE_ARCH=NO CURRENT_PROJECT_VERSION="$BUILD_NUMBER" build

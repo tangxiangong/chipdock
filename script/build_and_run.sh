@@ -25,7 +25,7 @@ if pgrep -x FlashDesk >/dev/null; then
     fi
 fi
 
-xcodebuild -project "$PROJECT_ROOT/FlashDesk.xcodeproj" -scheme FlashDesk \
+xcodebuild -project "$PROJECT_ROOT/macos/FlashDesk.xcodeproj" -scheme FlashDesk \
     -configuration Debug -destination 'platform=macOS' -derivedDataPath "$DERIVED_DATA" build
 
 case "$MODE" in

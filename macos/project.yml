@@ -55,7 +55,7 @@ targets:
           ENABLE_HARDENED_RUNTIME: NO
     preBuildScripts:
       - name: Build Rust Core and generate UniFFI bindings
-        script: '"${SRCROOT}/script/build_rust.sh"'
+        script: '"${SRCROOT}/../script/build_rust.sh"'
         basedOnDependencyAnalysis: false
         outputFiles:
           - '$(BUILT_PRODUCTS_DIR)/libflashdesk_core.a'

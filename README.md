@@ -18,7 +18,7 @@ FlashDesk 是面向 macOS 的原生嵌入式固件工作台，使用 **SwiftUI +
 
 需要 **macOS 14+、Xcode 26+**，以及通过 [rustup](https://rustup.rs/) 安装的稳定版 Rust。
 
-1. 打开根目录的 `FlashDesk.xcodeproj`。
+1. 打开 `macos/FlashDesk.xcodeproj`。
 2. 选择 **FlashDesk → My Mac**。
 3. 按 **⌘R** 构建运行。
 
@@ -33,26 +33,27 @@ Xcode 会解析 Sparkle 包依赖、编译 Rust 静态库、生成 UniFFI 绑定
 ## 架构
 
 ```text
-FlashDesk/                  SwiftUI 应用
-  App/                      应用入口与菜单
-  Views/                    原生界面
-  Stores/                   应用状态与操作流程
-  Services/                 Rust 调用与 Sparkle 更新服务
-  Models/ Support/          数据模型与辅助功能
-  Generated/                UniFFI 生成的 Swift / C 绑定
-  Resources/                应用元数据、图标与许可证
+macos/
+  FlashDesk/                SwiftUI 应用
+    App/                    应用入口与菜单
+    Views/                  原生界面
+    Stores/                 应用状态与操作流程
+    Services/               Rust 调用与 Sparkle 更新服务
+    Models/ Support/        数据模型与辅助功能
+    Generated/              UniFFI 生成的 Swift / C 绑定
+    Resources/              应用元数据、图标与许可证
+  FlashDeskTests/           应用集成与更新回归测试
+  FlashDesk.xcodeproj/      Xcode 工程与 Swift 包锁文件
+  project.yml               XcodeGen 工程定义
 crates/
-  flashdesk-core/            固件分析、目标连接、烧录、内存与存储
-  flashdesk-bindgen/         UniFFI 绑定生成工具
-FlashDeskTests/              应用集成与更新回归测试
+  flashdesk-core/           固件分析、目标连接、烧录、内存与存储
+  flashdesk-bindgen/        UniFFI 绑定生成工具
 script/                     构建、运行、测试与发布工具
-FlashDesk.xcodeproj/         Xcode 工程与 Swift 包锁文件
-project.yml                 XcodeGen 工程定义
 ```
 
 Rust Core 提供类型化 API、结构化错误和进度事件。硬件操作串行执行，阻塞操作由后台队列调用。
 
-修改 Rust API 后，Xcode 构建会重新生成绑定。依赖版本由 `Cargo.lock` 和 `Package.resolved` 固定。调整工程结构时，运行 `xcodegen generate` 并同步生成的工程。
+修改 Rust API 后，Xcode 构建会重新生成绑定。依赖版本由 `Cargo.lock` 和 `Package.resolved` 固定。调整工程结构时，在 `macos/` 下运行 `xcodegen generate` 并同步生成的工程。
 
 ## 测试
 
@@ -61,7 +62,7 @@ cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 ./script/test_backend.sh
 ./script/test_updates.sh
-xcodebuild -project FlashDesk.xcodeproj -scheme FlashDesk \
+xcodebuild -project macos/FlashDesk.xcodeproj -scheme FlashDesk \
   -configuration Debug -destination 'platform=macOS' \
   -derivedDataPath .build/Xcode test
 ```
@@ -82,7 +83,7 @@ Sparkle 验证 Ed25519 签名后安装更新并重新启动应用。硬件操作
 
 ## 发布
 
-1. 同步 `Cargo.toml` 和 `project.yml` 中的版本，运行 `xcodegen generate`。
+1. 同步 `Cargo.toml` 和 `macos/project.yml` 中的版本，在 `macos/` 下运行 `xcodegen generate`。
 2. 在 GitHub 仓库的 `release` 环境中配置 `SPARKLE_PRIVATE_ED_KEY` secret，对应工程内的 Sparkle 公钥。
 3. 创建与版本一致的标签，例如 `v0.1.0`，并发布 GitHub Release。
 
