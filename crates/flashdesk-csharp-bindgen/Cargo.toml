@@ -1,0 +1,10 @@
+[package]
+name = "flashdesk-csharp-bindgen"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+flashdesk-csharp.workspace = true
+interoptopus_csharp.workspace = true

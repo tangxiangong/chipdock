@@ -1,5 +1,10 @@
 [workspace]
-members = ["crates/flashdesk-core", "crates/flashdesk-bindgen"]
+members = [
+    "crates/flashdesk-core",
+    "crates/flashdesk-bindgen",
+    "crates/flashdesk-csharp",
+    "crates/flashdesk-csharp-bindgen",
+]
 default-members = ["crates/flashdesk-core"]
 resolver = "3"
 
@@ -11,6 +16,11 @@ authors = ["tangxiangong <tangxiangong@gmail.com>"]
 
 [workspace.dependencies]
 uniffi = "=0.32.2"
+interoptopus = "0.16"
+interoptopus_csharp = "0.16"
+flashdesk-core = { path = "crates/flashdesk-core" }
+flashdesk-csharp = { path = "crates/flashdesk-csharp" }
+tempfile = "3"
 
 [profile.release]
 lto = "thin"

@@ -8,6 +8,7 @@ type BoxedError = Box<dyn Error + Send + Sync + 'static>;
 pub type Result<T> = std::result::Result<T, AppError>;
 
 /// 前端可稳定匹配的错误码。
+#[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Debug, Clone, Copy, Serialize)]
 #[serde(rename_all = "snake_case")]
 #[derive(uniffi::Enum)]
@@ -35,6 +36,7 @@ pub enum ErrorCode {
 }
 
 /// 序列化给前端的统一错误响应。
+#[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 #[derive(uniffi::Record)]

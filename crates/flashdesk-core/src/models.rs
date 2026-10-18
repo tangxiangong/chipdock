@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 /// 支持的固件文件格式。
+#[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[derive(uniffi::Enum)]
@@ -16,6 +17,7 @@ pub enum FirmwareFormat {
 }
 
 /// 前端传入的固件文件信息。
+#[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[derive(uniffi::Record)]
@@ -29,6 +31,7 @@ pub struct FirmwareInput {
 }
 
 /// 固件文件中会被写入 Flash 的地址段。
+#[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[derive(uniffi::Record)]
@@ -42,6 +45,7 @@ pub struct FirmwareUsageSegment {
 }
 
 /// 固件 Flash 占用分析结果。
+#[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[derive(uniffi::Record)]
@@ -61,6 +65,7 @@ pub struct FirmwareUsage {
 }
 
 /// 可用调试探针的前端摘要。
+#[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[derive(uniffi::Record)]
@@ -78,6 +83,7 @@ pub struct ProbeSummary {
 }
 
 /// 一次目标连接或目标操作所需的选择信息。
+#[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[derive(uniffi::Record)]
@@ -93,6 +99,7 @@ pub struct TargetSelection {
 }
 
 /// 调试探针线协议。
+#[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[derive(uniffi::Enum)]
@@ -104,6 +111,7 @@ pub enum WireProtocol {
 }
 
 /// 固件烧录行为选项。
+#[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[derive(uniffi::Record)]
@@ -121,6 +129,7 @@ pub struct FlashOptions {
 }
 
 /// 前端提交的一次烧录任务请求。
+#[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[derive(uniffi::Record)]
@@ -136,6 +145,7 @@ pub struct FlashRequest {
 }
 
 /// 前端提交的一次整片擦除请求。
+#[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[derive(uniffi::Record)]
@@ -147,6 +157,7 @@ pub struct EraseRequest {
 }
 
 /// 前端提交的一次连接探测请求。
+#[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[derive(uniffi::Record)]
@@ -158,6 +169,7 @@ pub struct ConnectRequest {
 }
 
 /// 通过调试接口直接读取的目标硬件信息。
+#[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[derive(uniffi::Record)]
@@ -175,6 +187,7 @@ pub struct TargetInformation {
 }
 
 /// 成功连接目标后的摘要信息。
+#[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[derive(uniffi::Record)]
@@ -194,6 +207,7 @@ pub struct ConnectionInfo {
 }
 
 /// 自动识别失败时，后端按硬件可读信息缩小出的目标候选。
+#[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[derive(uniffi::Record)]
@@ -205,6 +219,7 @@ pub struct TargetCandidate {
 }
 
 /// 前端提交的一次内存读取请求。
+#[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[derive(uniffi::Record)]
@@ -220,6 +235,7 @@ pub struct MemoryRequest {
 }
 
 /// 内存读取结果。
+#[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[derive(uniffi::Record)]
@@ -233,6 +249,7 @@ pub struct MemoryReadResult {
 }
 
 /// 目标芯片内存区域类型。
+#[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[derive(uniffi::Enum)]
@@ -246,6 +263,7 @@ pub enum MemoryRegionKind {
 }
 
 /// 内存区域访问权限。
+#[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[derive(uniffi::Record)]
@@ -261,6 +279,7 @@ pub struct MemoryAccessInfo {
 }
 
 /// 目标芯片的内存区域布局。
+#[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[derive(uniffi::Record)]
@@ -289,6 +308,7 @@ pub struct MemoryRegionLayout {
 pub struct JobId(pub Uuid);
 
 /// 后台任务类型。
+#[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[derive(uniffi::Enum)]
@@ -300,6 +320,7 @@ pub enum JobKind {
 }
 
 /// 后台任务阶段。
+#[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[derive(uniffi::Enum)]

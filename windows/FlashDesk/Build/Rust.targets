@@ -1,0 +1,88 @@
+<Project>
+  <PropertyGroup>
+    <_CargoWasExplicit Condition="'$(CargoExecutable)' != ''">true</_CargoWasExplicit>
+    <RepositoryRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../../..'))</RepositoryRoot>
+    <RustTarget Condition="'$(RustTarget)' == '' and '$(Platform)' == 'ARM64'">aarch64-pc-windows-msvc</RustTarget>
+    <RustTarget Condition="'$(RustTarget)' == ''">x86_64-pc-windows-msvc</RustTarget>
+    <RustHostTarget Condition="'$(RustHostTarget)' == '' and '$(PROCESSOR_ARCHITECTURE)' == 'ARM64'">aarch64-pc-windows-msvc</RustHostTarget>
+    <RustHostTarget Condition="'$(RustHostTarget)' == ''">x86_64-pc-windows-msvc</RustHostTarget>
+    <RustProfile Condition="'$(Configuration)' == 'Release'">release</RustProfile>
+    <RustProfile Condition="'$(RustProfile)' == ''">debug</RustProfile>
+    <RustProfileArgument Condition="'$(Configuration)' == 'Release'">--release</RustProfileArgument>
+    <RustLibrary Condition="'$(RustLibrary)' == ''">$(RepositoryRoot)/target/$(RustTarget)/$(RustProfile)/flashdesk_csharp.dll</RustLibrary>
+    <GeneratedBindingsDirectory Condition="'$(GeneratedBindingsDirectory)' == ''">$(MSBuildProjectDirectory)/Generated</GeneratedBindingsDirectory>
+  </PropertyGroup>
+  <ItemGroup>
+    <Content Include="$(RustLibrary)" Link="flashdesk_csharp.dll" CopyToOutputDirectory="PreserveNewest" />
+    <Compile Remove="$(GeneratedBindingsDirectory)/**" />
+    <_RustBindingInputs Include="$(RepositoryRoot)/crates/**/*.rs;$(RepositoryRoot)/crates/**/Cargo.toml;$(RepositoryRoot)/Cargo.toml;$(RepositoryRoot)/Cargo.lock" Exclude="$(RepositoryRoot)/**/target/**" />
+    <UpToDateCheckInput Include="@(_RustBindingInputs)" />
+    <!-- IntelliSense consumes the checked-in bindings, but never starts Cargo. -->
+    <Compile Include="$(GeneratedBindingsDirectory)/*.cs" Link="Generated/%(Filename)%(Extension)" Condition="'$(DesignTimeBuild)' == 'true'" />
+  </ItemGroup>
+
+  <Target Name="ResolveCargo" Condition="'$(DesignTimeBuild)' != 'true'">
+    <Exec Command="cargo --version" WorkingDirectory="$(RepositoryRoot)" Condition="'$(CargoExecutable)' == ''"
+          IgnoreExitCode="true" IgnoreStandardErrorWarningFormat="true" StandardOutputImportance="Low" StandardErrorImportance="Low">
+      <Output TaskParameter="ExitCode" PropertyName="_CargoPathExitCode" />
+    </Exec>
+    <PropertyGroup>
+      <CargoExecutable Condition="'$(CargoExecutable)' == '' and '$(_CargoPathExitCode)' == '0'">cargo</CargoExecutable>
+      <CargoExecutable Condition="'$(CargoExecutable)' == '' and Exists('$(USERPROFILE)/.cargo/bin/cargo.exe')">$(USERPROFILE)/.cargo/bin/cargo.exe</CargoExecutable>
+    </PropertyGroup>
+    <Error Condition="'$(CargoExecutable)' == ''" Text="Cargo was not found on PATH or in USERPROFILE/.cargo/bin. Install Rust with the MSVC toolchain, then reopen Visual Studio." />
+  </Target>
+
+  <Target Name="EnsureRustTargets" DependsOnTargets="ResolveCargo"
+          Condition="'$(DesignTimeBuild)' != 'true' and ('$(_CargoWasExplicit)' != 'true' or '$(RustupExecutable)' != '')">
+    <!-- Respect the current rustup toolchain/RUSTUP_TOOLCHAIN; never select a version here. -->
+    <Exec Command="rustup --version" WorkingDirectory="$(RepositoryRoot)" Condition="'$(RustupExecutable)' == ''"
+          IgnoreExitCode="true" IgnoreStandardErrorWarningFormat="true" StandardOutputImportance="Low" StandardErrorImportance="Low">
+      <Output TaskParameter="ExitCode" PropertyName="_RustupPathExitCode" />
+    </Exec>
+    <PropertyGroup>
+      <RustupExecutable Condition="'$(RustupExecutable)' == '' and '$(_RustupPathExitCode)' == '0'">rustup</RustupExecutable>
+      <RustupExecutable Condition="'$(RustupExecutable)' == '' and Exists('$(USERPROFILE)/.cargo/bin/rustup.exe')">$(USERPROFILE)/.cargo/bin/rustup.exe</RustupExecutable>
+      <_RustHostTargetArgument Condition="'$(RustHostTarget)' != '$(RustTarget)'">$(RustHostTarget)</_RustHostTargetArgument>
+    </PropertyGroup>
+    <Exec Command="&quot;$(RustupExecutable)&quot; target add $(RustTarget) $(_RustHostTargetArgument)"
+          WorkingDirectory="$(RepositoryRoot)" Condition="'$(RustupExecutable)' != ''" IgnoreExitCode="true">
+      <Output TaskParameter="ExitCode" PropertyName="_RustTargetsExitCode" />
+    </Exec>
+    <Error Condition="'$(RustupExecutable)' != '' and '$(_RustTargetsExitCode)' != '0'" Text="Rust target installation failed for the current rustup toolchain. Check the rustup diagnostics above." />
+    <Message Condition="'$(RustupExecutable)' == ''" Importance="Low" Text="Rustup is unavailable; Cargo will use the installed Rust targets." />
+  </Target>
+
+  <Target Name="BuildRustBackend" DependsOnTargets="ResolveCargo;EnsureRustTargets" Condition="'$(DesignTimeBuild)' != 'true'">
+    <Message Importance="High" Text="Building FlashDesk Rust Core: $(RustTarget) / $(RustProfile)" />
+    <Exec Command="&quot;$(CargoExecutable)&quot; build --locked --target-dir &quot;$(RepositoryRoot)/target&quot; -p flashdesk-csharp --target $(RustTarget) $(RustProfileArgument)"
+          WorkingDirectory="$(RepositoryRoot)" IgnoreExitCode="true">
+      <Output TaskParameter="ExitCode" PropertyName="_RustBuildExitCode" />
+    </Exec>
+    <Error Condition="'$(_RustBuildExitCode)' != '0'" Text="Rust build failed for $(RustTarget). Check the Cargo diagnostics above; install the requested Rust target and Visual Studio C++ build tools." />
+    <Error Condition="!Exists('$(RustLibrary)')" Text="Cargo completed but its expected library was not found: $(RustLibrary)" />
+  </Target>
+
+  <Target Name="GenerateRustBindings" DependsOnTargets="BuildRustBackend" Condition="'$(DesignTimeBuild)' != 'true'"
+          Inputs="$(RustLibrary);@(_RustBindingInputs)" Outputs="$(GeneratedBindingsDirectory)/Interop.cs">
+    <Message Importance="High" Text="Generating Interoptopus C# bindings from the Rust declarations" />
+    <Exec Command="&quot;$(CargoExecutable)&quot; run --locked --target-dir &quot;$(RepositoryRoot)/target&quot; -p flashdesk-csharp-bindgen --target $(RustHostTarget) $(RustProfileArgument) -- &quot;$(GeneratedBindingsDirectory)&quot;"
+          WorkingDirectory="$(RepositoryRoot)" IgnoreExitCode="true">
+      <Output TaskParameter="ExitCode" PropertyName="_RustBindingsExitCode" />
+    </Exec>
+    <Error Condition="'$(_RustBindingsExitCode)' != '0'" Text="Interoptopus C# binding generation failed. Check the Cargo diagnostics above." />
+    <Error Condition="!Exists('$(GeneratedBindingsDirectory)/Interop.cs')" Text="The Interoptopus generator did not produce $(GeneratedBindingsDirectory)/Interop.cs" />
+  </Target>
+
+  <!-- Evaluate generated Compile items after generation. -->
+  <Target Name="IncludeRustBindings" DependsOnTargets="GenerateRustBindings" Condition="'$(DesignTimeBuild)' != 'true'">
+    <ItemGroup>
+      <GeneratedBindings Remove="@(GeneratedBindings)" />
+      <GeneratedBindings Include="$(GeneratedBindingsDirectory)/*.cs" />
+      <Compile Remove="@(GeneratedBindings)" />
+      <Compile Include="@(GeneratedBindings)" Link="Generated/%(Filename)%(Extension)" />
+    </ItemGroup>
+    <Error Condition="'@(GeneratedBindings)' == ''" Text="No generated Interoptopus C# source was found after generation." />
+  </Target>
+  <Target Name="PrepareRustBackend" BeforeTargets="PrepareForBuild;CoreCompile" DependsOnTargets="IncludeRustBindings" Condition="'$(DesignTimeBuild)' != 'true'" />
+</Project>

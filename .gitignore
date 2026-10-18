@@ -13,5 +13,12 @@ docs/superpowers/
 # Rust and Xcode build products
 /target/
 /.build/
+/dist/
 **/xcuserdata/
 *.xcuserstate
+
+# Visual Studio and .NET build products
+.vs/
+*.user
+windows/**/bin/
+windows/**/obj/
