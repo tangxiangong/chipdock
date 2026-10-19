@@ -154,6 +154,7 @@ internal sealed class FlashView : UserControl
 
         // Erases the whole chip without programming, after confirmation.
         erase = Ui.Button(Glyphs.Erase, "擦除芯片…", () => _ = window.ConfirmErase());
+        erase.Style = Ui.Style("DestructiveButtonStyle");
         erase.Padding = new Thickness(14, 8, 14, 8);
 
         var actionLabel = new Grid { ColumnSpacing = 8 };

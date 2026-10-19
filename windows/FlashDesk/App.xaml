@@ -27,6 +27,9 @@
    <Style x:Key="CriticalGlyphStyle" TargetType="FontIcon">
     <Setter Property="Foreground" Value="{ThemeResource SystemFillColorCriticalBrush}" />
    </Style>
+   <Style x:Key="DestructiveButtonStyle" TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}">
+    <Setter Property="Foreground" Value="{ThemeResource SystemFillColorCriticalBrush}" />
+   </Style>
    <Style x:Key="SecondaryGlyphStyle" TargetType="FontIcon">
     <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
    </Style>

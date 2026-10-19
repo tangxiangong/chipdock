@@ -417,6 +417,8 @@ private struct EraseButton: View {
 
     var body: some View {
         Button("擦除芯片…", systemImage: "eraser", role: .destructive) { store.confirmErase = true }
+            .buttonStyle(.borderedProminent)
+            .tint(.red)
             .controlSize(.large)
             .disabled(!store.canErase)
             .help(store.connection == nil ? "连接后即可擦除" : "擦除整个芯片，不烧录")
