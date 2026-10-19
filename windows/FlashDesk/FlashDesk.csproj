@@ -17,7 +17,7 @@
     <WindowsPackageType>None</WindowsPackageType>
     <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
     <DefaultLanguage>zh-CN</DefaultLanguage>
-    <Version>0.1.0</Version>
+    <Version>0.1.1</Version>
     <WindowsAppSDKSelfContained>false</WindowsAppSDKSelfContained>
     <SelfContained>false</SelfContained>
     <!-- Program.Main provisions Windows App Runtime before any WinUI type loads. -->

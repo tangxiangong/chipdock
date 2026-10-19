@@ -4,7 +4,7 @@ import XCTest
 final class CoreIntegrationTests: XCTestCase {
     func testGeneratedBindingsSearchAndMemoryMap() throws {
         let core = FlashDeskCore()
-        XCTAssertEqual(core.version(), "0.1.0")
+        XCTAssertEqual(core.version(), "0.1.1")
         XCTAssertEqual(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String, core.version())
         let chips = try core.searchChips(query: "STM32F103VE", limit: 10)
         XCTAssertTrue(chips.contains { $0.hasPrefix("STM32F103VE") })

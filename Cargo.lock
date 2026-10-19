@@ -485,14 +485,14 @@ checksum = "d45db016d36b838f563236e9193d0ee6ce38f3f68b6c94e914b4929c96bbb890"
 
 [[package]]
 name = "flashdesk-bindgen"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "uniffi",
 ]
 
 [[package]]
 name = "flashdesk-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "chrono",
  "ihex",
@@ -510,7 +510,7 @@ dependencies = [
 
 [[package]]
 name = "flashdesk-csharp"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "chrono",
  "flashdesk-core",
@@ -521,7 +521,7 @@ dependencies = [
 
 [[package]]
 name = "flashdesk-csharp-bindgen"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "flashdesk-csharp",
  "interoptopus_csharp",
@@ -529,7 +529,7 @@ dependencies = [
 
 [[package]]
 name = "flashdesk-release-notes"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "tempfile",
