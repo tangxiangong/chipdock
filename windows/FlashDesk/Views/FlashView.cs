@@ -118,13 +118,11 @@ internal sealed class FlashView : UserControl
         var targetTitle = new Grid { ColumnSpacing = 8 };
         targetTitle.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         targetTitle.ColumnDefinitions.Add(new());
-        targetTitle.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         Grid.SetColumn(targetName, 1);
-        Grid.SetColumn(targetState, 2);
         targetTitle.Children.Add(connectionDot);
         targetTitle.Children.Add(targetName);
-        targetTitle.Children.Add(targetState);
-        var targetCard = Card(Glyphs.Chip, Ui.Column(2, targetTitle, targetDetail), Ui.Row(8, disconnectTarget, changeTarget));
+        targetState.VerticalAlignment = VerticalAlignment.Center;
+        var targetCard = Card(Glyphs.Chip, Ui.Column(2, targetTitle, targetDetail), Ui.Row(8, targetState, disconnectTarget, changeTarget));
 
         baseAddress.FontFamily = (FontFamily)Application.Current.Resources["MonoFontFamily"];
         baseAddress.TextChanged += (_, _) => store.BinBaseAddress = baseAddress.Text;
@@ -135,7 +133,7 @@ internal sealed class FlashView : UserControl
         foreach (var strategy in Enum.GetValues<EraseStrategy>()) eraseStrategy.Items.Add(strategy.Title());
         eraseStrategy.SelectionChanged += (_, _) => { if (eraseStrategy.SelectedIndex >= 0) store.EraseStrategy = (EraseStrategy)eraseStrategy.SelectedIndex; };
         Ui.Name(eraseStrategy, "擦除");
-        var eraseCard = Card(Glyphs.Erase, Ui.Column(2, Ui.Text("擦除"), eraseDetail), eraseStrategy);
+        var eraseCard = Card(Glyphs.Erase, Ui.Column(2, Ui.Text("擦除"), eraseDetail), eraseStrategy, stackBelow: 320);
 
         verify.Toggled += (_, _) => store.Verify = verify.IsOn;
         resetAfter.Toggled += (_, _) => store.ResetAfter = resetAfter.IsOn;
@@ -144,17 +142,32 @@ internal sealed class FlashView : UserControl
         Ui.Name(resetAfter, "复位并运行程序");
         Ui.Name(dryRun, "仅预检查，不写入芯片");
 
-        var settings = Ui.Column(4,
-            targetCard,
-            baseAddressCard,
+        var options = new Grid { ColumnSpacing = 4, RowSpacing = 4 };
+        options.ColumnDefinitions.Add(new());
+        options.ColumnDefinitions.Add(new());
+        options.RowDefinitions.Add(new() { Height = GridLength.Auto });
+        options.RowDefinitions.Add(new() { Height = GridLength.Auto });
+        Border[] optionCards =
+        [
             eraseCard,
-            Card(Glyphs.Verify, Description("校验写入的数据", "写入后逐字节比对"), verify),
-            Card(Glyphs.Reset, Description("复位并运行程序", "完成后复位目标芯片"), resetAfter),
-            Card(Glyphs.Shield, Description("仅预检查，不写入芯片", "检查连接、地址与 Flash 映射"), dryRun));
+            Card(Glyphs.Verify, Description("校验写入的数据", "写入后逐字节比对"), verify, stackBelow: 320),
+            Card(Glyphs.Reset, Description("复位并运行程序", "完成后复位目标芯片"), resetAfter, stackBelow: 320),
+            Card(Glyphs.Shield, Description("仅预检查，不写入芯片", "检查连接、地址与 Flash 映射"), dryRun, stackBelow: 320),
+        ];
+        for (var index = 0; index < optionCards.Length; index++)
+        {
+            Grid.SetRow(optionCards[index], index / 2);
+            Grid.SetColumn(optionCards[index], index % 2);
+            options.Children.Add(optionCards[index]);
+        }
+        var settings = Ui.Column(4, targetCard, baseAddressCard, options);
 
         // Erases the whole chip without programming, after confirmation.
         erase = Ui.Button(Glyphs.Erase, "擦除芯片…", () => _ = window.ConfirmErase());
-        erase.Style = Ui.Style("DestructiveButtonStyle");
+        erase.Resources.MergedDictionaries.Add(new ResourceDictionary
+        {
+            Source = new Uri("ms-appx:///Views/DestructiveButtonResources.xaml"),
+        });
         erase.Padding = new Thickness(14, 8, 14, 8);
 
         var actionLabel = new Grid { ColumnSpacing = 8 };
@@ -248,7 +261,7 @@ internal sealed class FlashView : UserControl
     private static StackPanel Description(string title, string detail) => Ui.Column(2, Ui.Text(title, wrap: true), Ui.Secondary(detail, 12, wrap: true));
 
     /// A Windows Settings-style row: icon, title and description, then the control.
-    private static Border Card(string glyph, FrameworkElement text, FrameworkElement control)
+    private static Border Card(string glyph, FrameworkElement text, FrameworkElement control, double stackBelow = 520)
     {
         var grid = new Grid { ColumnSpacing = 16, MinHeight = 40 };
         grid.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
@@ -266,7 +279,7 @@ internal sealed class FlashView : UserControl
         bool? controlStacked = null;
         grid.SizeChanged += (_, args) =>
         {
-            var stacked = args.NewSize.Width < 520;
+            var stacked = args.NewSize.Width < stackBelow;
             if (controlStacked == stacked) return;
             controlStacked = stacked;
             Grid.SetColumnSpan(text, stacked ? 2 : 1);

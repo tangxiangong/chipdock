@@ -36,8 +36,7 @@ internal sealed class MainWindow : Window
     private readonly SelectorBarItem logsTab = new() { Text = "日志", Icon = new FontIcon { Glyph = Glyphs.Logs } };
     private readonly SelectorBarItem memoryTab = new() { Text = "内存", Icon = new FontIcon { Glyph = Glyphs.Memory } };
     private readonly Border dropOverlay = new() { Style = Ui.Style("DropOverlayStyle"), Visibility = Visibility.Collapsed, IsHitTestVisible = false };
-    private readonly ToggleButton logsButton = new() { Padding = new Thickness(10, 6, 10, 6) };
-    private readonly ToggleButton memoryButton = new() { Padding = new Thickness(10, 6, 10, 6) };
+    private readonly ToggleButton inspectorButton = new() { Padding = new Thickness(10, 6, 10, 6) };
     private readonly InfoBadge errorBadge = new() { HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, -6, -8, 0) };
     private readonly DropDownButton profilesButton = new() { Content = Ui.Row(8, Ui.Glyph(Glyphs.Bookmark, 14), Ui.Text("配置")) };
 
@@ -113,9 +112,8 @@ internal sealed class MainWindow : Window
         toolbar.ColumnDefinitions.Add(new());
         toolbar.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         Grid.SetColumn(activity, 1);
-        var tools = Ui.Row(4, profilesButton, ToolSeparator(), PaneButton(logsButton, Glyphs.Logs, "日志（Ctrl+J）", InspectorPane.Logs, errorBadge),
-            PaneButton(memoryButton, Glyphs.Memory, "内存（Ctrl+Alt+M）", InspectorPane.Memory, null),
-            Ui.IconButton(Glyphs.Settings, "设置", () => _ = ShowSettings()));
+        var tools = Ui.Row(4, profilesButton, ToolSeparator(),
+            Ui.IconButton(Glyphs.Settings, "设置", () => _ = ShowSettings()), BuildInspectorButton());
         tools.VerticalAlignment = VerticalAlignment.Center;
         Grid.SetColumn(tools, 2);
         toolbar.Children.Add(menu);
@@ -202,7 +200,7 @@ internal sealed class MainWindow : Window
         var bar = new Grid { Padding = new Thickness(16, 0, 0, 0), ColumnSpacing = 12, Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent) };
         bar.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         bar.ColumnDefinitions.Add(new());
-        var icon = new Image { Source = new BitmapImage(new Uri("ms-appx:///Assets/FlashDesk.png")), Width = 16, Height = 16, VerticalAlignment = VerticalAlignment.Center };
+        var icon = new Image { Source = new BitmapImage(new Uri("ms-appx:///Assets/FlashDesk.png")), Width = 24, Height = 24, VerticalAlignment = VerticalAlignment.Center };
         titleText.VerticalAlignment = VerticalAlignment.Center;
         Grid.SetColumn(titleText, 1);
         bar.Children.Add(icon);
@@ -226,20 +224,15 @@ internal sealed class MainWindow : Window
         VerticalAlignment = VerticalAlignment.Center,
     };
 
-    private ToggleButton PaneButton(ToggleButton button, string glyph, string tip, InspectorPane pane, InfoBadge? badge)
+    private ToggleButton BuildInspectorButton()
     {
         var content = new Grid();
-        content.Children.Add(Ui.Glyph(glyph, 16));
-        if (badge is not null)
-        {
-            badge.Style = Ui.Style("CriticalValueInfoBadgeStyle");
-            content.Children.Add(badge);
-        }
-        button.Content = content;
-        button.Click += (_, _) => TogglePane(pane);
-        ToolTipService.SetToolTip(button, tip);
-        Ui.Name(button, tip);
-        return button;
+        content.Children.Add(Ui.Glyph(Glyphs.Sidebar, 16));
+        errorBadge.Style = Ui.Style("CriticalValueInfoBadgeStyle");
+        content.Children.Add(errorBadge);
+        inspectorButton.Content = content;
+        inspectorButton.Click += (_, _) => ToggleInspector();
+        return inspectorButton;
     }
 
     private void BuildInspector()
@@ -266,6 +259,12 @@ internal sealed class MainWindow : Window
         inspector.Children.Add(header);
         inspector.Children.Add(logs);
         inspector.Children.Add(memory);
+    }
+
+    private void ToggleInspector()
+    {
+        if (openPane is not null) ClosePane();
+        else OpenPane(selector.SelectedItem == memoryTab ? InspectorPane.Memory : InspectorPane.Logs);
     }
 
     private void TogglePane(InspectorPane pane)
@@ -344,13 +343,15 @@ internal sealed class MainWindow : Window
         eraseItem.IsEnabled = Store.CanErase;
         checkUpdatesItem.IsEnabled = Updater.CanCheck;
         logsItem.IsChecked = openPane == InspectorPane.Logs;
-        logsButton.IsChecked = logsItem.IsChecked;
         memoryItem.IsChecked = openPane == InspectorPane.Memory;
-        memoryButton.IsChecked = memoryItem.IsChecked;
+        inspectorButton.IsChecked = openPane is not null;
         profilesButton.IsEnabled = !busy;
         errorBadge.Value = Store.UnseenErrors;
         Ui.SetVisible(errorBadge, Store.UnseenErrors > 0);
-        ToolTipService.SetToolTip(logsButton, Store.UnseenErrors > 0 ? $"{Store.UnseenErrors} 条新错误（Ctrl+J）" : "日志（Ctrl+J）");
+        var inspectorTip = openPane is null ? "打开侧栏（日志 / 内存）" : "关闭侧栏（日志 / 内存）";
+        if (Store.UnseenErrors > 0) inspectorTip += $" · {Store.UnseenErrors} 条新错误";
+        ToolTipService.SetToolTip(inspectorButton, inspectorTip);
+        Ui.Name(inspectorButton, inspectorTip);
 
         if (!ReferenceEquals(shownRecentFiles, Store.RecentFiles))
         {

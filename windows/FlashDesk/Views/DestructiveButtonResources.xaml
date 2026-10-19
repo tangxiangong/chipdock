@@ -1,0 +1,25 @@
+<ResourceDictionary
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+ <!-- Load a fresh dictionary per button; resource dictionaries cannot have two owners. -->
+ <ResourceDictionary.ThemeDictionaries>
+  <ResourceDictionary x:Key="Default">
+   <SolidColorBrush x:Key="ButtonBackground" Color="#C42B1C" />
+   <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#B52619" />
+   <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#A32217" />
+   <SolidColorBrush x:Key="ButtonBackgroundDisabled" Color="#40C42B1C" />
+   <SolidColorBrush x:Key="ButtonForeground" Color="White" />
+   <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="White" />
+   <SolidColorBrush x:Key="ButtonForegroundPressed" Color="White" />
+  </ResourceDictionary>
+  <ResourceDictionary x:Key="HighContrast">
+   <SolidColorBrush x:Key="ButtonBackground" Color="{ThemeResource SystemColorButtonFaceColor}" />
+   <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="{ThemeResource SystemColorHighlightColor}" />
+   <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="{ThemeResource SystemColorHighlightColor}" />
+   <SolidColorBrush x:Key="ButtonBackgroundDisabled" Color="{ThemeResource SystemColorButtonFaceColor}" />
+   <SolidColorBrush x:Key="ButtonForeground" Color="{ThemeResource SystemColorButtonTextColor}" />
+   <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="{ThemeResource SystemColorHighlightTextColor}" />
+   <SolidColorBrush x:Key="ButtonForegroundPressed" Color="{ThemeResource SystemColorHighlightTextColor}" />
+  </ResourceDictionary>
+ </ResourceDictionary.ThemeDictionaries>
+</ResourceDictionary>

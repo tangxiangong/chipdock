@@ -19,7 +19,8 @@ internal static class Glyphs
     internal const string Delete = "\uE74D", Settings = "\uE713", Info = "\uE946", Copy = "\uE8C8";
     internal const string Export = "\uEDE1", Download = "\uE896", Flash = "\uE945", Shield = "\uEA18";
     internal const string Warning = "\uE7BA", Error = "\uE783", More = "\uE712", Logs = "\uE8FD";
-    internal const string Memory = "\uE9F5", Chip = "\uE950", Search = "\uE721", ChevronDown = "\uE70D";
+    internal const string Memory = "\uEEA0", Chip = "\uE950", Search = "\uE721", ChevronDown = "\uE70D";
+    internal const string Sidebar = "\uE90D";
     internal const string Probe = "\uE88E", Close = "\uE8BB", Filter = "\uE71C", Erase = "\uE75C";
     internal const string Verify = "\uE73E", Reset = "\uE777", Swap = "\uE8AB", Edit = "\uE70F";
 }
