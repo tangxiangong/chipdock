@@ -60,6 +60,13 @@ pub fn validate_firmware(input: &FirmwareInput) -> Result<FirmwareFormat> {
 pub fn analyze_firmware_usage(input: &FirmwareInput) -> Result<FirmwareUsage> {
     let format = validate_firmware(input)?;
     let path = Path::new(&input.path);
+    // Windows cannot open a directory as a regular file. Classify it before
+    // opening so every platform reports the same invalid-input error.
+    if !fs::metadata(path).map_err(AppError::IoFailure)?.is_file() {
+        return Err(AppError::InvalidUserInput {
+            detail: "固件路径必须是普通文件".to_string(),
+        });
+    }
     let mut segments = match format {
         FirmwareFormat::Bin => analyze_bin_usage(path, input.base_address)?,
         FirmwareFormat::Hex => analyze_hex_usage(path)?,
@@ -434,19 +441,22 @@ mod tests {
     }
 
     #[test]
-    fn analyze_bin_should_reject_a_directory_with_a_bin_extension() {
+    fn analyze_firmware_usage_should_reject_directories_with_supported_extensions() {
         let directory = tempfile::tempdir().unwrap();
-        let file = directory.path().join("directory.bin");
-        fs::create_dir(&file).unwrap();
-        let input = FirmwareInput {
-            path: file.display().to_string(),
-            format: None,
-            base_address: Some(0),
-        };
-        assert!(matches!(
-            analyze_firmware_usage(&input),
-            Err(AppError::InvalidUserInput { .. })
-        ));
+        for extension in ["bin", "hex", "elf"] {
+            let file = directory.path().join(format!("directory.{extension}"));
+            fs::create_dir(&file).unwrap();
+            let input = FirmwareInput {
+                path: file.display().to_string(),
+                format: None,
+                base_address: Some(0),
+            };
+            let error = analyze_firmware_usage(&input).unwrap_err();
+            assert!(
+                matches!(error, AppError::InvalidUserInput { .. }),
+                "unexpected error for {extension}: {error:?}"
+            );
+        }
     }
 
     #[test]

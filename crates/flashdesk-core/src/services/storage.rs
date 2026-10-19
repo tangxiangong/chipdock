@@ -97,9 +97,17 @@ where
         .as_file()
         .sync_all()
         .map_err(|err| storage_io_error("sync json file", err))?;
-    temporary
-        .persist(path)
+    // Clear the Windows temporary attribute, then restore automatic cleanup
+    // before renaming. Unlike tempfile::persist, std::fs::rename supports
+    // replacing a Windows destination while readers retain its old snapshot.
+    let temporary = temporary
+        .into_temp_path()
+        .keep()
         .map_err(|err| storage_io_error("replace json file", err.error))?;
+    let mut temporary = tempfile::TempPath::try_from_path(temporary)
+        .map_err(|err| storage_io_error("track temporary json file", err))?;
+    fs::rename(&temporary, path).map_err(|err| storage_io_error("replace json file", err))?;
+    temporary.disable_cleanup(true);
     Ok(())
 }
 
@@ -207,6 +215,20 @@ mod tests {
         reader.read_to_string(&mut old_snapshot).unwrap();
         assert_eq!(old_snapshot, "[]");
         assert_eq!(load_profiles(&paths).unwrap().len(), 1);
+        assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 1);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn saved_profiles_should_not_have_the_windows_temporary_attribute() {
+        use std::os::windows::fs::MetadataExt;
+
+        const FILE_ATTRIBUTE_TEMPORARY: u32 = 0x100;
+        let directory = tempfile::tempdir().unwrap();
+        let paths = StoragePaths::new(directory.path().to_path_buf());
+        save_profiles(&paths, &[profile()]).unwrap();
+        let attributes = fs::metadata(paths.profiles()).unwrap().file_attributes();
+        assert_eq!(attributes & FILE_ATTRIBUTE_TEMPORARY, 0);
     }
 
     #[test]
