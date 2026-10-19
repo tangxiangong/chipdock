@@ -177,7 +177,9 @@ internal sealed class TargetSetupDialog : ContentDialog
         }
         probe.SelectedItem = selected ?? probe.Items[0];
         Ui.SetVisible(probeFooter, store.HasScanned);
-        probeFooter.Text = store.Probes.Count == 0 ? "未发现调试探针，请检查 USB 连接。" : $"已发现 {store.Probes.Count} 个调试探针。";
+        probeFooter.Text = store.Probes.Count == 0
+            ? "未发现调试探针。请检查 USB 数据线及驱动，并关闭其他调试工具；串口型烧录器需安装对应的串口驱动。"
+            : $"已发现 {store.Probes.Count} 个调试探针；连接时会检查并修复支持的 USB 调试接口驱动。";
         probeFooter.Style = Ui.Style(store.Probes.Count == 0 ? "CriticalTextStyle" : "SecondaryTextStyle");
 
         if (chip.FocusState == FocusState.Unfocused) chip.Text = store.Chip;

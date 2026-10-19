@@ -31,8 +31,14 @@ struct TargetSetupSheet: View {
                     Text("探针")
                 } footer: {
                     if store.hasScanned {
-                        Text(store.probes.isEmpty ? "未发现调试探针，请检查 USB 连接。" : "已发现 \(store.probes.count) 个调试探针。")
+                        Text(store.probes.isEmpty
+                             ? "未发现调试探针。请检查 USB 数据线；使用 Apple 芯片的 Mac 笔记本时，请先解锁并允许此配件连接。关闭其他调试工具后重新扫描。"
+                             : "已发现 \(store.probes.count) 个调试探针。")
                             .font(.caption).foregroundStyle(store.probes.isEmpty ? Color.orange : Color.secondary)
+                        if store.probes.isEmpty {
+                            Link("USB 配件授权说明", destination: URL(string: "https://support.apple.com/zh-cn/102282")!)
+                                .font(.caption)
+                        }
                     }
                 }
 

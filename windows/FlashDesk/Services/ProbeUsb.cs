@@ -9,41 +9,35 @@ namespace FlashDesk;
 
 /// SetupAPI is used instead of CIM/WMI so driver discovery needs no administrator rights.
 [SupportedOSPlatform("windows")]
-internal static class StLinkUsb
+internal static class ProbeUsb
 {
     private const uint ClassDriver = 1, ServiceProperty = 4, PresentAllClasses = 6;
     private const int NoMoreItems = 259, InvalidData = 13, InsufficientBuffer = 122;
-    // ST's debug interface GUID, also used by its programming tools.
-    private const string DebugInterfaceGuid = "{DBCE1CD9-A320-4B51-A365-A0C3F3C5FB29}";
 
-    internal sealed record Device(string InstanceId, ushort Vendor, ushort Product, string Serial, string Service,
-        bool HasInterfaceGuid, bool Started, bool InterfaceActive)
+    internal static bool IsDebugInterface(string instanceId) =>
+        ProbeDriverRules.DebugInterface(instanceId, [], "") is not null;
+
+    // Dynamic CMSIS-DAP / Glasgow identity is checked again against live descriptors
+    // in the elevated helper. Obvious non-debug interfaces never reach native APIs.
+    internal static bool CanInspect(string instanceId)
     {
-        internal bool UsesWinUsb => Service.Equals("WinUSB", StringComparison.OrdinalIgnoreCase);
-        internal bool IsComposite => InstanceId.Split('\\')[1].Contains("&MI_", StringComparison.OrdinalIgnoreCase);
-        // nusb opens a standalone V2 through GUID_DEVINTERFACE_USB_DEVICE; a custom
-        // interface GUID is needed only for a composite device's debug child.
-        internal bool NeedsRepair => Service.Length == 0 || (UsesWinUsb && IsComposite && !HasInterfaceGuid);
-        internal bool Ready => UsesWinUsb && (!IsComposite || HasInterfaceGuid) && Started && InterfaceActive;
+        var id = UsbProbeIdentity.Parse(instanceId);
+        if (id is null) return false;
+        var family = ProbeDriverRules.KnownFamily(id.Vendor, id.Product);
+        return family is null || family == ProbeFamily.Glasgow && id.Interface is not null || IsDebugInterface(instanceId);
     }
 
-    internal static bool IsDebugInterface(string instanceId)
-    {
-        var parts = instanceId.Split('\\');
-        if (parts.Length != 3 || !parts[0].Equals("USB", StringComparison.OrdinalIgnoreCase) || parts[2].Length == 0) return false;
-        var ids = parts[1].Split('&');
-        if (ids.Length is not (2 or 3) || !ids[0].Equals("VID_0483", StringComparison.OrdinalIgnoreCase)
-            || !ids[1].StartsWith("PID_", StringComparison.OrdinalIgnoreCase)
-            || !ushort.TryParse(ids[1].AsSpan(4), System.Globalization.NumberStyles.HexNumber, null, out var product)
-            || !StLinkDriver.IsSupported(0x0483, product)) return false;
-        // V2 is a single-function device. Composite V2-1/V3 expose debug on MI_00.
-        return ids.Length == 3 ? ids[2].Equals("MI_00", StringComparison.OrdinalIgnoreCase) : product == 0x3748;
-    }
-
-    internal static IReadOnlyList<Device> ListDevices()
+    internal static IReadOnlyList<UsbProbeDevice> ListDevices()
     {
         using var set = GetPresentDevices();
-        var result = new List<Device>();
+        var result = new List<UsbProbeDevice>();
+        var physicalDevices = new Dictionary<(ushort Vendor, ushort Product), HashSet<string>>();
+        void TrackPhysical(UsbProbeIdentity id, string parent)
+        {
+            var key = (id.Vendor, id.Product);
+            if (!physicalDevices.TryGetValue(key, out var ids)) physicalDevices[key] = ids = new(StringComparer.OrdinalIgnoreCase);
+            ids.Add(parent);
+        }
         for (uint index = 0; ; index++)
         {
             var info = DeviceInfo.Create();
@@ -53,26 +47,41 @@ internal static class StLinkUsb
                 throw NativeError("无法枚举 USB 设备");
             }
             var instanceId = InstanceId(info.DevInst);
-            if (!IsDebugInterface(instanceId)) continue;
+            var id = UsbProbeIdentity.Parse(instanceId);
+            if (id is null) continue;
+            // Count all physical devices, including siblings with an unknown or
+            // protected driver that never become repair candidates.
+            if (id.Interface is null) TrackPhysical(id, instanceId);
+            if (!CanInspect(instanceId)) continue;
+            var compatibleIds = RegistryStrings(set, ref info, 2); // SPDRP_COMPATIBLEIDS
+            var description = BusDescription(info.DevInst);
+            var family = ProbeDriverRules.DebugInterface(instanceId, compatibleIds, description);
+            if (family is null) continue;
             var identity = instanceId.Split('\\');
-            var product = Convert.ToUInt16(identity[1].Split('&')[1][4..], 16);
             var serial = identity[2];
             if (identity[1].Contains("&MI_", StringComparison.OrdinalIgnoreCase))
             {
                 if (CM_Get_Parent(out var parent, info.DevInst, 0) != 0)
-                    throw new IOException("无法读取 ST-Link 的 USB 父设备。");
-                serial = InstanceId(parent).Split('\\')[^1];
+                    throw new IOException("无法读取烧录器的 USB 父设备。");
+                var parentId = InstanceId(parent);
+                TrackPhysical(id, parentId);
+                serial = parentId.Split('\\')[^1];
             }
+            var service = Service(set, ref info);
+            if (service.Equals("usbccgp", StringComparison.OrdinalIgnoreCase)) continue;
             using var key = OpenParameters(set, ref info, create: false);
-            var guid = RegisteredGuid(key?.GetValue("DeviceInterfaceGUIDs"), key?.GetValue("DeviceInterfaceGUID"));
+            var guid = ProbeDriverRules.RegisteredGuid(key?.GetValue("DeviceInterfaceGUIDs"), key?.GetValue("DeviceInterfaceGUID"));
             var started = CM_Get_DevNode_Status(out var status, out _, info.DevInst, 0) == 0
                 && (status & 0x408) == 0x8; // DN_STARTED, without DN_HAS_PROBLEM
             var accessGuid = identity[1].Contains("&MI_", StringComparison.OrdinalIgnoreCase)
                 ? guid : new Guid("A5DCBF10-6530-11D2-901F-00C04FB951ED"); // GUID_DEVINTERFACE_USB_DEVICE
-            result.Add(new Device(instanceId, 0x0483, product, serial, Service(set, ref info), guid is not null,
-                started, started && accessGuid is { } value && HasActiveInterface(instanceId, value)));
+            result.Add(new UsbProbeDevice(instanceId, id.Vendor, id.Product, serial, service, guid is not null,
+                started, started && accessGuid is { } value && HasActiveInterface(instanceId, value), family.Value));
         }
-        return result;
+        return result.Select(device => device with
+        {
+            UniqueOnBus = physicalDevices.TryGetValue((device.Vendor, device.Product), out var ids) && ids.Count == 1,
+        }).ToArray();
     }
 
     /// Builds an in-memory driver list without selecting or installing anything.
@@ -80,7 +89,7 @@ internal static class StLinkUsb
     {
         using var set = GetPresentDevices();
         var info = DeviceInfo.Create();
-        Require(SetupDiOpenDeviceInfoW(set, instanceId, 0, 0, ref info), "无法打开 ST-Link 调试接口");
+        Require(SetupDiOpenDeviceInfoW(set, instanceId, 0, 0, ref info), "无法打开烧录器调试接口");
         BuildWinUsbDriverList(set, ref info);
         try { _ = FindWinUsbDriver(set, ref info); }
         finally { SetupDiDestroyDriverInfoList(set, ref info, ClassDriver); }
@@ -89,42 +98,42 @@ internal static class StLinkUsb
     internal static bool Install(string instanceId)
     {
         // Revalidate against currently present devices in the elevated process.
-        if (!IsDebugInterface(instanceId)) throw new Win32Exception(87);
+        if (!CanInspect(instanceId)) throw new Win32Exception(87);
         var device = ListDevices().SingleOrDefault(candidate => candidate.InstanceId.Equals(instanceId, StringComparison.OrdinalIgnoreCase))
-            ?? throw new Win32Exception(1167, "ST-Link 已断开。");
+            ?? throw new Win32Exception(1167, "烧录器已断开。");
         if (device.Ready) return false;
-        if (!device.NeedsRepair) throw new Win32Exception(50, "ST-Link 已绑定其他驱动。");
+        if (!device.NeedsRepair) throw new Win32Exception(50, "烧录器已绑定其他驱动。");
 
         using var set = GetPresentDevices();
         var info = DeviceInfo.Create();
-        Require(SetupDiOpenDeviceInfoW(set, instanceId, 0, 0, ref info), "无法打开 ST-Link 调试接口");
+        Require(SetupDiOpenDeviceInfoW(set, instanceId, 0, 0, ref info), "无法打开烧录器调试接口");
         if (!Service(set, ref info).Equals(device.Service, StringComparison.OrdinalIgnoreCase))
-            throw new Win32Exception(1237, "ST-Link 驱动状态已改变，请重试。");
+            throw new Win32Exception(1237, "烧录器驱动状态已改变，请重试。");
 
         var reboot = false;
-        if (device.Service.Length == 0)
+        if (!device.UsesWinUsb)
         {
             BuildWinUsbDriverList(set, ref info);
             try
             {
                 var driver = FindWinUsbDriver(set, ref info);
                 Require(SetupDiSetSelectedDriverW(set, ref info, ref driver), "无法选择 WinUSB 驱动");
-                AddGuid(set, ref info);
+                AddGuid(set, ref info, device.Family);
                 Require(DiInstallDevice(0, set, ref info, ref driver, 0, out reboot), "无法安装 WinUSB 驱动");
             }
             finally { SetupDiDestroyDriverInfoList(set, ref info, ClassDriver); }
         }
-        else AddGuid(set, ref info);
+        else AddGuid(set, ref info, device.Family);
 
         if (!reboot)
         {
-            // WinUSB reads DeviceInterfaceGUIDs on device start. Restart only debug MI_00.
+            // WinUSB reads DeviceInterfaceGUIDs on device start. Restart only the selected debug interface.
             var change = new PropertyChange
             {
                 HeaderSize = 8, InstallFunction = 0x12, StateChange = 3, Scope = 2,
             }; // DIF_PROPERTYCHANGE, DICS_PROPCHANGE, DICS_FLAG_CONFIGSPECIFIC
-            Require(SetupDiSetClassInstallParamsW(set, ref info, ref change, (uint)Marshal.SizeOf<PropertyChange>()), "无法准备 ST-Link 接口重启");
-            Require(SetupDiCallClassInstaller(0x12, set, ref info), "无法重启 ST-Link 调试接口，请重新插拔设备");
+            Require(SetupDiSetClassInstallParamsW(set, ref info, ref change, (uint)Marshal.SizeOf<PropertyChange>()), "无法准备烧录器接口重启");
+            Require(SetupDiCallClassInstaller(0x12, set, ref info), "无法重启烧录器调试接口，请重新插拔设备");
             var parameters = InstallParameters.Create();
             Require(SetupDiGetDeviceInstallParamsW(set, ref info, ref parameters), "无法读取驱动安装结果");
             reboot = (parameters.Flags & 0x180) != 0; // DI_NEEDRESTART | DI_NEEDREBOOT
@@ -157,38 +166,17 @@ internal static class StLinkUsb
             // Static fields are filled even when the trailing hardware-ID buffer is too small.
             if (!SetupDiGetDriverInfoDetailW(set, ref info, ref driver, ref detail, detail.Size, out _)
                 && Marshal.GetLastWin32Error() != InsufficientBuffer) throw NativeError("无法读取 WinUSB 驱动信息");
-            if (detail.Section.Equals("WINUSB", StringComparison.OrdinalIgnoreCase)) return driver;
+            if (detail.Section.Split('.')[0].Equals("WINUSB", StringComparison.OrdinalIgnoreCase)) return driver;
         }
         throw new Win32Exception(1168, "Windows 内置 WinUSB 驱动不可用。");
     }
 
-    private static void AddGuid(DeviceSet set, ref DeviceInfo info)
+    private static void AddGuid(DeviceSet set, ref DeviceInfo info, ProbeFamily family)
     {
-        using var key = OpenParameters(set, ref info, create: true) ?? throw new IOException("无法打开 ST-Link 设备参数。");
-        var guids = RepairGuids(key.GetValue("DeviceInterfaceGUIDs"), key.GetValue("DeviceInterfaceGUID"));
+        using var key = OpenParameters(set, ref info, create: true) ?? throw new IOException("无法打开烧录器设备参数。");
+        var guids = ProbeDriverRules.RepairGuids(key.GetValue("DeviceInterfaceGUIDs"), key.GetValue("DeviceInterfaceGUID"), family);
         key.SetValue("DeviceInterfaceGUIDs", guids, RegistryValueKind.MultiString);
     }
-
-    private static IEnumerable<string> GuidValues(object? value) => value switch
-    {
-        string[] values => values,
-        string single => [single],
-        _ => [],
-    };
-
-    internal static Guid? RegisteredGuid(object? multiple, object? single)
-    {
-        // nusb reads only the first value in REG_MULTI_SZ, falling back to the
-        // singular registry value if that first value cannot be parsed.
-        foreach (var first in new[] { GuidValues(multiple).FirstOrDefault(), GuidValues(single).FirstOrDefault() })
-            if (Guid.TryParseExact(first, "B", out var guid) && guid != Guid.Empty) return guid;
-        return null;
-    }
-
-    internal static string[] RepairGuids(object? multiple, object? single) =>
-        new[] { DebugInterfaceGuid }.Concat(GuidValues(multiple)).Concat(GuidValues(single))
-            .Select(value => Guid.TryParse(value, out var guid) ? guid : Guid.Empty)
-            .Where(guid => guid != Guid.Empty).Distinct().Select(guid => guid.ToString("B")).ToArray();
 
     internal static bool HasActiveInterface(string instanceId, Guid guid)
     {
@@ -215,18 +203,32 @@ internal static class StLinkUsb
         {
             var error = Marshal.GetLastWin32Error();
             if (!create && error is 2 or unchecked((int)0xe0000204)) return null;
-            throw new Win32Exception(error, "无法读取 ST-Link 设备参数。");
+            throw new Win32Exception(error, "无法读取烧录器设备参数。");
         }
         return RegistryKey.FromHandle(new SafeRegistryHandle(handle, ownsHandle: true));
     }
 
-    private static string Service(DeviceSet set, ref DeviceInfo info)
+    private static string Service(DeviceSet set, ref DeviceInfo info) =>
+        RegistryStrings(set, ref info, ServiceProperty).FirstOrDefault() ?? "";
+
+    private static string[] RegistryStrings(DeviceSet set, ref DeviceInfo info, uint property)
     {
-        var buffer = new byte[1024];
-        if (SetupDiGetDeviceRegistryPropertyW(set, ref info, ServiceProperty, out _, buffer, (uint)buffer.Length, out var size))
-            return Encoding.Unicode.GetString(buffer, 0, (int)size).TrimEnd('\0');
-        if (Marshal.GetLastWin32Error() == InvalidData) return "";
-        throw NativeError("无法读取 ST-Link 驱动状态");
+        var buffer = new byte[8192];
+        if (SetupDiGetDeviceRegistryPropertyW(set, ref info, property, out _, buffer, (uint)buffer.Length, out var size))
+            return Encoding.Unicode.GetString(buffer, 0, checked((int)size)).Split('\0', StringSplitOptions.RemoveEmptyEntries);
+        if (Marshal.GetLastWin32Error() == InvalidData) return [];
+        throw NativeError("无法读取烧录器 USB 属性");
+    }
+
+    private static string BusDescription(uint devInst)
+    {
+        var key = new DevicePropertyKey { Format = new Guid("540b947e-8b40-45bc-a8a2-6a0b894cbda2"), Id = 4 };
+        var buffer = new byte[8192];
+        var size = (uint)buffer.Length;
+        // DEVPKEY_Device_BusReportedDeviceDesc is the unlocalized USB descriptor,
+        // unlike the friendly name installed by a third-party driver.
+        return CM_Get_DevNode_PropertyW(devInst, ref key, out var type, buffer, ref size, 0) == 0 && type == 0x12
+            ? Encoding.Unicode.GetString(buffer, 0, checked((int)size)).TrimEnd('\0') : "";
     }
 
     private static string InstanceId(uint devInst)
@@ -299,6 +301,12 @@ internal static class StLinkUsb
         [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)] public string Description;
         public char HardwareId;
     }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct DevicePropertyKey { public Guid Format; public uint Id; }
+
+    [DllImport("cfgmgr32.dll", ExactSpelling = true, CharSet = CharSet.Unicode)]
+    private static extern uint CM_Get_DevNode_PropertyW(uint devInst, ref DevicePropertyKey key, out uint type, byte[] buffer, ref uint size, uint flags);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct PropertyChange { public uint HeaderSize, InstallFunction, StateChange, Scope, Profile; }

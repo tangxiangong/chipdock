@@ -497,6 +497,7 @@ dependencies = [
  "chrono",
  "ihex",
  "interoptopus",
+ "nusb",
  "object 0.40.0",
  "probe-rs",
  "serde",

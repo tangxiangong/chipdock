@@ -7,7 +7,7 @@ internal sealed partial class WorkbenchStore
 {
     internal async Task ScanProbes()
     {
-        var result = await Perform(WorkbenchOperation.Scan, RustCore.ListProbes);
+        var result = await Perform(WorkbenchOperation.Scan, ProbeDriver.ListProbes);
         if (result is null) return;
         HasScanned = true;
         Probes = result;
@@ -24,18 +24,18 @@ internal sealed partial class WorkbenchStore
         InvalidateConnection();
         var result = await Perform(WorkbenchOperation.Connect, async () =>
         {
-            var probes = await RustCore.ListProbes();
+            var probes = await ProbeDriver.ListProbes();
             Probes = probes;
             HasScanned = true;
             Notify();
-            var selected = StLinkDriver.SelectProbe(request.probe, probes);
+            var selected = ProbeDriver.SelectProbe(request.probe, probes);
             // Pin the chosen probe while UAC and device restart are in progress.
             if (selected is not null) request.probe = selected.identifier;
-            await StLinkDriver.EnsureInstalled(selected, message =>
+            request.probe = await ProbeDriver.PrepareProbe(selected, message =>
             {
                 SetStatus(message);
                 AppendLog("驱动", message);
-            });
+            }) ?? request.probe;
             return await RustCore.ConnectTarget(request);
         });
         if (result is null) return;

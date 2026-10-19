@@ -15,6 +15,12 @@ FlashDesk 是原生嵌入式固件工作台：macOS 版使用 **SwiftUI + UniFFI
 
 macOS 界面使用系统字体、SF Symbols 和原生控件；应用图标使用 Xcode Icon Composer 制作。Windows 版的界面、构建、桥接、自动更新与发布说明见 [windows/README.md](windows/README.md)。
 
+## 烧录器与驱动
+
+Windows 会在连接时检查并尝试安装 / 修复所选 USB 调试接口的系统 WinUSB 驱动，覆盖 ST-Link、J-Link、CMSIS-DAP v2、已知 FTDI 调试通道、WCH-Link 和 CH347；Glasgow 支持修复已枚举 applet 的接口对。具体范围和限制见 [Windows 驱动说明](windows/README.md#运行时)。HID、串口和存储接口保留原驱动；Black Magic Probe、SiFli UART 使用对应的串口驱动。
+
+macOS 上常见 USB 调试探针通常无需额外驱动。使用 Apple 芯片的 Mac 笔记本时，需解锁并[允许 USB 配件连接](https://support.apple.com/zh-cn/102282)。扫描为空和 USB 访问失败时，应用会显示授权、设备断开或接口占用的恢复建议。若其他调试工具或 USB/FTDI 内核驱动占用了调试接口，需释放占用；当前 USB 库不能在 macOS 自动解除内核驱动占用。
+
 ## 构建运行
 
 ### macOS

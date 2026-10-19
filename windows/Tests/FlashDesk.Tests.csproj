@@ -1,5 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <!-- Checks for updates, Windows ST-Link discovery and the Rust/C# bridge.
+  <!-- Portable driver policies and simulations, updates, Windows USB discovery and the Rust/C# bridge.
        Run with the built flashdesk_csharp library to include the bridge checks. -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -16,8 +16,9 @@
     <Compile Include="../FlashDesk/Services/UpdateFeed.cs" Link="Linked/UpdateFeed.cs" />
     <Compile Include="../FlashDesk/Services/UpdateSource.cs" Link="Linked/UpdateSource.cs" />
     <Compile Include="../FlashDesk/Services/RustCore.cs" Link="Linked/RustCore.cs" />
-    <Compile Include="../FlashDesk/Services/StLinkDriver.cs" Link="Linked/StLinkDriver.cs" />
-    <Compile Include="../FlashDesk/Services/StLinkUsb.cs" Link="Linked/StLinkUsb.cs" />
+    <Compile Include="../FlashDesk/Services/ProbeDriver.cs" Link="Linked/ProbeDriver.cs" />
+    <Compile Include="../FlashDesk/Services/ProbeUsb.cs" Link="Linked/ProbeUsb.cs" />
+    <Compile Include="../FlashDesk/Services/ProbeDriverRules.cs" Link="Linked/ProbeDriverRules.cs" />
     <Compile Include="../FlashDesk/Generated/*.cs" Link="Generated/%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>

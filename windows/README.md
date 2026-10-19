@@ -49,11 +49,21 @@ Rust 动态库位于 `target/<目标三元组>/<debug或release>/flashdesk_cshar
 
 应用为非打包、依赖框架的 WinUI 3。`Program.Main` 在加载 WinUI 前检查 Windows App Runtime 2.5.1，缺失时下载微软安装程序、校验固定的 SHA-256 后静默安装；已有兼容版本时直接使用。`FlashDesk.exe --prepare-runtime` 只准备运行时，不打开界面。升级 Windows App SDK 时需同时更新 `WindowsRuntime.cs` 中的版本、下载地址和哈希。
 
-调试探针通过 probe-rs 访问。连接 ST-Link 时，应用自动检查所选探针的调试接口；缺少驱动或 WinUSB 接口 GUID 时，通过系统 UAC 授权运行短时安装进程，绑定 Windows 内置且已签名的 WinUSB、补齐接口 GUID，随后自动继续连接。此流程支持 x64 / ARM64，无需下载 ST 的旧版协同安装程序。已有正常驱动不重复安装；仅处理所选 ST-Link 的调试接口，不更改复合设备的串口或存储接口。取消管理员授权、设备拔出、安装失败或需要重启时，在连接对话框中显示具体提示。
+调试探针通过 probe-rs 访问。连接时，应用检查所选探针的 USB 调试接口；缺少驱动、已绑定可识别的旧版驱动或缺少 WinUSB 接口 GUID 时，通过 UAC 授权运行短时安装进程，尝试绑定 Windows 内置且已签名的 WinUSB、补齐接口 GUID，然后等待设备启动且访问路径启用后继续连接。要求使用与 Windows 架构一致的 x64 / ARM64 版 FlashDesk，无需下载旧版协同安装程序。已有正常 WinUSB 不重复安装；取消授权、拔出设备、安装失败或需要重启均会显示具体提示。
 
-普通无存储功能的 ST-Link/V2 同样支持自动安装，其短序列号按 probe-rs 的编码规则匹配。已正常使用 WinUSB 的独立 V2 无需另加复合接口 GUID；V2-1/V3 的复合调试接口则需要可访问的接口 GUID。安装后必须确认设备已启动且访问路径已启用才继续连接。此流程要求运行与 Windows 架构一致的 FlashDesk；它不替其他型号烧录器安装驱动。
+| 类型 | 自动安装 / 修复范围 |
+| --- | --- |
+| ST-Link V2 / V2-1 / V3 系列 | 独立 V2 或复合设备的调试接口 MI_00；可迁移 STTub 系列旧驱动，保留短序列号编码兼容 |
+| J-Link | probe-rs 可识别的 VID/PID，对独立设备或 MI_00 安装 / 修复 WinUSB，可迁移旧 JLink 驱动 |
+| CMSIS-DAP v2 | USB 总线报告名称含 CMSIS-DAP，且接口类为 FF/00 的 Bulk 接口；不更改 v1 HID 接口 |
+| FTDI / Olimex | probe-rs 支持的 VID/PID 的通道 A（MI_00），或独立 FT232H；可迁移 FTDIBUS，不修改其他 UART 通道 |
+| WCH-Link RISC-V 模式 | 1A86:8010 的调试接口；ARM 的 CMSIS-DAP 模式按 CMSIS-DAP 规则处理 |
+| CH347 | 1A86:55DD / 55DE / 55E8 的调试接口，优先 MI_04，缺少时使用 MI_02 |
+| Glasgow | 必须已由 probe-rs 枚举出 applet 的序列号和 IN/OUT 接口；只修复选定的接口对，不猜测 applet |
 
-其他探针的驱动要求见 [probe-rs 文档](https://probe.rs/docs/getting-started/probe-setup/)。
+系统扫描会补充部分驱动异常、未出现在 probe-rs 列表中的设备。由于 Windows 实例 ID 中的序列号可能被转换大小写，仅在同一 VID/PID 下能确认唯一物理设备时补充无序列号的选择器；修复后重新通过 probe-rs 枚举并核对物理设备。多个同型号且无法可靠区分的设备不会被自动选择或批量安装。
+
+复合设备父节点、HID、CDC 串口、存储和 Hub 接口均排除；仅迁移已识别的驱动服务，未知服务显示人工恢复建议。WinUSB 可用性预检失败时不会提权安装。Black Magic Probe 和 SiFli UART 使用串口，保留串口驱动；缺少驱动时应使用 Windows Update 或对应芯片厂商的驱动包。某些旧 J-Link 可先通过 [J-Link Configurator](https://kb.segger.com/J-Link_WinUSB_driver_selection) 切换 WinUSB；无法自动处理的 USB 调试接口可使用 [Zadig](https://zadig.akeo.ie/)，只修改调试接口，切换后原厂工具的可用性取决于其驱动要求。其他要求见 [probe-rs 文档](https://probe.rs/docs/getting-started/probe-setup/)。
 
 ## 自动更新
 
@@ -102,6 +112,6 @@ dotnet run --project windows/Tests -- target/x86_64-pc-windows-msvc/debug/flashd
 
 - Rust 测试经由 Wire 编码调用导出函数，覆盖芯片搜索、配置与最近文件的往返（含中文路径与 1970 年前的时间戳）、无效配置 ID 的结构化错误、进度时间戳换算和 panic 边界。
 - `windows/Tests` 是可移植的 .NET 程序：更新部分覆盖签名验证、篡改与错误密钥、更新信息的结构限制、危险文件名、下载地址、包校验、取消与发布回退保护；传入已构建的 `flashdesk_csharp` 动态库时，还通过生成的 C# 绑定调用真实的 Rust Core（芯片搜索、内存映射、BIN 分析、结构化错误、配置与最近文件往返），不连接目标芯片。不传参数时跳过 Rust/C# 桥接检查。
-- 在 Windows 上，`windows/Tests` 还检查 ST-Link 调试接口筛选、V2 短序列号编码、选择器兼容性、已有驱动保护、接口 GUID 修复，以及安装取消、失败、需要重启、接口延迟启用和设备拔出的处理。安装流程由模拟系统测试；真实 USB 检查只读验证设备状态、系统 WinUSB 和接口枚举，传入 Rust 动态库后还会核对真实探针选择器。测试不会安装驱动或连接目标芯片。
+- USB 驱动策略和模拟安装流程可在宿主机独立运行：`dotnet run --project windows/Tests -- --driver-rules-only`。覆盖型号与接口筛选、HID/串口/存储保护、旧驱动迁移、单设备补充发现、多设备歧义、FTDI 通道、Glasgow 接口对、ST-Link 短序列号、GUID 修复，以及取消、失败、重启要求、延迟就绪和设备拔出。它们不调用 Windows 安装 API。仅在 Windows 上额外运行真实 SetupAPI 只读枚举、WinUSB 预检与接口状态检查；传入 Rust 动态库后还核对真实 ST-Link 选择器。测试不会安装驱动或连接目标芯片；模拟测试不能替代 Windows x64 / ARM64 实机驱动验收。
 
 `.github/workflows/windows.yml` 在 x64 与 ARM64 上运行 Rust Core 与 Interoptopus 桥接的 Clippy 和测试、WinUI 编译、绑定一致性检查、`windows/Tests` 和发布资源检查；macOS 不测试 Windows 桥接。界面通过人工验收。
