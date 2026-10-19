@@ -3,6 +3,8 @@ import UniformTypeIdentifiers
 
 struct ContentView: View {
     @Bindable var store: WorkbenchStore
+    @Environment(\.scenePhase) private var scenePhase
+
     var body: some View {
         document
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -35,6 +37,9 @@ struct ContentView: View {
             panelToggles
         }
         .frame(minWidth: 900, minHeight: 600)
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { store.refreshRecentFileAvailability() }
+        }
         .fileImporter(isPresented: $store.showImporter, allowedContentTypes: firmwareTypes) { result in
             switch result {
             case .success(let url): store.selectFirmware(url)
@@ -137,10 +142,13 @@ private struct ActivityView: View {
     var body: some View {
         HStack(spacing: 8) {
             if let event {
-                Text(event.message).lineLimit(1)
+                Text(event.progress == nil ? event.message : messageWithoutPercentage(event.message)).lineLimit(1)
                 if let progress = event.progress {
                     ProgressView(value: Double(progress)).progressViewStyle(.linear).frame(width: 90)
-                    Text("\(Int(progress * 100))%").monospacedDigit()
+                    Text("\(Int((progress * 100).rounded()))%")
+                        .monospacedDigit()
+                        .frame(minWidth: 34, alignment: .trailing)
+                        .fixedSize()
                 }
             } else {
                 if store.isBusy { ProgressView().controlSize(.small) }
@@ -152,5 +160,9 @@ private struct ActivityView: View {
         .padding(.horizontal, 12)
         .frame(minWidth: 280, maxWidth: 440)
         .accessibilityElement(children: .combine)
+    }
+
+    private func messageWithoutPercentage(_ message: String) -> String {
+        message.replacingOccurrences(of: #"\s*[（(]\d+%[）)]\s*$"#, with: "", options: .regularExpression)
     }
 }

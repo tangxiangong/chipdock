@@ -190,6 +190,10 @@ impl FlashDeskCore {
         Ok(services::firmware::analyze_firmware_usage(&input)?)
     }
 
+    pub fn firmware_preview(&self, input: FirmwareInput, length: u32) -> Result<FirmwarePreview> {
+        Ok(services::firmware::read_firmware_preview(&input, length)?)
+    }
+
     pub fn flash_firmware(&self, request: FlashRequest) -> Result<String> {
         let _guard = self.hardware_guard()?;
         Ok(services::flash::flash_firmware(&self.events, request)?

@@ -64,6 +64,18 @@ pub struct FirmwareUsage {
     pub segments: Vec<FirmwareUsageSegment>,
 }
 
+/// 固件文件起始地址处的有界数据预览，不访问目标设备。
+#[cfg_attr(feature = "csharp", interoptopus::ffi)]
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct FirmwarePreview {
+    /// 与预览对应的固件占用信息。
+    pub usage: FirmwareUsage,
+    /// 预览的第一个地址。
+    pub start_address: u64,
+    /// 逐地址的文件数据；None 表示固件未写入的空洞。
+    pub bytes: Vec<Option<u8>>,
+}
+
 /// 可用调试探针的前端摘要。
 #[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Debug, Clone, Serialize, Deserialize)]

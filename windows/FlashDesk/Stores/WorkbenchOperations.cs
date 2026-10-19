@@ -93,6 +93,7 @@ internal sealed partial class WorkbenchStore
         analysisRevision++;
         FirmwarePath = null;
         FirmwareUsage = null;
+        FirmwarePreview = null;
         FirmwareError = null;
         AnalyzingFirmware = false;
         Notify();
@@ -103,6 +104,7 @@ internal sealed partial class WorkbenchStore
         analysisCancellation?.Cancel();
         var revision = ++analysisRevision;
         FirmwareUsage = null;
+        FirmwarePreview = null;
         FirmwareError = null;
         AnalyzingFirmware = false;
         Notify();
@@ -119,11 +121,11 @@ internal sealed partial class WorkbenchStore
 
     private async Task AnalyzeFirmware(FirmwareInput input, int revision, CancellationToken cancellation)
     {
-        FirmwareUsage usage;
+        FirmwarePreview preview;
         try
         {
             await Task.Delay(200, cancellation);
-            usage = await RustCore.FirmwareUsage(input);
+            preview = await RustCore.FirmwarePreview(input);
             if (cancellation.IsCancellationRequested || revision != analysisRevision) return;
         }
         catch (OperationCanceledException)
@@ -139,24 +141,21 @@ internal sealed partial class WorkbenchStore
             AppendLog("固件分析", FirmwareError, ActivityLevel.Error);
             return;
         }
+        var usage = preview.usage;
         FirmwareUsage = usage;
+        FirmwarePreview = preview;
         AnalyzingFirmware = false;
         AppendLog("固件", $"{Path.GetFileName(input.path)} · {usage.format.Title()} · {ByteCountLabel(usage.used_bytes)}");
 
-        var files = RecentFiles.Where(file => !string.Equals(file.path, input.path, StringComparison.OrdinalIgnoreCase)).ToList();
-        files.Insert(0, new RecentFirmwareRecord
-        {
-            path = input.path,
-            format = usage.format,
-            base_address = input.base_address,
-            used_at_ms = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-        });
-        files = files.Take(10).ToList();
         try
         {
-            await RustCore.SaveRecentFiles(AppSettings.StorageDirectory, files);
-            RecentFiles = files;
-            Notify();
+            await recentHistory.Record(new RecentFirmwareRecord
+            {
+                path = input.path,
+                format = usage.format,
+                base_address = input.base_address,
+                used_at_ms = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            });
         }
         catch (Exception error)
         {
@@ -166,18 +165,39 @@ internal sealed partial class WorkbenchStore
 
     internal void OpenRecent(RecentFirmwareRecord file)
     {
+        if (IsBusy) return;
+        RefreshRecentFileAvailability();
+        if (MissingRecentPaths.Contains(file.path))
+        {
+            SetStatus("固件文件不存在");
+            AppendLog("打开固件", Status, ActivityLevel.Error, file.path);
+            Failed?.Invoke(new UserFacingError("找不到固件文件", file.path,
+                "文件可能已被移动或删除。请选择其他固件，或从最近使用中移除此记录。"));
+            return;
+        }
         if (file.base_address is { } address) BinBaseAddress = AddressLabel(address);
         SelectFirmware(file.path);
     }
 
+    internal async Task RemoveRecentFiles(IEnumerable<string> paths)
+    {
+        if (IsBusy) return;
+        var removed = paths.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (removed.Count == 0) return;
+        try { await recentHistory.Remove(removed); }
+        catch (Exception error) { Report(error, "移除最近使用记录"); }
+    }
+
+    internal async Task ClearMissingRecentFiles()
+    {
+        RefreshRecentFileAvailability();
+        await RemoveRecentFiles(MissingRecentPaths);
+    }
+
     internal async Task ClearRecentFiles()
     {
-        try
-        {
-            await RustCore.SaveRecentFiles(AppSettings.StorageDirectory, []);
-            RecentFiles = [];
-            Notify();
-        }
+        if (IsBusy) return;
+        try { await recentHistory.Clear(); }
         catch (Exception error) { Report(error, "清除最近使用"); }
     }
 

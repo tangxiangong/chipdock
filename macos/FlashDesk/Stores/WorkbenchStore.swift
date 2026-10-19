@@ -12,6 +12,9 @@ final class WorkbenchStore {
     @ObservationIgnored var didStart = false
     @ObservationIgnored var analysisTask: Task<Void, Never>?
     @ObservationIgnored var analysisRevision = UUID()
+    @ObservationIgnored var recentFilesUpdateTask: Task<Void, Error>?
+    @ObservationIgnored var recentFilesLoadTask: Task<Void, Error>?
+    @ObservationIgnored var recentFilesLoaded = false
 
     var showMemory = false
     var showLogs = false { didSet { if showLogs { unseenErrors = 0 } } }
@@ -42,6 +45,7 @@ final class WorkbenchStore {
 
     var firmwareURL: URL?
     var firmwareUsage: FirmwareUsage?
+    var firmwarePreview: FirmwarePreview?
     var analyzingFirmware = false
     var firmwareError: String?
     var binBaseAddress = "0x08000000"
@@ -50,7 +54,10 @@ final class WorkbenchStore {
     var dryRun = false
     var eraseStrategy: EraseStrategy = .automatic
     var profiles: [SavedProfile] = []
-    var recentFiles: [RecentFirmware] = []
+    var recentFiles: [RecentFirmware] = [] {
+        didSet { refreshRecentFileAvailability() }
+    }
+    var missingRecentPaths: Set<String> = []
 
     var memoryAddress = "0x08000000"
     var memoryLength: UInt32 = 256
@@ -101,8 +108,31 @@ final class WorkbenchStore {
         let directory = storageDirectory
         do {
             profiles = try await rust.run { try $0.loadProfiles(directory: directory) }
-            recentFiles = try await rust.run { try $0.loadRecentFiles(directory: directory) }
+            try await loadRecentFilesIfNeeded()
         } catch { report(error, operation: "加载配置") }
+    }
+
+    func loadRecentFilesIfNeeded() async throws {
+        guard !recentFilesLoaded else { return }
+        if let task = recentFilesLoadTask { try await task.value; return }
+        let directory = storageDirectory
+        let task = Task { [rust] in
+            do {
+                recentFiles = try await rust.run { try $0.loadRecentFiles(directory: directory) }
+                recentFilesLoaded = true
+            } catch {
+                recentFilesLoadTask = nil
+                throw error
+            }
+        }
+        recentFilesLoadTask = task
+        try await task.value
+    }
+
+    func refreshRecentFileAvailability() {
+        missingRecentPaths = Set(recentFiles.compactMap { file in
+            FileManager.default.fileExists(atPath: file.path) ? nil : file.path
+        })
     }
 
     func invalidateConnection() {

@@ -67,6 +67,14 @@ internal static class RustCore
         return Require(response.payload, "固件分析");
     });
 
+    internal static Task<FirmwarePreview> FirmwarePreview(FirmwareInput value, uint length = 4096) => Task.Run(() =>
+    {
+        using var request = new FirmwarePreviewRequest { firmware = value, length = length }.Wire();
+        using var wire = Interop.firmware_preview(request).AsOk();
+        var response = wire.Unwire(); Check(response.error);
+        return Require(response.payload, "固件预览");
+    });
+
     /// Blocks until the job finishes; progress is drained separately with <see cref="TakeEvents"/>.
     internal static Task<string> FlashFirmware(FlashRequest value) => Task.Run(() =>
     {

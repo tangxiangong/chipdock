@@ -11,10 +11,25 @@ struct WorkbenchCommands: Commands {
                 .disabled(store.isBusy)
             Menu("打开最近使用的") {
                 ForEach(store.recentFiles, id: \.path) { file in
-                    Button(URL(fileURLWithPath: file.path).lastPathComponent) { store.openRecent(file) }
+                    let isMissing = store.missingRecentPaths.contains(file.path)
+                    Button {
+                        store.openRecent(file)
+                    } label: {
+                        Text(URL(fileURLWithPath: file.path).lastPathComponent + (isMissing ? "（文件不存在）" : ""))
+                    }
+                    .disabled(isMissing)
                 }
                 Divider()
-                Button("清除菜单") { Task { await store.clearRecentFiles() } }
+                Menu("移除记录") {
+                    ForEach(store.recentFiles, id: \.path) { file in
+                        Button(URL(fileURLWithPath: file.path).lastPathComponent) {
+                            Task { await store.removeRecentFiles(at: [file.path]) }
+                        }
+                    }
+                }
+                Button("清除失效记录") { Task { await store.clearMissingRecentFiles() } }
+                    .disabled(store.missingRecentPaths.isEmpty)
+                Button("清空最近使用") { Task { await store.clearRecentFiles() } }
             }
             .disabled(store.isBusy || store.recentFiles.isEmpty)
         }

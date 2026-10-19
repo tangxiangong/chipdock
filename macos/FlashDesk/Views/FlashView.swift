@@ -1,30 +1,34 @@
 import AppKit
 import SwiftUI
 
-/// Main area: one column reading top to bottom — firmware, settings, then
-/// the single primary action. The column fills the window: it widens with
-/// it, and extra height goes to the drop zone or above the action row.
+/// The drop zone fills the empty state. With a firmware open, its data viewer
+/// fills spare height while metadata, settings and actions stay compact.
 struct FlashView: View {
     @Bindable var store: WorkbenchStore
     @State private var isDropTargeted = false
 
     var body: some View {
         GeometryReader { geometry in
+            let compact = geometry.size.height < 560
+            let margin: CGFloat = compact ? 20 : 24
+            let gap: CGFloat = compact ? 16 : 20
             ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
+                WorkbenchColumnLayout(spacing: 0,
+                                      minimumHeight: max(geometry.size.height - 2 * margin, 0)) {
                     if let url = store.firmwareURL {
-                        FirmwareSummary(store: store, url: url)
+                        FirmwareSummary(store: store, url: url, spacing: compact ? 16 : 20)
+                            .layoutValue(key: WorkbenchExpansion.self, value: store.firmwarePreview == nil ? 0 : 1)
                     } else {
-                        DropZone(store: store, isTargeted: isDropTargeted).layoutPriority(1)
+                        DropZone(store: store, isTargeted: isDropTargeted)
+                            .layoutValue(key: WorkbenchExpansion.self, value: 1)
                     }
-                    Divider().padding(.vertical, 24)
-                    SettingsGrid(store: store)
-                    Spacer(minLength: 26)
+                    Divider().padding(.vertical, gap)
+                    SettingsGrid(store: store, spacing: compact ? 12 : 16)
                     FlashAction(store: store)
+                        .padding(.top, compact ? 20 : 24)
                 }
                 .frame(width: Self.columnWidth(in: geometry.size.width))
-                .frame(minHeight: max(geometry.size.height - 2 * Self.verticalMargin, 0), alignment: .top)
-                .padding(.vertical, Self.verticalMargin)
+                .padding(.vertical, margin)
                 .frame(maxWidth: .infinity)
             }
             .scrollBounceBehavior(.basedOnSize)
@@ -45,8 +49,6 @@ struct FlashView: View {
         .onChange(of: store.binBaseAddress) { store.scheduleFirmwareAnalysis() }
     }
 
-    static let verticalMargin: CGFloat = 28
-
     /// The window width less side margins of a twentieth of it (at least 32 pt).
     nonisolated static func columnWidth(in width: CGFloat) -> CGFloat {
         max(width - 2 * max(32, width * 0.05), 0)
@@ -58,9 +60,10 @@ struct FlashView: View {
 private struct FirmwareSummary: View {
     var store: WorkbenchStore
     var url: URL
+    var spacing: CGFloat
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        WorkbenchColumnLayout(spacing: spacing) {
             HStack(spacing: 14) {
                 let tint = store.firmwareUsage?.format.tint ?? .secondary
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -110,6 +113,11 @@ private struct FirmwareSummary: View {
                 .background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 6))
             } else if let usage = store.firmwareUsage {
                 FirmwareLayoutView(usage: usage, regions: store.memoryRegions)
+                if let preview = store.firmwarePreview {
+                    FirmwareDataView(preview: preview)
+                        .id(url)
+                        .layoutValue(key: WorkbenchExpansion.self, value: 1)
+                }
                 let range = "\(addressLabel(usage.startAddress)) – \(addressLabel(usage.endAddress.map { $0 > 0 ? $0 - 1 : 0 }))"
                 ViewThatFits(in: .horizontal) {
                     HStack(alignment: .top, spacing: 36) {
@@ -173,7 +181,7 @@ private struct DropZone: View {
                     .padding(.top, 8)
             }
             .padding(.vertical, 26)
-            .frame(maxWidth: .infinity, minHeight: 190, maxHeight: .infinity)
+            .frame(maxWidth: .infinity, minHeight: 170, maxHeight: .infinity)
             .background(isTargeted ? Color.accentColor.opacity(0.06) : Color.clear,
                         in: RoundedRectangle(cornerRadius: 10))
             .overlay {
@@ -195,34 +203,69 @@ private struct RecentFilesList: View {
     var store: WorkbenchStore
     @State private var selection: String?
 
-    private var files: [RecentFirmware] { Array(store.recentFiles.prefix(5)) }
+    private var files: [RecentFirmware] { store.recentFiles }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("最近使用").font(.subheadline).foregroundStyle(.secondary)
+            HStack {
+                Text("最近使用").font(.subheadline).foregroundStyle(.secondary)
+                Spacer()
+                if !store.missingRecentPaths.isEmpty {
+                    Button("清除失效记录") { Task { await store.clearMissingRecentFiles() } }
+                }
+                Button("清空列表") { Task { await store.clearRecentFiles() } }
+            }
+            .buttonStyle(.borderless)
+            .disabled(store.isBusy)
             List(files, id: \.path, selection: $selection) { file in
                 let url = URL(fileURLWithPath: file.path)
+                let isMissing = store.missingRecentPaths.contains(file.path)
                 HStack(spacing: 8) {
                     Image(systemName: "doc.text").foregroundStyle(file.format.tint).frame(width: 16)
                     Text(url.lastPathComponent).lineLimit(1)
+                        .foregroundStyle(isMissing ? .secondary : .primary)
                     Text((url.deletingLastPathComponent().path as NSString).abbreviatingWithTildeInPath)
                         .foregroundStyle(.secondary).lineLimit(1).truncationMode(.head)
                     Spacer(minLength: 8)
-                    Text(file.usedAt, format: .relative(presentation: .named))
-                        .font(.callout).foregroundStyle(.secondary)
+                    if isMissing {
+                        Label("文件不存在", systemImage: "exclamationmark.triangle.fill")
+                            .font(.callout).foregroundStyle(.orange).fixedSize()
+                    } else {
+                        Text(file.usedAt, format: .relative(presentation: .named))
+                            .font(.callout).foregroundStyle(.secondary).fixedSize()
+                    }
+                    Button {
+                        Task { await store.removeRecentFiles(at: [file.path]) }
+                    } label: {
+                        Image(systemName: "xmark")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("从最近使用中移除")
+                    .accessibilityLabel("移除 \(url.lastPathComponent) 的最近使用记录")
                 }
                 .help(file.path)
             }
             .listStyle(.bordered)
             .alternatingRowBackgrounds()
-            .scrollDisabled(true)
-            .frame(height: CGFloat(files.count) * 24 + 2)
+            .environment(\.defaultMinListRowHeight, 30)
+            .scrollDisabled(files.count <= 5)
+            .frame(height: CGFloat(min(files.count, 5)) * 30 + 2)
             .disabled(store.isBusy)
+            .onAppear { store.refreshRecentFileAvailability() }
+            .onDeleteCommand {
+                if let selection { Task { await store.removeRecentFiles(at: [selection]) } }
+            }
             .contextMenu(forSelectionType: String.self) { paths in
                 if let file = files.first(where: { paths.contains($0.path) }) {
                     Button("打开") { store.openRecent(file) }
+                        .disabled(store.missingRecentPaths.contains(file.path))
                     Button("在访达中显示") {
                         NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: file.path)])
+                    }
+                    .disabled(store.missingRecentPaths.contains(file.path))
+                    Divider()
+                    Button("从最近使用中移除", role: .destructive) {
+                        Task { await store.removeRecentFiles(at: paths) }
                     }
                 }
             } primaryAction: { paths in
@@ -237,10 +280,11 @@ private struct RecentFilesList: View {
 /// Classic Mac preferences layout: trailing-aligned labels, leading controls.
 private struct SettingsGrid: View {
     @Bindable var store: WorkbenchStore
+    var spacing: CGFloat
 
     var body: some View {
-        Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 14, verticalSpacing: 16) {
-            GridRow {
+        VStack(alignment: .leading, spacing: spacing) {
+            HStack(alignment: .firstTextBaseline, spacing: 14) {
                 label("目标")
                 ViewThatFits(in: .horizontal) {
                     HStack(alignment: .firstTextBaseline, spacing: 16) {
@@ -255,7 +299,7 @@ private struct SettingsGrid: View {
                 }
             }
             if store.isBin {
-                GridRow {
+                HStack(alignment: .firstTextBaseline, spacing: 14) {
                     label("基地址")
                     HStack(spacing: 8) {
                         TextField("基地址", text: $store.binBaseAddress)
@@ -271,7 +315,7 @@ private struct SettingsGrid: View {
                     }
                 }
             }
-            GridRow {
+            HStack(alignment: .firstTextBaseline, spacing: 14) {
                 label("擦除")
                 VStack(alignment: .leading, spacing: 4) {
                     Picker("擦除", selection: $store.eraseStrategy) {
@@ -282,7 +326,7 @@ private struct SettingsGrid: View {
                 }
                 .disabled(store.isBusy)
             }
-            GridRow {
+            HStack(alignment: .firstTextBaseline, spacing: 14) {
                 label("完成后")
                 VStack(alignment: .leading, spacing: 7) {
                     Toggle("校验写入的数据", isOn: $store.verify)
@@ -336,8 +380,7 @@ private struct SettingsGrid: View {
     private func label(_ text: String) -> some View {
         Text(text)
             .foregroundStyle(.secondary)
-            .gridColumnAlignment(.trailing)
-            .frame(minWidth: 52, alignment: .trailing)
+            .frame(width: 52, alignment: .trailing)
     }
 }
 

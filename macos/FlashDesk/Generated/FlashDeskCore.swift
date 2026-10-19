@@ -465,6 +465,22 @@ fileprivate final class UniffiHandleMap<T>: @unchecked Sendable {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterUInt8: FfiConverterPrimitive {
+    typealias FfiType = UInt8
+    typealias SwiftType = UInt8
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> UInt8 {
+        return try lift(readInt(&buf))
+    }
+
+    public static func write(_ value: UInt8, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterUInt16: FfiConverterPrimitive {
     typealias FfiType = UInt16
     typealias SwiftType = UInt16
@@ -624,6 +640,8 @@ public protocol FlashDeskCoreProtocol: AnyObject, Sendable {
     
     func eraseTarget(request: EraseRequest) throws  -> String
     
+    func firmwarePreview(input: FirmwareInput, length: UInt32) throws  -> FirmwarePreview
+    
     func firmwareUsage(input: FirmwareInput) throws  -> FirmwareUsage
     
     func flashFirmware(request: FlashRequest) throws  -> String
@@ -729,6 +747,17 @@ open func eraseTarget(request: EraseRequest)throws  -> String  {
     uniffi_flashdesk_core_fn_method_flashdeskcore_erase_target(
             self.uniffiCloneHandle(),
         FfiConverterTypeEraseRequest_lower(request),uniffiCallStatus
+    )
+})
+}
+    
+open func firmwarePreview(input: FirmwareInput, length: UInt32)throws  -> FirmwarePreview  {
+    return try  FfiConverterTypeFirmwarePreview_lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
+        uniffiCallStatus in
+    uniffi_flashdesk_core_fn_method_flashdeskcore_firmware_preview(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeFirmwareInput_lower(input),
+        FfiConverterUInt32.lower(length),uniffiCallStatus
     )
 })
 }
@@ -1331,6 +1360,85 @@ public func FfiConverterTypeFirmwareInput_lift(_ buf: RustBuffer) throws -> Firm
 #endif
 public func FfiConverterTypeFirmwareInput_lower(_ value: FirmwareInput) -> RustBuffer {
     return FfiConverterTypeFirmwareInput.lower(value)
+}
+
+
+/**
+ * 固件文件起始地址处的有界数据预览，不访问目标设备。
+ */
+public struct FirmwarePreview: Equatable, Hashable, Codable {
+    /**
+     * 与预览对应的固件占用信息。
+     */
+    public var usage: FirmwareUsage
+    /**
+     * 预览的第一个地址。
+     */
+    public var startAddress: UInt64
+    /**
+     * 逐地址的文件数据；None 表示固件未写入的空洞。
+     */
+    public var bytes: [UInt8?]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * 与预览对应的固件占用信息。
+         */usage: FirmwareUsage, 
+        /**
+         * 预览的第一个地址。
+         */startAddress: UInt64, 
+        /**
+         * 逐地址的文件数据；None 表示固件未写入的空洞。
+         */bytes: [UInt8?]) {
+        self.usage = usage
+        self.startAddress = startAddress
+        self.bytes = bytes
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension FirmwarePreview: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeFirmwarePreview: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> FirmwarePreview {
+        return
+            try FirmwarePreview(
+                usage: FfiConverterTypeFirmwareUsage.read(from: &buf), 
+                startAddress: FfiConverterUInt64.read(from: &buf), 
+                bytes: FfiConverterSequenceOptionUInt8.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: FirmwarePreview, into buf: inout [UInt8]) {
+        FfiConverterTypeFirmwareUsage.write(value.usage, into: &buf)
+        FfiConverterUInt64.write(value.startAddress, into: &buf)
+        FfiConverterSequenceOptionUInt8.write(value.bytes, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFirmwarePreview_lift(_ buf: RustBuffer) throws -> FirmwarePreview {
+    return try FfiConverterTypeFirmwarePreview.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFirmwarePreview_lower(_ value: FirmwarePreview) -> RustBuffer {
+    return FfiConverterTypeFirmwarePreview.lower(value)
 }
 
 
@@ -3370,6 +3478,30 @@ public func FfiConverterTypeWireProtocol_lower(_ value: WireProtocol) -> RustBuf
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionUInt8: FfiConverterRustBuffer {
+    typealias SwiftType = UInt8?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterUInt8.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterUInt8.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionUInt16: FfiConverterRustBuffer {
     typealias SwiftType = UInt16?
 
@@ -3735,6 +3867,31 @@ fileprivate struct FfiConverterSequenceTypeTargetCandidate: FfiConverterRustBuff
     }
 }
 
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceOptionUInt8: FfiConverterRustBuffer {
+    typealias SwiftType = [UInt8?]
+
+    public static func write(_ value: [UInt8?], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterOptionUInt8.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [UInt8?] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [UInt8?]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterOptionUInt8.read(from: &buf))
+        }
+        return seq
+    }
+}
+
 
 
 
@@ -3801,6 +3958,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_flashdesk_core_checksum_method_flashdeskcore_erase_target() != 15647) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_flashdesk_core_checksum_method_flashdeskcore_firmware_preview() != 61322) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_flashdesk_core_checksum_method_flashdeskcore_firmware_usage() != 9346) {

@@ -1,6 +1,6 @@
 use crate::{
     error::{AppError, Result},
-    models::{FirmwareFormat, FirmwareInput, FirmwareUsage, FirmwareUsageSegment},
+    models::{FirmwareFormat, FirmwareInput, FirmwarePreview, FirmwareUsage, FirmwareUsageSegment},
 };
 use ihex::Record;
 use object::{
@@ -8,7 +8,7 @@ use object::{
     elf::{FileHeader32, FileHeader64, PT_LOAD},
     read::elf::{FileHeader, ProgramHeader},
 };
-use std::{fs, path::Path};
+use std::{fs, io::Read, path::Path};
 
 /// 根据文件扩展名推断固件格式。
 pub fn detect_format(path: &Path) -> Result<FirmwareFormat> {
@@ -81,6 +81,128 @@ pub fn analyze_firmware_usage(input: &FirmwareInput) -> Result<FirmwareUsage> {
     merge_segments(&mut segments);
 
     Ok(usage_from_segments(format, segments))
+}
+
+/// 读取固件起始位置的实际文件字节，保留空洞，限制预览内存占用。
+pub fn read_firmware_preview(input: &FirmwareInput, length: u32) -> Result<FirmwarePreview> {
+    if !(1..=65_536).contains(&length) {
+        return Err(AppError::InvalidUserInput {
+            detail: "固件预览长度须为 1–65536 字节".to_string(),
+        });
+    }
+    let usage = analyze_firmware_usage(input)?;
+    let start_address = usage
+        .start_address
+        .ok_or_else(|| AppError::InvalidUserInput {
+            detail: "固件中没有可预览的数据".to_string(),
+        })?;
+    let count = usage.span_bytes.min(u64::from(length)) as usize;
+    let mut bytes = vec![None; count];
+    let path = Path::new(&input.path);
+
+    match usage.format {
+        FirmwareFormat::Bin => {
+            let mut data = vec![0; count];
+            fs::File::open(path)
+                .and_then(|mut file| file.read_exact(&mut data))
+                .map_err(AppError::IoFailure)?;
+            copy_preview_bytes(start_address, &mut bytes, start_address, &data)?;
+        }
+        FirmwareFormat::Hex => {
+            let data = fs::read_to_string(path).map_err(AppError::IoFailure)?;
+            let mut base = 0;
+            for record in ihex::Reader::new(&data) {
+                match record.map_err(|error| AppError::InvalidUserInput {
+                    detail: format!("HEX 解析失败：{error}"),
+                })? {
+                    Record::Data { offset, value } => {
+                        copy_preview_bytes(
+                            start_address,
+                            &mut bytes,
+                            base + u64::from(offset),
+                            &value,
+                        )?;
+                    }
+                    Record::ExtendedSegmentAddress(address) => base = u64::from(address) << 4,
+                    Record::ExtendedLinearAddress(address) => base = u64::from(address) << 16,
+                    Record::EndOfFile
+                    | Record::StartSegmentAddress { .. }
+                    | Record::StartLinearAddress(_) => {}
+                }
+            }
+        }
+        FirmwareFormat::Elf => {
+            let data = fs::read(path).map_err(AppError::IoFailure)?;
+            match object::FileKind::parse(&*data).map_err(elf_parse_error)? {
+                object::FileKind::Elf32 => {
+                    let header =
+                        FileHeader32::<Endianness>::parse(&*data).map_err(elf_parse_error)?;
+                    preview_elf_segments(header, &data, start_address, &mut bytes)?;
+                }
+                object::FileKind::Elf64 => {
+                    let header =
+                        FileHeader64::<Endianness>::parse(&*data).map_err(elf_parse_error)?;
+                    preview_elf_segments(header, &data, start_address, &mut bytes)?;
+                }
+                _ => {
+                    return Err(AppError::InvalidUserInput {
+                        detail: "固件不是 ELF 文件".to_string(),
+                    });
+                }
+            }
+        }
+    }
+    Ok(FirmwarePreview {
+        usage,
+        start_address,
+        bytes,
+    })
+}
+
+fn copy_preview_bytes(
+    start: u64,
+    preview: &mut [Option<u8>],
+    address: u64,
+    data: &[u8],
+) -> Result<()> {
+    let low = start.max(address);
+    let high =
+        segment_end(start, preview.len() as u64)?.min(segment_end(address, data.len() as u64)?);
+    if low < high {
+        let count = (high - low) as usize;
+        let target = (low - start) as usize;
+        let source = (low - address) as usize;
+        for (destination, value) in preview[target..target + count]
+            .iter_mut()
+            .zip(&data[source..source + count])
+        {
+            *destination = Some(*value);
+        }
+    }
+    Ok(())
+}
+
+fn preview_elf_segments<T: FileHeader>(
+    header: &T,
+    data: &[u8],
+    start: u64,
+    preview: &mut [Option<u8>],
+) -> Result<()> {
+    let endian = header.endian().map_err(elf_parse_error)?;
+    for segment in header
+        .program_headers(endian, data)
+        .map_err(elf_parse_error)?
+    {
+        if segment.p_type(endian) == PT_LOAD {
+            let bytes = segment
+                .data(endian, data)
+                .map_err(|_| AppError::InvalidUserInput {
+                    detail: "ELF 解析失败：无法读取 loadable segment 数据".to_string(),
+                })?;
+            copy_preview_bytes(start, preview, segment.p_paddr(endian).into(), bytes)?;
+        }
+    }
+    Ok(())
 }
 
 /// 解析用户输入的十进制或 `0x` 前缀十六进制地址。
@@ -292,6 +414,171 @@ fn elf_parse_error(error: object::Error) -> AppError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn preview_should_bound_bin_bytes_without_truncating_usage() {
+        let directory = tempfile::tempdir().unwrap();
+        let file = directory.path().join("preview.bin");
+        let data: Vec<u8> = (0..=255).cycle().take(8192).collect();
+        fs::write(&file, &data).unwrap();
+        let input = FirmwareInput {
+            path: file.display().to_string(),
+            format: None,
+            base_address: Some(0x0800_0000),
+        };
+        let preview = read_firmware_preview(&input, 4096).unwrap();
+        assert_eq!(
+            preview.bytes,
+            data[..4096].iter().copied().map(Some).collect::<Vec<_>>()
+        );
+        assert_eq!(
+            (preview.start_address, preview.usage.used_bytes),
+            (0x0800_0000, 8192)
+        );
+    }
+
+    #[test]
+    fn preview_should_not_pad_short_bin_files_with_zeroes() {
+        let directory = tempfile::tempdir().unwrap();
+        let file = directory.path().join("short.bin");
+        fs::write(&file, [0, 0x41, 0xff]).unwrap();
+        let input = FirmwareInput {
+            path: file.display().to_string(),
+            format: None,
+            base_address: Some(0),
+        };
+        let preview = read_firmware_preview(&input, 4096).unwrap();
+        assert_eq!(preview.bytes, vec![Some(0), Some(0x41), Some(0xff)]);
+    }
+
+    #[test]
+    fn preview_should_preserve_hex_holes_and_linear_addresses() {
+        let directory = tempfile::tempdir().unwrap();
+        let file = directory.path().join("sparse.hex");
+        fs::write(
+            &file,
+            ":020000040800F2\n:020000000001FD\n:01000300FFFD\n:00000001FF\n",
+        )
+        .unwrap();
+        let input = FirmwareInput {
+            path: file.display().to_string(),
+            format: None,
+            base_address: None,
+        };
+        let preview = read_firmware_preview(&input, 4096).unwrap();
+        assert_eq!(
+            (preview.start_address, preview.bytes),
+            (0x0800_0000, vec![Some(0), Some(1), None, Some(0xff)])
+        );
+    }
+
+    #[test]
+    fn preview_should_apply_hex_segment_addresses_and_later_overlaps() {
+        let directory = tempfile::tempdir().unwrap();
+        let file = directory.path().join("segment.hex");
+        fs::write(
+            &file,
+            ":020000021234B6\n:020002000102F9\n:01000300FFFD\n:00000001FF\n",
+        )
+        .unwrap();
+        let input = FirmwareInput {
+            path: file.display().to_string(),
+            format: None,
+            base_address: None,
+        };
+        let preview = read_firmware_preview(&input, 4096).unwrap();
+        assert_eq!(
+            (preview.start_address, preview.bytes),
+            (0x12342, vec![Some(1), Some(0xff)])
+        );
+    }
+
+    #[test]
+    fn preview_should_use_elf_physical_addresses_and_only_file_bytes() {
+        let directory = tempfile::tempdir().unwrap();
+        let file = directory.path().join("preview.axf");
+        let mut elf = vec![0u8; 124];
+        elf[..7].copy_from_slice(b"\x7fELF\x02\x01\x01");
+        elf[16..18].copy_from_slice(&2u16.to_le_bytes());
+        elf[18..20].copy_from_slice(&183u16.to_le_bytes());
+        elf[20..24].copy_from_slice(&1u32.to_le_bytes());
+        elf[32..40].copy_from_slice(&64u64.to_le_bytes());
+        elf[52..54].copy_from_slice(&64u16.to_le_bytes());
+        elf[54..56].copy_from_slice(&56u16.to_le_bytes());
+        elf[56..58].copy_from_slice(&1u16.to_le_bytes());
+        elf[64..68].copy_from_slice(&PT_LOAD.0.to_le_bytes());
+        elf[72..80].copy_from_slice(&120u64.to_le_bytes());
+        elf[80..88].copy_from_slice(&0x2000_0000u64.to_le_bytes());
+        elf[88..96].copy_from_slice(&0x0800_0000u64.to_le_bytes());
+        elf[96..104].copy_from_slice(&4u64.to_le_bytes());
+        elf[104..112].copy_from_slice(&16u64.to_le_bytes());
+        elf[120..].copy_from_slice(&[0, 0x41, 0x7f, 0xff]);
+        fs::write(&file, elf).unwrap();
+        let input = FirmwareInput {
+            path: file.display().to_string(),
+            format: None,
+            base_address: None,
+        };
+        let preview = read_firmware_preview(&input, 4096).unwrap();
+        assert_eq!(
+            (preview.start_address, preview.bytes),
+            (
+                0x0800_0000,
+                vec![Some(0), Some(0x41), Some(0x7f), Some(0xff)]
+            )
+        );
+    }
+
+    #[test]
+    fn preview_should_reject_unbounded_lengths_before_opening_files() {
+        let input = FirmwareInput {
+            path: "/missing/preview.bin".to_string(),
+            format: None,
+            base_address: Some(0),
+        };
+        for length in [0, 65_537] {
+            assert!(matches!(
+                read_firmware_preview(&input, length),
+                Err(AppError::InvalidUserInput { .. })
+            ));
+        }
+    }
+
+    #[test]
+    fn preview_should_read_arm_elf32_load_segments() {
+        let directory = tempfile::tempdir().unwrap();
+        let file = directory.path().join("arm.elf");
+        let mut elf = vec![0u8; 88];
+        elf[..7].copy_from_slice(b"\x7fELF\x01\x01\x01");
+        elf[16..18].copy_from_slice(&2u16.to_le_bytes());
+        elf[18..20].copy_from_slice(&40u16.to_le_bytes());
+        elf[20..24].copy_from_slice(&1u32.to_le_bytes());
+        elf[28..32].copy_from_slice(&52u32.to_le_bytes());
+        elf[40..42].copy_from_slice(&52u16.to_le_bytes());
+        elf[42..44].copy_from_slice(&32u16.to_le_bytes());
+        elf[44..46].copy_from_slice(&1u16.to_le_bytes());
+        elf[52..56].copy_from_slice(&PT_LOAD.0.to_le_bytes());
+        elf[56..60].copy_from_slice(&84u32.to_le_bytes());
+        elf[60..64].copy_from_slice(&0x2000_0000u32.to_le_bytes());
+        elf[64..68].copy_from_slice(&0x0800_0020u32.to_le_bytes());
+        elf[68..72].copy_from_slice(&4u32.to_le_bytes());
+        elf[72..76].copy_from_slice(&16u32.to_le_bytes());
+        elf[84..].copy_from_slice(&[0xaa, 0x55, 0, 0xff]);
+        fs::write(&file, elf).unwrap();
+        let input = FirmwareInput {
+            path: file.display().to_string(),
+            format: None,
+            base_address: None,
+        };
+        let preview = read_firmware_preview(&input, 4096).unwrap();
+        assert_eq!(
+            (preview.start_address, preview.bytes),
+            (
+                0x0800_0020,
+                vec![Some(0xaa), Some(0x55), Some(0), Some(0xff)]
+            )
+        );
+    }
 
     #[test]
     fn detect_format_should_accept_elf_extension() {

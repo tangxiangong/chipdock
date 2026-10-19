@@ -3,10 +3,17 @@ using System.Runtime.InteropServices;
 using FlashDesk.Tests;
 
 // Usage: FlashDesk.Tests [path to the built flashdesk_csharp library]
+var driverRulesOnly = args.SequenceEqual(["--driver-rules-only"]);
+if (!driverRulesOnly)
+{
+    await WorkbenchTests.Run();
+    Console.WriteLine($"Portable workbench logic checks passed ({Check.Count} assertions).");
+    if (args.SequenceEqual(["--workbench-only"])) return;
+}
 ProbeDriverRulesTests.Run();
 await ProbeDriverTests.RunSimulation();
 Console.WriteLine($"Portable USB driver logic checks passed ({Check.Count} assertions).");
-if (args.SequenceEqual(["--driver-rules-only"])) return;
+if (driverRulesOnly) return;
 UpdateFeedTests.Run();
 await UpdateSourceTests.Run();
 Console.WriteLine($"Update checks passed ({Check.Count} assertions).");

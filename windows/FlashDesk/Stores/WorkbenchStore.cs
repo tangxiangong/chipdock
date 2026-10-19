@@ -12,6 +12,11 @@ internal sealed partial class WorkbenchStore
     private bool didStart, notificationPending;
     private CancellationTokenSource? analysisCancellation;
     private int analysisRevision;
+    private readonly RecentFirmwareHistory recentHistory = new(
+        () => RustCore.LoadRecentFiles(AppSettings.StorageDirectory),
+        files => RustCore.SaveRecentFiles(AppSettings.StorageDirectory, files));
+
+    internal WorkbenchStore() => recentHistory.Changed += Notify;
 
     internal event Action? Changed;
     internal event Action<ActivityEntry>? LogAppended;
@@ -73,6 +78,7 @@ internal sealed partial class WorkbenchStore
 
     internal string? FirmwarePath { get; private set; }
     internal FirmwareUsage? FirmwareUsage { get; private set; }
+    internal FirmwarePreview? FirmwarePreview { get; private set; }
     internal bool AnalyzingFirmware { get; private set; }
     internal string? FirmwareError { get; private set; }
 
@@ -87,7 +93,8 @@ internal sealed partial class WorkbenchStore
     internal bool DryRun { get; set { field = value; Notify(); } }
     internal EraseStrategy EraseStrategy { get; set { field = value; Notify(); } }
     internal List<ProfileRecord> Profiles { get; private set; } = [];
-    internal List<RecentFirmwareRecord> RecentFiles { get; private set; } = [];
+    internal List<RecentFirmwareRecord> RecentFiles => recentHistory.Files;
+    internal HashSet<string> MissingRecentPaths => recentHistory.MissingPaths;
 
     internal string MemoryAddress { get; set { field = value; Notify(); } } = "0x08000000";
     internal uint MemoryLength { get; set { field = value; Notify(); } } = 256;
@@ -143,11 +150,13 @@ internal sealed partial class WorkbenchStore
         try
         {
             Profiles = await RustCore.LoadProfiles(AppSettings.StorageDirectory);
-            RecentFiles = await RustCore.LoadRecentFiles(AppSettings.StorageDirectory);
+            await recentHistory.Load();
             Notify();
         }
         catch (Exception error) { Report(error, "加载配置"); }
     }
+
+    internal void RefreshRecentFileAvailability() => recentHistory.RefreshAvailability();
 
     internal void InvalidateConnection()
     {

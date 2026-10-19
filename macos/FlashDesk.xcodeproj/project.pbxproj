@@ -34,6 +34,7 @@
 		F35F77FE040327F9CC9C8439 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14384D295C65B1DC5243EB70 /* SettingsView.swift */; };
 		F393CB654662075668E088D0 /* WorkbenchStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D69CC2EC85EF8DF673A9AA9 /* WorkbenchStore.swift */; };
 		FC3BE69B4F55EF104C93E8CB /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7025575D43628910A0B566A /* Components.swift */; };
+		8F5EB1D661DC79B85181AF4A /* FirmwareDataView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF642640559B2662D78CD10B /* FirmwareDataView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -74,6 +75,7 @@
 		D2B8FB7D3B2A65FA1C8B7343 /* FlashDesk.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FlashDesk.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		FB55020249FDA9F67BCD2FC4 /* Formatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Formatting.swift; sourceTree = "<group>"; };
 		FC29B0F063FA27FCE15663E7 /* CoreIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreIntegrationTests.swift; sourceTree = "<group>"; };
+		FF642640559B2662D78CD10B /* FirmwareDataView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirmwareDataView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -173,6 +175,7 @@
 				1A99D86ACA20D93C45B57D40 /* ChipPicker.swift */,
 				B7025575D43628910A0B566A /* Components.swift */,
 				477DD85AEDE6FCD1F6921738 /* ContentView.swift */,
+				FF642640559B2662D78CD10B /* FirmwareDataView.swift */,
 				1B935F0E6832C92B1784E1C2 /* FirmwareLayoutView.swift */,
 				7A5FC861BEE6B20C91D3B303 /* FlashView.swift */,
 				3BB0C98D732365029F21B7C4 /* LogsView.swift */,
@@ -353,6 +356,7 @@
 				FC3BE69B4F55EF104C93E8CB /* Components.swift in Sources */,
 				02DF582AA8D96D41D1A46385 /* ContentView.swift in Sources */,
 				0CD31FD7D1EC4A3D5EE850FA /* ExportDocument.swift in Sources */,
+				8F5EB1D661DC79B85181AF4A /* FirmwareDataView.swift in Sources */,
 				A368C953C25F6C29963A01DD /* FirmwareLayoutView.swift in Sources */,
 				6ECA7675C35D2E48EA5C7972 /* FlashDeskApp.swift in Sources */,
 				8DDB90E9D3CE2890C27CB196 /* FlashDeskCore.swift in Sources */,

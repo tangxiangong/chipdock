@@ -68,6 +68,7 @@ extension WorkbenchStore {
         analysisRevision = UUID()
         firmwareURL = nil
         firmwareUsage = nil
+        firmwarePreview = nil
         firmwareError = nil
         analyzingFirmware = false
     }
@@ -77,6 +78,7 @@ extension WorkbenchStore {
         analysisRevision = UUID()
         let revision = analysisRevision
         firmwareUsage = nil
+        firmwarePreview = nil
         firmwareError = nil
         guard let input = firmwareInput else { return }
         if isBin && parseAddress(binBaseAddress) == nil {
@@ -88,18 +90,19 @@ extension WorkbenchStore {
         analysisTask = Task { [rust] in
             do {
                 try await Task.sleep(for: .milliseconds(200))
-                let usage = try await rust.run { try $0.firmwareUsage(input: input) }
+                let preview = try await rust.run { try $0.firmwarePreview(input: input, length: 4096) }
                 guard !Task.isCancelled, revision == analysisRevision else { return }
+                let usage = preview.usage
                 firmwareUsage = usage
+                firmwarePreview = preview
                 analyzingFirmware = false
                 appendLog("固件", "\(URL(fileURLWithPath: input.path).lastPathComponent) · \(usage.format.title) · \(byteCountLabel(usage.usedBytes))")
-                var files = recentFiles.filter { $0.path != input.path }
-                files.insert(RecentFirmware(path: input.path, format: usage.format, baseAddress: input.baseAddress, usedAt: .now), at: 0)
-                files = Array(files.prefix(10))
-                let directory = storageDirectory
-                let savedFiles = files
-                try await rust.run { try $0.saveRecentFiles(directory: directory, files: savedFiles) }
-                recentFiles = savedFiles
+                try await updateRecentFiles { files in
+                    var updated = files.filter { $0.path != input.path }
+                    updated.insert(RecentFirmware(path: input.path, format: usage.format,
+                                                  baseAddress: input.baseAddress, usedAt: .now), at: 0)
+                    return Array(updated.prefix(10))
+                }
             } catch is CancellationError {
                 if revision == analysisRevision { analyzingFirmware = false }
             } catch {
@@ -114,15 +117,51 @@ extension WorkbenchStore {
     }
 
     func openRecent(_ file: RecentFirmware) {
+        guard !isBusy else { return }
+        refreshRecentFileAvailability()
+        guard !missingRecentPaths.contains(file.path) else {
+            failure = UserFacingError(message: "找不到固件文件", detail: file.path,
+                                      recovery: "文件可能已被移动或删除。请选择其他固件，或从最近使用中移除此记录。")
+            status = "固件文件不存在"
+            appendLog("打开固件", status, level: .error, detail: file.path)
+            return
+        }
         if let address = file.baseAddress { binBaseAddress = addressLabel(address) }
         selectFirmware(URL(fileURLWithPath: file.path))
     }
 
-    func clearRecentFiles() async {
-        let directory = storageDirectory
+    /// Serialize history edits and apply each edit to the latest saved list.
+    /// Opening a file and removing another record must not overwrite each other.
+    private func updateRecentFiles(_ update: @escaping ([RecentFirmware]) -> [RecentFirmware]) async throws {
+        let previous = recentFilesUpdateTask
+        let task = Task { [rust] in
+            _ = try? await previous?.value
+            try await loadRecentFilesIfNeeded()
+            let files = update(recentFiles)
+            let directory = storageDirectory
+            try await rust.run { try $0.saveRecentFiles(directory: directory, files: files) }
+            recentFiles = files
+        }
+        recentFilesUpdateTask = task
+        try await task.value
+    }
+
+    func removeRecentFiles(at paths: Set<String>) async {
+        guard !isBusy, !paths.isEmpty else { return }
         do {
-            try await rust.run { try $0.saveRecentFiles(directory: directory, files: []) }
-            recentFiles = []
+            try await updateRecentFiles { $0.filter { !paths.contains($0.path) } }
+        } catch { report(error, operation: "移除最近使用记录") }
+    }
+
+    func clearMissingRecentFiles() async {
+        refreshRecentFileAvailability()
+        await removeRecentFiles(at: missingRecentPaths)
+    }
+
+    func clearRecentFiles() async {
+        guard !isBusy else { return }
+        do {
+            try await updateRecentFiles { _ in [] }
         } catch { report(error, operation: "清除最近使用") }
     }
 

@@ -16,6 +16,8 @@
     <Compile Include="../FlashDesk/Services/UpdateFeed.cs" Link="Linked/UpdateFeed.cs" />
     <Compile Include="../FlashDesk/Services/UpdateSource.cs" Link="Linked/UpdateSource.cs" />
     <Compile Include="../FlashDesk/Services/RustCore.cs" Link="Linked/RustCore.cs" />
+    <Compile Include="../FlashDesk/Services/RecentFirmwareHistory.cs" Link="Linked/RecentFirmwareHistory.cs" />
+    <Compile Include="../FlashDesk/Support/ActivityText.cs" Link="Linked/ActivityText.cs" />
     <Compile Include="../FlashDesk/Services/ProbeDriver.cs" Link="Linked/ProbeDriver.cs" />
     <Compile Include="../FlashDesk/Services/ProbeUsb.cs" Link="Linked/ProbeUsb.cs" />
     <Compile Include="../FlashDesk/Services/ProbeDriverRules.cs" Link="Linked/ProbeDriverRules.cs" />

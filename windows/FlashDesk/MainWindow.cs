@@ -46,6 +46,7 @@ internal sealed class MainWindow : Window
     private readonly MenuFlyoutSubItem recentMenu = new() { Text = "打开最近使用的" };
     private readonly MenuFlyoutSubItem loadProfileMenu = new() { Text = "载入配置" };
     private List<RecentFirmwareRecord>? shownRecentFiles;
+    private HashSet<string>? shownMissingRecentPaths;
     private List<ProfileRecord>? shownProfiles;
 
     private InspectorPane? openPane;
@@ -159,7 +160,12 @@ internal sealed class MainWindow : Window
             await Store.Start();
             _ = Updater.Start();
         };
-        Activated += (_, args) => titleText.Style = args.WindowActivationState == WindowActivationState.Deactivated ? Ui.Style("TertiaryTextStyle") : null;
+        Activated += (_, args) =>
+        {
+            var active = args.WindowActivationState != WindowActivationState.Deactivated;
+            titleText.Style = active ? null : Ui.Style("TertiaryTextStyle");
+            if (active) Store.RefreshRecentFileAvailability();
+        };
         AppWindow.Closing += (sender, args) =>
         {
             if (!Store.IsBusy)
@@ -353,13 +359,26 @@ internal sealed class MainWindow : Window
         ToolTipService.SetToolTip(inspectorButton, inspectorTip);
         Ui.Name(inspectorButton, inspectorTip);
 
-        if (!ReferenceEquals(shownRecentFiles, Store.RecentFiles))
+        if (!ReferenceEquals(shownRecentFiles, Store.RecentFiles) || !ReferenceEquals(shownMissingRecentPaths, Store.MissingRecentPaths))
         {
             shownRecentFiles = Store.RecentFiles;
+            shownMissingRecentPaths = Store.MissingRecentPaths;
             recentMenu.Items.Clear();
-            foreach (var file in Store.RecentFiles) recentMenu.Items.Add(Ui.MenuItem(Path.GetFileName(file.path), null, () => Store.OpenRecent(file)));
+            var removeMenu = new MenuFlyoutSubItem { Text = "移除记录" };
+            foreach (var file in Store.RecentFiles)
+            {
+                var missing = Store.MissingRecentPaths.Contains(file.path);
+                var open = Ui.MenuItem(Path.GetFileName(file.path) + (missing ? "（文件不存在）" : ""), null, () => Store.OpenRecent(file));
+                open.IsEnabled = !missing;
+                recentMenu.Items.Add(open);
+                removeMenu.Items.Add(Ui.MenuItem(Path.GetFileName(file.path), null, () => _ = Store.RemoveRecentFiles([file.path])));
+            }
             recentMenu.Items.Add(new MenuFlyoutSeparator());
-            recentMenu.Items.Add(Ui.MenuItem("清除菜单", null, () => _ = Store.ClearRecentFiles()));
+            recentMenu.Items.Add(removeMenu);
+            var clearMissing = Ui.MenuItem("清除失效记录", null, () => _ = Store.ClearMissingRecentFiles());
+            clearMissing.IsEnabled = Store.MissingRecentPaths.Count > 0;
+            recentMenu.Items.Add(clearMissing);
+            recentMenu.Items.Add(Ui.MenuItem("清空最近使用", null, () => _ = Store.ClearRecentFiles()));
         }
         if (!ReferenceEquals(shownProfiles, Store.Profiles))
         {
@@ -536,16 +555,25 @@ internal sealed class ActivityView : UserControl
     private readonly ProgressRing ring = new() { Width = 14, Height = 14, IsActive = true };
     private readonly TextBlock message = Ui.Secondary(size: 13);
     private readonly ProgressBar bar = new() { Width = 90, Maximum = 1, VerticalAlignment = VerticalAlignment.Center };
-    private readonly TextBlock percent = Ui.Secondary(size: 13);
+    private readonly TextBlock percent = Ui.Mono(size: 13, style: "SecondaryTextStyle");
 
     internal ActivityView(WorkbenchStore store)
     {
         this.store = store;
         message.TextTrimming = TextTrimming.CharacterEllipsis;
         message.MaxWidth = 360;
-        var row = Ui.Row(8, ring, message, bar, percent);
-        row.HorizontalAlignment = HorizontalAlignment.Center;
-        row.VerticalAlignment = VerticalAlignment.Center;
+        percent.MinWidth = 34;
+        percent.TextAlignment = TextAlignment.Right;
+        percent.TextTrimming = TextTrimming.None;
+        var row = new Grid { ColumnSpacing = 8, MaxWidth = 440, VerticalAlignment = VerticalAlignment.Center };
+        row.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new());
+        row.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        Grid.SetColumn(message, 1);
+        Grid.SetColumn(bar, 2);
+        Grid.SetColumn(percent, 3);
+        foreach (var child in new FrameworkElement[] { ring, message, bar, percent }) row.Children.Add(child);
         foreach (var child in row.Children) ((FrameworkElement)child).VerticalAlignment = VerticalAlignment.Center;
         Content = row;
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetLiveSetting(message, Microsoft.UI.Xaml.Automation.Peers.AutomationLiveSetting.Polite);
@@ -554,16 +582,16 @@ internal sealed class ActivityView : UserControl
     internal void Update()
     {
         var progress = store.IsBusy && store.LatestEvent is { } latest && !latest.stage.IsTerminal() ? latest : null;
-        message.Text = progress?.message ?? store.Status;
-        ToolTipService.SetToolTip(message, message.Text);
         var fraction = progress?.progress;
+        message.Text = ActivityText.Message(progress?.message ?? store.Status, fraction is not null);
+        ToolTipService.SetToolTip(message, message.Text);
         Ui.SetVisible(ring, store.IsBusy && fraction is null);
         Ui.SetVisible(bar, fraction is not null);
         Ui.SetVisible(percent, fraction is not null);
         if (fraction is { } value)
         {
             bar.Value = value;
-            percent.Text = $"{(int)(value * 100)}%";
+            percent.Text = ActivityText.Percentage(value);
         }
     }
 }

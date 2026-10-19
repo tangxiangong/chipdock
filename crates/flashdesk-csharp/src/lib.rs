@@ -44,6 +44,12 @@ pub struct DirectoryRequest {
     pub directory: String,
 }
 
+#[ffi]
+pub struct FirmwarePreviewRequest {
+    pub firmware: FirmwareInput,
+    pub length: u32,
+}
+
 /// A progress event. `at_ms` is milliseconds since the Unix epoch.
 #[ffi]
 pub struct ProgressRecord {
@@ -120,6 +126,12 @@ pub struct MemoryMapResponse {
 #[ffi]
 pub struct FirmwareUsageResponse {
     pub payload: Option<FirmwareUsage>,
+    pub error: Option<ErrorResponse>,
+}
+
+#[ffi]
+pub struct FirmwarePreviewResponse {
+    pub payload: Option<FirmwarePreview>,
     pub error: Option<ErrorResponse>,
 }
 
@@ -334,6 +346,17 @@ pub fn firmware_usage(
 }
 
 #[ffi]
+pub fn firmware_preview(
+    input: Wire<FirmwarePreviewRequest>,
+) -> ffi::Result<Wire<FirmwarePreviewResponse>, BridgeError> {
+    invoke(|| {
+        let input = request(input)?;
+        let (payload, error) = split(CORE.firmware_preview(input.firmware, input.length), Some);
+        Ok(FirmwarePreviewResponse { payload, error })
+    })
+}
+
+#[ffi]
 pub fn flash_firmware(input: Wire<FlashRequest>) -> ffi::Result<Wire<JobResponse>, BridgeError> {
     invoke(|| {
         let (payload, error) = split(CORE.flash_firmware(request(input)?), Some);
@@ -440,6 +463,7 @@ pub fn inventory() -> RustInventory {
         .register(function!(search_chips))
         .register(function!(target_memory_map))
         .register(function!(firmware_usage))
+        .register(function!(firmware_preview))
         .register(function!(flash_firmware))
         .register(function!(erase_target))
         .register(function!(read_memory))
@@ -454,6 +478,40 @@ pub fn inventory() -> RustInventory {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn wire_firmware_preview_should_preserve_addresses_and_holes() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("firmware.hex");
+        std::fs::write(
+            &path,
+            ":020000040800F2\n:0200000041427B\n:0100040043B8\n:00000001FF\n",
+        )
+        .unwrap();
+        let input = Wire::from(FirmwarePreviewRequest {
+            firmware: FirmwareInput {
+                path: path.to_string_lossy().into_owned(),
+                format: None,
+                base_address: None,
+            },
+            length: 4096,
+        });
+        let response = firmware_preview(input).unwrap().unwire();
+        assert!(response.error.is_none());
+        let preview = response.payload.unwrap();
+        assert_eq!(
+            (
+                preview.start_address,
+                preview.bytes,
+                preview.usage.used_bytes
+            ),
+            (
+                0x0800_0000,
+                vec![Some(0x41), Some(0x42), None, None, Some(0x43)],
+                3
+            )
+        );
+    }
 
     #[test]
     fn wire_chip_search_should_return_builtin_targets() {

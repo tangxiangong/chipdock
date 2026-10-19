@@ -3,13 +3,14 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Shapes;
+using Windows.System;
 using static FlashDesk.Formatting;
 
 namespace FlashDesk;
 
 /// Main area: one column reading top to bottom — firmware, settings, then
 /// the single primary action. The column fills the window: it widens with
-/// it, and extra height goes to the drop zone or above the action row.
+/// it, and extra height goes to the drop zone or firmware data viewer.
 internal sealed class FlashView : UserControl
 {
     private readonly WorkbenchStore store;
@@ -24,20 +25,24 @@ internal sealed class FlashView : UserControl
     private readonly StackPanel analyzing = Ui.Row(8, new ProgressRing { Width = 16, Height = 16, IsActive = true }, Ui.Secondary("正在分析固件…"));
     private readonly InfoBar firmwareError = new() { Severity = InfoBarSeverity.Warning, IsClosable = false, IsOpen = true };
     private readonly FirmwareLayoutView layout = new();
+    private readonly FirmwareDataView data = new();
     private readonly Grid facts = new() { ColumnSpacing = 36, RowSpacing = 14 };
-    private readonly StackPanel usageDetails;
+    private readonly Grid usageDetails = new() { RowSpacing = 20 };
 
-    private readonly Grid dropZone = new() { MinHeight = 190 };
+    private readonly Grid dropZone = new() { MinHeight = 170 };
     private readonly Rectangle dropBorder = new() { RadiusX = 8, RadiusY = 8, StrokeThickness = 1.5, StrokeDashArray = [4, 3] };
     private readonly FontIcon dropIcon = Ui.Glyph(Glyphs.Download, 30, "SecondaryGlyphStyle");
     private readonly Button chooseFile;
     private readonly StackPanel recentSection = new() { Spacing = 6 };
-    private readonly ListView recentList = new() { SelectionMode = ListViewSelectionMode.None, IsItemClickEnabled = true };
+    private readonly ListView recentList = new() { SelectionMode = ListViewSelectionMode.Single, MaxHeight = 5 * 36 };
+    private readonly Button clearMissingRecent = new() { Content = "清除失效记录", Padding = new Thickness(8, 4, 8, 4) };
+    private readonly Button clearRecent = new() { Content = "清空列表", Padding = new Thickness(8, 4, 8, 4) };
     private List<RecentFirmwareRecord>? shownRecentFiles;
+    private HashSet<string>? shownMissingRecentPaths;
     private FirmwareUsage? shownUsage;
     private List<MemoryRegionLayout>? shownRegions;
     private readonly Grid firmwareSection = new();
-    private readonly RowDefinition firmwareRow = new(), spacerRow = new();
+    private readonly RowDefinition firmwareRow = new();
 
     private readonly Ellipse connectionDot = new() { Width = 8, Height = 8, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock targetName = Ui.Text(semibold: true);
@@ -84,9 +89,22 @@ internal sealed class FlashView : UserControl
         heading.Children.Add(formatTile);
         heading.Children.Add(names);
         heading.Children.Add(firmwareMenu);
-        usageDetails = Ui.Column(18, layout, facts);
-        summary.Child = Ui.Column(20, heading, analyzing, firmwareError, usageDetails);
-        summary.VerticalAlignment = VerticalAlignment.Top;
+        usageDetails.RowDefinitions.Add(new() { Height = GridLength.Auto });
+        usageDetails.RowDefinitions.Add(new());
+        usageDetails.RowDefinitions.Add(new() { Height = GridLength.Auto });
+        Grid.SetRow(data, 1);
+        Grid.SetRow(facts, 2);
+        usageDetails.Children.Add(layout);
+        usageDetails.Children.Add(data);
+        usageDetails.Children.Add(facts);
+        var summaryContent = new Grid { RowSpacing = 20 };
+        summaryContent.RowDefinitions.Add(new() { Height = GridLength.Auto });
+        summaryContent.RowDefinitions.Add(new());
+        var summaryHeading = Ui.Column(20, heading, analyzing, firmwareError);
+        summaryContent.Children.Add(summaryHeading);
+        Grid.SetRow(usageDetails, 1);
+        summaryContent.Children.Add(usageDetails);
+        summary.Child = summaryContent;
         facts.SizeChanged += (_, args) => { if (Math.Abs(args.NewSize.Width - args.PreviousSize.Width) > 1) ArrangeFacts(); };
 
         chooseFile = Ui.Button(Glyphs.Folder, "选择文件…", () => _ = window.PickFirmware());
@@ -105,8 +123,32 @@ internal sealed class FlashView : UserControl
         SetDropTargeted(false);
 
         Ui.CompactItems(recentList, new Thickness(12, 0, 12, 0), 36);
-        recentList.ItemClick += (_, args) => { if ((args.ClickedItem as FrameworkElement)?.Tag is RecentFirmwareRecord file) store.OpenRecent(file); };
-        recentSection.Children.Add(Ui.Text("最近使用", 14, semibold: true));
+        ScrollViewer.SetHorizontalScrollBarVisibility(recentList, ScrollBarVisibility.Disabled);
+        ScrollViewer.SetHorizontalScrollMode(recentList, ScrollMode.Disabled);
+        recentList.Loaded += (_, _) => store.RefreshRecentFileAvailability();
+        recentList.KeyDown += (_, args) =>
+        {
+            if (args.OriginalSource is Button) return;
+            if ((recentList.SelectedItem as FrameworkElement)?.Tag is not RecentFirmwareRecord file) return;
+            if (args.Key == VirtualKey.Delete) _ = store.RemoveRecentFiles([file.path]);
+            else if (args.Key == VirtualKey.Enter) store.OpenRecent(file);
+            else return;
+            args.Handled = true;
+        };
+        clearMissingRecent.Click += (_, _) => _ = store.ClearMissingRecentFiles();
+        clearRecent.Click += (_, _) => _ = store.ClearRecentFiles();
+        var recentHeading = new Grid { ColumnSpacing = 8 };
+        recentHeading.ColumnDefinitions.Add(new());
+        recentHeading.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        recentHeading.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        var recentTitle = Ui.Text("最近使用", 14, semibold: true);
+        recentTitle.VerticalAlignment = VerticalAlignment.Center;
+        recentHeading.Children.Add(recentTitle);
+        Grid.SetColumn(clearMissingRecent, 1);
+        Grid.SetColumn(clearRecent, 2);
+        recentHeading.Children.Add(clearMissingRecent);
+        recentHeading.Children.Add(clearRecent);
+        recentSection.Children.Add(recentHeading);
         recentSection.Children.Add(new Border { Style = Ui.Style("CardStyle"), Padding = new Thickness(0, 4, 0, 4), Child = recentList });
         recentSection.Margin = new Thickness(0, 22, 0, 0);
         firmwareSection.RowDefinitions.Add(new());
@@ -188,7 +230,7 @@ internal sealed class FlashView : UserControl
         actionButtons.Children.Add(busy);
         actionButtons.Children.Add(erase);
         actionButtons.Children.Add(action);
-        var actionRow = new Grid { ColumnSpacing = 16, Margin = new Thickness(0, 26, 0, 0) };
+        var actionRow = new Grid { ColumnSpacing = 16, Margin = new Thickness(0, 24, 0, 0) };
         actionRow.ColumnDefinitions.Add(new());
         actionRow.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         actionRow.RowDefinitions.Add(new() { Height = GridLength.Auto });
@@ -212,16 +254,15 @@ internal sealed class FlashView : UserControl
         };
 
         var settingsTitle = Ui.Text("烧录设置", 14, semibold: true);
-        settingsTitle.Margin = new Thickness(0, 28, 0, 8);
-        var column = new Grid { Padding = new Thickness(0, 28, 0, 28) };
+        settingsTitle.Margin = new Thickness(0, 20, 0, 8);
+        var column = new Grid { Padding = new Thickness(0, 24, 0, 24) };
         column.RowDefinitions.Add(firmwareRow);
         column.RowDefinitions.Add(new() { Height = GridLength.Auto });
         column.RowDefinitions.Add(new() { Height = GridLength.Auto });
-        column.RowDefinitions.Add(spacerRow);
         column.RowDefinitions.Add(new() { Height = GridLength.Auto });
         Grid.SetRow(settingsTitle, 1);
         Grid.SetRow(settings, 2);
-        Grid.SetRow(actionRow, 4);
+        Grid.SetRow(actionRow, 3);
         foreach (var element in new UIElement[] { firmwareSection, settingsTitle, settings, actionRow }) column.Children.Add(element);
         var scroll = new ScrollViewer
         {
@@ -238,6 +279,13 @@ internal sealed class FlashView : UserControl
             column.Margin = new Thickness(margin, 0, margin, 0);
             column.MaxWidth = width;
             column.MinHeight = args.NewSize.Height;
+            var compact = args.NewSize.Height < 560;
+            var verticalMargin = compact ? 20 : 24;
+            var gap = compact ? 16 : 20;
+            column.Padding = new Thickness(0, verticalMargin, 0, verticalMargin);
+            settingsTitle.Margin = new Thickness(0, gap, 0, 8);
+            actionRow.Margin = new Thickness(0, compact ? 20 : 24, 0, 0);
+            summaryHeading.Spacing = summaryContent.RowSpacing = usageDetails.RowSpacing = gap;
         };
         Content = scroll;
     }
@@ -317,12 +365,13 @@ internal sealed class FlashView : UserControl
             firmwareSection.Children.Clear();
             foreach (var section in sections) firmwareSection.Children.Add(section);
         }
-        // The drop zone takes the spare height; a loaded firmware leaves it above the action row.
-        firmwareRow.Height = path is null ? new GridLength(1, GridUnitType.Star) : GridLength.Auto;
-        spacerRow.Height = path is null ? GridLength.Auto : new GridLength(1, GridUnitType.Star);
+        // Only the drop zone or a loaded firmware's data viewer absorbs spare height.
+        var expands = path is null || store.FirmwarePreview is not null;
+        firmwareRow.Height = expands ? new GridLength(1, GridUnitType.Star) : GridLength.Auto;
         if (path is null) UpdateRecentFiles();
         else UpdateSummary(path);
-        chooseFile.IsEnabled = recentList.IsEnabled = firmwareMenu.IsEnabled = !store.IsBusy;
+        chooseFile.IsEnabled = recentList.IsEnabled = firmwareMenu.IsEnabled = clearRecent.IsEnabled = clearMissingRecent.IsEnabled = !store.IsBusy;
+        Ui.SetVisible(clearMissingRecent, store.MissingRecentPaths.Count > 0);
 
         connectionDot.Style = Ui.Style(store.Connection is null ? "IdleDotStyle" : "ConnectedDotStyle");
         targetName.Text = store.TargetName;
@@ -369,6 +418,7 @@ internal sealed class FlashView : UserControl
         firmwareError.Message = store.FirmwareError ?? "";
         var usage = store.AnalyzingFirmware || store.FirmwareError is not null ? null : store.FirmwareUsage;
         Ui.SetVisible(usageDetails, usage is not null);
+        data.Update(usage is null ? null : store.FirmwarePreview);
         if (usage is null || (ReferenceEquals(usage, shownUsage) && ReferenceEquals(store.MemoryRegions, shownRegions))) return;
         shownUsage = usage;
         shownRegions = store.MemoryRegions;
@@ -408,35 +458,64 @@ internal sealed class FlashView : UserControl
 
     private void UpdateRecentFiles()
     {
-        if (ReferenceEquals(shownRecentFiles, store.RecentFiles)) return;
+        if (ReferenceEquals(shownRecentFiles, store.RecentFiles) && ReferenceEquals(shownMissingRecentPaths, store.MissingRecentPaths)) return;
+        var selected = ((recentList.SelectedItem as FrameworkElement)?.Tag as RecentFirmwareRecord)?.path;
         shownRecentFiles = store.RecentFiles;
+        shownMissingRecentPaths = store.MissingRecentPaths;
         recentList.Items.Clear();
-        foreach (var file in store.RecentFiles.Take(5)) recentList.Items.Add(RecentRow(file));
+        foreach (var file in store.RecentFiles)
+        {
+            var row = RecentRow(file);
+            recentList.Items.Add(row);
+            if (string.Equals(file.path, selected, StringComparison.OrdinalIgnoreCase)) recentList.SelectedItem = row;
+        }
+        ScrollViewer.SetVerticalScrollMode(recentList, store.RecentFiles.Count > 5 ? ScrollMode.Enabled : ScrollMode.Disabled);
+        ScrollViewer.SetVerticalScrollBarVisibility(recentList, ScrollBarVisibility.Auto);
     }
 
     private Grid RecentRow(RecentFirmwareRecord file)
     {
-        var row = new Grid { ColumnSpacing = 10, Tag = file, Padding = new Thickness(0, 6, 0, 6) };
+        var missing = store.MissingRecentPaths.Contains(file.path);
+        var row = new Grid { ColumnSpacing = 10, Tag = file, Padding = new Thickness(0, 2, 0, 2) };
         row.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         row.ColumnDefinitions.Add(new());
         row.ColumnDefinitions.Add(new());
+        row.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         row.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         var icon = Ui.Glyph(Glyphs.Document, 14);
         icon.Foreground = Ui.Brush(file.format.Tint());
         var name = Ui.Text(System.IO.Path.GetFileName(file.path));
         name.MaxLines = 1;
+        if (missing) name.Style = Ui.Style("SecondaryTextStyle");
         var directory = Ui.Secondary(DisplayDirectory(file.path));
         directory.TextTrimming = TextTrimming.CharacterEllipsis;
-        var time = Ui.Secondary(RelativeTime(FromUnixMilliseconds(file.used_at_ms)), 13);
+        FrameworkElement status = missing
+            ? Ui.Row(4, Ui.Glyph(Glyphs.Warning, 12, "SecondaryGlyphStyle"), Ui.Secondary("文件不存在", 13))
+            : Ui.Secondary(RelativeTime(FromUnixMilliseconds(file.used_at_ms)), 13);
+        var remove = Ui.IconButton(Glyphs.Cancel, $"移除 {System.IO.Path.GetFileName(file.path)} 的最近使用记录", () => _ = store.RemoveRecentFiles([file.path]));
+        remove.Padding = new Thickness(6);
+        remove.DoubleTapped += (_, args) => args.Handled = true;
         Grid.SetColumn(name, 1);
         Grid.SetColumn(directory, 2);
-        Grid.SetColumn(time, 3);
-        foreach (var element in new FrameworkElement[] { icon, name, directory, time }) { element.VerticalAlignment = VerticalAlignment.Center; row.Children.Add(element); }
+        Grid.SetColumn(status, 3);
+        Grid.SetColumn(remove, 4);
+        foreach (var element in new FrameworkElement[] { icon, name, directory, status, remove }) { element.VerticalAlignment = VerticalAlignment.Center; row.Children.Add(element); }
         ToolTipService.SetToolTip(row, file.path);
         Ui.Name(row, System.IO.Path.GetFileName(file.path));
+        row.DoubleTapped += (_, args) => { store.OpenRecent(file); args.Handled = true; };
         var menu = new MenuFlyout();
-        menu.Items.Add(Ui.MenuItem("打开", Glyphs.OpenFile, () => store.OpenRecent(file)));
-        menu.Items.Add(Ui.MenuItem("在资源管理器中显示", Glyphs.Folder, () => MainWindow.RevealInExplorer(file.path)));
+        var open = Ui.MenuItem("打开", Glyphs.OpenFile, () => store.OpenRecent(file));
+        var reveal = Ui.MenuItem("在资源管理器中显示", Glyphs.Folder, () => MainWindow.RevealInExplorer(file.path));
+        open.IsEnabled = reveal.IsEnabled = !missing;
+        menu.Items.Add(open);
+        menu.Items.Add(reveal);
+        menu.Items.Add(new MenuFlyoutSeparator());
+        menu.Items.Add(Ui.MenuItem("从最近使用中移除", Glyphs.Delete, () => _ = store.RemoveRecentFiles([file.path])));
+        menu.Opening += (_, _) =>
+        {
+            store.RefreshRecentFileAvailability();
+            open.IsEnabled = reveal.IsEnabled = !store.MissingRecentPaths.Contains(file.path);
+        };
         row.ContextFlyout = menu;
         return row;
     }

@@ -46,6 +46,17 @@ private struct BackendInteropTests {
                   "BIN size or address conversion failed")
         passed += 1
 
+        let preview = try core.firmwarePreview(input: FirmwareInput(path: image.path, format: .bin, baseAddress: 0x0800_0000), length: 4096)
+        try check(preview.startAddress == 0x0800_0000 && preview.bytes == [0, 1, 2, 3, 0xFF],
+                  "Firmware preview bytes, optionals or addresses changed across UniFFI")
+        passed += 1
+
+        let sparseImage = root.appendingPathComponent("sparse.hex")
+        try Data(":020000040800F2\n:020000000001FD\n:01000300FFFD\n:00000001FF\n".utf8).write(to: sparseImage)
+        let sparsePreview = try core.firmwarePreview(input: FirmwareInput(path: sparseImage.path, format: .hex, baseAddress: nil), length: 4096)
+        try check(sparsePreview.bytes == [0, 1, nil, 0xFF], "An unwritten firmware address became a real byte across UniFFI")
+        passed += 1
+
         try expectCoreError(.invalidFirmwareAddress) {
             _ = try core.firmwareUsage(input: FirmwareInput(path: image.path, format: .bin, baseAddress: UInt64.max - 3))
         }
