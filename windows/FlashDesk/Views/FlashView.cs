@@ -54,6 +54,7 @@ internal sealed class FlashView : UserControl
     private readonly Button action = new() { Style = Ui.Style("AccentButtonStyle"), Padding = new Thickness(20, 8, 20, 8), MinWidth = 140 };
     private readonly FontIcon actionIcon = Ui.Glyph(Glyphs.Link, 14);
     private readonly TextBlock actionText = Ui.Text();
+    private readonly Button erase;
 
     internal FlashView(WorkbenchStore store, MainWindow window)
     {
@@ -135,17 +136,24 @@ internal sealed class FlashView : UserControl
             Card(Glyphs.Reset, Description("复位并运行程序", "完成后复位目标芯片"), resetAfter),
             Card(Glyphs.Shield, Description("仅预检查，不写入芯片", "检查连接、地址与 Flash 映射"), dryRun));
 
+        // Erases the whole chip without programming, after confirmation.
+        erase = Ui.Button(Glyphs.Erase, "擦除芯片…", () => _ = window.ConfirmErase());
+        erase.Padding = new Thickness(14, 8, 14, 8);
+
         action.Content = Ui.Row(8, actionIcon, actionText);
         action.Click += (_, _) => _ = store.Connection is null ? store.Connect() : store.Flash();
         var actionRow = new Grid { ColumnSpacing = 16, Margin = new Thickness(0, 26, 0, 0) };
         actionRow.ColumnDefinitions.Add(new());
         actionRow.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         actionRow.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-        hint.VerticalAlignment = busy.VerticalAlignment = VerticalAlignment.Center;
+        actionRow.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        hint.VerticalAlignment = busy.VerticalAlignment = erase.VerticalAlignment = VerticalAlignment.Center;
         Grid.SetColumn(busy, 1);
-        Grid.SetColumn(action, 2);
+        Grid.SetColumn(erase, 2);
+        Grid.SetColumn(action, 3);
         actionRow.Children.Add(hint);
         actionRow.Children.Add(busy);
+        actionRow.Children.Add(erase);
         actionRow.Children.Add(action);
 
         var settingsTitle = Ui.Text("烧录设置", 14, semibold: true);
@@ -340,12 +348,15 @@ internal sealed class FlashView : UserControl
         actionText.Text = store.Operation switch
         {
             WorkbenchOperation.Connect => "正在连接…",
+            WorkbenchOperation.Erase => "正在擦除…",
             WorkbenchOperation.Flash => store.DryRun ? "正在预检查…" : "正在烧录…",
             _ when needsConnection => "连接目标",
             _ => store.DryRun ? "开始预检查" : $"烧录到 {store.TargetName}",
         };
         actionIcon.Glyph = needsConnection ? Glyphs.Link : store.DryRun ? Glyphs.Shield : Glyphs.Flash;
         action.IsEnabled = needsConnection ? store.CanConnect : store.CanFlash;
+        erase.IsEnabled = store.CanErase;
+        ToolTipService.SetToolTip(erase, needsConnection ? "连接后即可擦除" : "擦除整个芯片，不烧录");
         Ui.Name(action, actionText.Text);
         hint.Text = store.IsBusy ? ""
             : needsConnection ? "连接后即可烧录（Ctrl+K）"

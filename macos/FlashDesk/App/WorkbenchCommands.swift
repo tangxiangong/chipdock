@@ -56,8 +56,9 @@ struct WorkbenchCommands: Commands {
             Button("读取内存") { store.showMemory = true; Task { await store.readMemory() } }
                 .keyboardShortcut("r", modifiers: [.command, .shift])
                 .disabled(!store.canReadMemory)
+            Divider()
             Button("擦除整个芯片…", role: .destructive) { store.confirmErase = true }
-                .disabled(store.isBusy || store.connection == nil)
+                .disabled(!store.canErase)
         }
         CommandGroup(after: .toolbar) {
             Button(store.showLogs ? "隐藏日志" : "显示日志", systemImage: "text.alignleft") { store.showLogs.toggle() }

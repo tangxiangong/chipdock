@@ -45,7 +45,7 @@ internal sealed partial class WorkbenchStore
 
     internal async Task Erase()
     {
-        if (IsBusy || Connection is null) return;
+        if (!CanErase) return;
         var request = new EraseRequest { probe = ProbeSelector, target = TargetSelection };
         await Perform(WorkbenchOperation.Erase, () => RustCore.EraseTarget(request));
         MemoryResult = null;

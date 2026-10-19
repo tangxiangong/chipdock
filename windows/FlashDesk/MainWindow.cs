@@ -341,7 +341,7 @@ internal sealed class MainWindow : Window
         flashItem.Text = Store.DryRun ? "开始预检查" : "烧录固件";
         flashItem.IsEnabled = Store.CanFlash;
         readItem.IsEnabled = Store.CanReadMemory;
-        eraseItem.IsEnabled = !busy && Store.Connection is not null;
+        eraseItem.IsEnabled = Store.CanErase;
         checkUpdatesItem.IsEnabled = Updater.CanCheck;
         logsItem.IsChecked = openPane == InspectorPane.Logs;
         logsButton.IsChecked = logsItem.IsChecked;
@@ -436,7 +436,7 @@ internal sealed class MainWindow : Window
 
     internal async Task ConfirmErase()
     {
-        if (Store.IsBusy || Store.Connection is null) return;
+        if (!Store.CanErase) return;
         var dialog = new ContentDialog
         {
             Title = $"擦除 {Store.TargetName} 的全部 Flash？",

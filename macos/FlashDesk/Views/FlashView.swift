@@ -308,6 +308,7 @@ private struct FlashAction: View {
             Text(hint).font(.callout).foregroundStyle(.secondary)
             Spacer(minLength: 0)
             if store.isBusy { ProgressView().controlSize(.small) }
+            EraseButton(store: store)
             Button {
                 Task { needsConnection ? await store.connect() : await store.flash() }
             } label: {
@@ -325,6 +326,7 @@ private struct FlashAction: View {
 
     private var title: String {
         if store.operation == .connect { return "正在连接…" }
+        if store.operation == .erase { return "正在擦除…" }
         if store.operation == .flash { return store.dryRun ? "正在预检查…" : "正在烧录…" }
         if needsConnection { return "连接目标" }
         return store.dryRun ? "开始预检查" : "烧录到 \(store.targetName)"
@@ -341,5 +343,17 @@ private struct FlashAction: View {
         if needsConnection { return "连接后即可烧录（⌘K）" }
         if store.firmwareURL == nil { return "选择固件后即可烧录" }
         return "按 ⌘↩ 开始"
+    }
+}
+
+/// Erases the whole chip without programming, after confirmation.
+private struct EraseButton: View {
+    var store: WorkbenchStore
+
+    var body: some View {
+        Button("擦除芯片…", systemImage: "eraser", role: .destructive) { store.confirmErase = true }
+            .controlSize(.large)
+            .disabled(!store.canErase)
+            .help(store.connection == nil ? "连接后即可擦除" : "擦除整个芯片，不烧录")
     }
 }

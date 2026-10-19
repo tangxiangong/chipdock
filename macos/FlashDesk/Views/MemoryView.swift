@@ -17,7 +17,7 @@ struct MemoryView: View {
                         store.showMemory = false
                         store.confirmErase = true
                     }
-                    .disabled(store.isBusy || store.connection == nil)
+                    .disabled(!store.canErase)
                 } label: { Image(systemName: "ellipsis.circle") }
                 .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
                 .help("芯片操作")

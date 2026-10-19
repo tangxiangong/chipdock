@@ -37,7 +37,7 @@ extension WorkbenchStore {
     }
 
     func erase() async {
-        guard !isBusy, connection != nil else { return }
+        guard canErase else { return }
         let request = EraseRequest(probe: selectedProbe.isEmpty ? nil : selectedProbe, target: targetSelection)
         _ = await perform(.erase) { [rust] in try await rust.run { try $0.eraseTarget(request: request) } }
         memoryResult = nil

@@ -104,6 +104,8 @@ internal sealed partial class WorkbenchStore
         !IsBusy && Connection is not null && FirmwareUsage is not null && FirmwareError is null && !AnalyzingFirmware
         && (!IsBin || ParseAddress(BinBaseAddress) is not null);
 
+    internal bool CanErase => !IsBusy && Connection is not null;
+
     internal bool CanReadMemory =>
         ParseAddress(MemoryAddress) is { } address && !IsBusy && Connection is not null
         && MemoryLength is >= 1 and <= 4096 && address <= ulong.MaxValue - MemoryLength;

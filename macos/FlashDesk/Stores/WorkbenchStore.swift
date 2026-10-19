@@ -67,6 +67,7 @@ final class WorkbenchStore {
         !isBusy && connection != nil && firmwareUsage != nil && firmwareError == nil && !analyzingFirmware
             && (!isBin || parseAddress(binBaseAddress) != nil)
     }
+    var canErase: Bool { !isBusy && connection != nil }
     var canReadMemory: Bool {
         guard let address = parseAddress(memoryAddress) else { return false }
         return !isBusy && connection != nil && (1...4096).contains(memoryLength)

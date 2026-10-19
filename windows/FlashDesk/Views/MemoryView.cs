@@ -143,7 +143,7 @@ internal sealed class MemoryView : UserControl
         if (length.SelectedIndex != lengthIndex) length.SelectedIndex = lengthIndex;
         read.IsEnabled = store.CanReadMemory;
         export.IsEnabled = store.MemoryResult is not null && !store.IsBusy;
-        eraseItem.IsEnabled = !store.IsBusy && store.Connection is not null;
+        eraseItem.IsEnabled = store.CanErase;
         map.IsEnabled = !store.IsBusy;
 
         Ui.SetVisible(mapSection, store.MemoryRegions.Count > 0);
