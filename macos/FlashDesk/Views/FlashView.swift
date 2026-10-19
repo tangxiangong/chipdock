@@ -48,7 +48,7 @@ struct FlashView: View {
     static let verticalMargin: CGFloat = 28
 
     /// The window width less side margins of a twentieth of it (at least 32 pt).
-    static func columnWidth(in width: CGFloat) -> CGFloat {
+    nonisolated static func columnWidth(in width: CGFloat) -> CGFloat {
         max(width - 2 * max(32, width * 0.05), 0)
     }
 }
