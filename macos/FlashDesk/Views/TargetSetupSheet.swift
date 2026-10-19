@@ -85,7 +85,7 @@ struct TargetSetupSheet: View {
 
             HStack {
                 if store.connection != nil {
-                    Button("断开", systemImage: "xmark.circle", role: .destructive) { store.disconnect() }.disabled(store.isBusy)
+                    Button("断开", systemImage: "xmark.circle", role: .destructive) { store.disconnect() }.disabled(!store.canDisconnect)
                 }
                 Spacer()
                 if store.isBusy { ProgressView().controlSize(.small).padding(.trailing, 4) }

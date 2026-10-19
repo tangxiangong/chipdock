@@ -335,7 +335,7 @@ internal sealed class MainWindow : Window
         recentMenu.IsEnabled = !busy && Store.RecentFiles.Count > 0;
         scanItem.IsEnabled = !busy;
         connectItem.IsEnabled = Store.CanConnect;
-        disconnectItem.IsEnabled = !busy && Store.Connection is not null;
+        disconnectItem.IsEnabled = Store.CanDisconnect;
         chipItem.IsEnabled = saveProfileItem.IsEnabled = !busy;
         loadProfileMenu.IsEnabled = !busy && Store.Profiles.Count > 0;
         flashItem.Text = Store.DryRun ? "开始预检查" : "烧录固件";

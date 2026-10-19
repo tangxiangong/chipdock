@@ -33,7 +33,7 @@ struct WorkbenchCommands: Commands {
                 .disabled(!store.canConnect)
             Button("断开目标") { store.disconnect() }
                 .keyboardShortcut("k", modifiers: [.command, .shift])
-                .disabled(store.isBusy || store.connection == nil)
+                .disabled(!store.canDisconnect)
             Divider()
             Button("选择芯片…") { store.showChipPicker = true }
                 .disabled(store.isBusy)

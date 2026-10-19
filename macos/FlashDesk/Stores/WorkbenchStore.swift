@@ -67,6 +67,7 @@ final class WorkbenchStore {
         !isBusy && connection != nil && firmwareUsage != nil && firmwareError == nil && !analyzingFirmware
             && (!isBin || parseAddress(binBaseAddress) != nil)
     }
+    var canDisconnect: Bool { !isBusy && connection != nil }
     var canErase: Bool { !isBusy && connection != nil }
     var canReadMemory: Bool {
         guard let address = parseAddress(memoryAddress) else { return false }
@@ -112,9 +113,13 @@ final class WorkbenchStore {
         memoryLines = []
     }
 
+    /// Also closes the firmware and drops the last job's progress, so the
+    /// previous flash no longer shows once the target is gone.
     func disconnect() {
-        guard !isBusy else { return }
+        guard canDisconnect else { return }
         invalidateConnection()
+        clearFirmware()
+        latestEvent = nil
         status = "已断开"
         appendLog("连接", "已清除目标连接")
     }

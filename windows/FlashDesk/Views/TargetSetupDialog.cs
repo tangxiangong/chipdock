@@ -153,7 +153,7 @@ internal sealed class TargetSetupDialog : ContentDialog
         PrimaryButtonText = connected ? "重新连接" : "连接";
         SecondaryButtonText = connected ? "断开" : "";
         IsPrimaryButtonEnabled = store.CanConnect;
-        IsSecondaryButtonEnabled = !store.IsBusy;
+        IsSecondaryButtonEnabled = store.CanDisconnect;
 
         if (!ReferenceEquals(shownProbes, store.Probes) || probe.Items.Count == 0)
         {

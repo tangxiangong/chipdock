@@ -41,7 +41,7 @@ internal sealed class FlashView : UserControl
     private readonly TextBlock targetName = Ui.Text(semibold: true);
     private readonly TextBlock targetState = Ui.Secondary("未连接");
     private readonly TextBlock targetDetail = Ui.Secondary(size: 12);
-    private readonly Button changeTarget;
+    private readonly Button changeTarget, disconnectTarget;
     private readonly TextBox baseAddress = new() { Width = 150, PlaceholderText = "0x08000000" };
     private readonly StackPanel baseAddressError = Ui.Row(6, Ui.Glyph(Glyphs.Warning, 12, "CriticalGlyphStyle"), Ui.Text("无效的十六进制地址", 12, "CriticalTextStyle"));
     private readonly Border baseAddressCard;
@@ -107,8 +107,9 @@ internal sealed class FlashView : UserControl
         recentSection.Margin = new Thickness(0, 22, 0, 0);
 
         changeTarget = Ui.Button(Glyphs.Edit, "更改…", () => _ = window.ShowTargetSetup());
+        disconnectTarget = Ui.Button(Glyphs.Cancel, "断开连接", store.Disconnect, "断开目标（Ctrl+Shift+K）");
         var targetTitle = Ui.Row(8, connectionDot, targetName, targetState);
-        var targetCard = Card(Glyphs.Chip, Ui.Column(2, targetTitle, targetDetail), changeTarget);
+        var targetCard = Card(Glyphs.Chip, Ui.Column(2, targetTitle, targetDetail), Ui.Row(8, disconnectTarget, changeTarget));
 
         baseAddress.FontFamily = (FontFamily)Application.Current.Resources["MonoFontFamily"];
         baseAddress.TextChanged += (_, _) => store.BinBaseAddress = baseAddress.Text;
@@ -227,6 +228,8 @@ internal sealed class FlashView : UserControl
         Ui.SetVisible(targetState, store.Connection is null);
         targetDetail.Text = TargetDetail();
         changeTarget.IsEnabled = !store.IsBusy;
+        Ui.SetVisible(disconnectTarget, store.Connection is not null);
+        disconnectTarget.IsEnabled = store.CanDisconnect;
 
         Ui.SetVisible(baseAddressCard, store.IsBin);
         Ui.SetText(baseAddress, store.BinBaseAddress);

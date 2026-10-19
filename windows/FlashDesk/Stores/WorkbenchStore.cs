@@ -104,6 +104,8 @@ internal sealed partial class WorkbenchStore
         !IsBusy && Connection is not null && FirmwareUsage is not null && FirmwareError is null && !AnalyzingFirmware
         && (!IsBin || ParseAddress(BinBaseAddress) is not null);
 
+    internal bool CanDisconnect => !IsBusy && Connection is not null;
+
     internal bool CanErase => !IsBusy && Connection is not null;
 
     internal bool CanReadMemory =>
@@ -156,10 +158,14 @@ internal sealed partial class WorkbenchStore
         Notify();
     }
 
+    /// Also closes the firmware and drops the last job's progress, so the
+    /// previous flash no longer shows once the target is gone.
     internal void Disconnect()
     {
-        if (IsBusy) return;
+        if (!CanDisconnect) return;
         InvalidateConnection();
+        ClearFirmware();
+        LatestEvent = null;
         SetStatus("已断开");
         AppendLog("连接", "已清除目标连接");
     }

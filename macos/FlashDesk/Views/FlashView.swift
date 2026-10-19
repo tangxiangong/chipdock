@@ -235,6 +235,11 @@ private struct SettingsGrid: View {
                         Text(targetDetail).font(.callout).foregroundStyle(.secondary)
                     }
                     Spacer(minLength: 8)
+                    if store.connection != nil {
+                        Button("断开连接", systemImage: "xmark.circle") { store.disconnect() }
+                            .disabled(!store.canDisconnect)
+                            .help("断开目标（⇧⌘K）")
+                    }
                     Button("更改…", systemImage: "slider.horizontal.3") { store.showTargetSetup = true }
                         .disabled(store.isBusy)
                 }
