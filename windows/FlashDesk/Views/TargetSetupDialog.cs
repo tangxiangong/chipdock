@@ -23,8 +23,10 @@ internal sealed class TargetSetupDialog : ContentDialog
     private readonly CheckBox connectUnderReset = new() { Content = "复位下连接" };
     private readonly StackPanel identified = new() { Spacing = 6 };
     private readonly Grid identifiedFacts = new() { ColumnSpacing = 16, RowSpacing = 4 };
-    private readonly StackPanel progress = Ui.Row(8, new ProgressRing { Width = 16, Height = 16, IsActive = true }, Ui.Secondary("正在连接…", 13));
+    private readonly TextBlock progressMessage = Ui.Secondary("正在连接…", 13, wrap: true);
+    private readonly StackPanel progress;
     private readonly StackPanel form;
+    private readonly ContentControl formControls;
     private List<ProbeSummary>? shownProbes;
     private CancellationTokenSource? chipSearch;
     private bool updating;
@@ -32,6 +34,8 @@ internal sealed class TargetSetupDialog : ContentDialog
     internal TargetSetupDialog(WorkbenchStore store)
     {
         this.store = store;
+        progress = Ui.Row(8, new ProgressRing { Width = 16, Height = 16, IsActive = true }, progressMessage);
+        progressMessage.MaxWidth = 340;
         Title = "目标配置";
         CloseButtonText = "取消";
         DefaultButton = ContentDialogButton.Primary;
@@ -86,9 +90,10 @@ internal sealed class TargetSetupDialog : ContentDialog
             Ui.Column(4, Ui.Text("速度"), speedRow, speedError),
             connectUnderReset,
             identified);
+        formControls = new ContentControl { Content = form, HorizontalContentAlignment = HorizontalAlignment.Stretch };
         Content = new ScrollViewer
         {
-            Content = Ui.Column(16, state, failure, form, progress),
+            Content = Ui.Column(16, state, failure, formControls, progress),
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             MinWidth = 400,
         };
@@ -104,6 +109,7 @@ internal sealed class TargetSetupDialog : ContentDialog
             deferral.Complete();
         };
         SecondaryButtonClick += (_, args) => { args.Cancel = true; store.Disconnect(); };
+        Closing += (_, args) => { if (store.IsBusy) args.Cancel = true; };
         Opened += (_, _) => { store.Changed += Update; Update(); };
         Closed += (_, _) => { store.Changed -= Update; chipSearch?.Cancel(); };
     }
@@ -190,9 +196,10 @@ internal sealed class TargetSetupDialog : ContentDialog
             if (information.flash_size_bytes is { } bytes) AddFact("Flash", ByteCountLabel(bytes));
         }
 
-        form.IsHitTestVisible = !store.IsBusy;
+        formControls.IsEnabled = !store.IsBusy;
         form.Opacity = store.IsBusy ? 0.6 : 1;
         Ui.SetVisible(progress, store.Operation == WorkbenchOperation.Connect);
+        progressMessage.Text = store.Status;
         updating = false;
     }
 

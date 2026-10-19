@@ -43,11 +43,17 @@ Rust 动态库位于 `target/<目标三元组>/<debug或release>/flashdesk_cshar
 
 配置与最近使用的固件由 Rust Core 存储在 `%APPDATA%\FlashDesk`；外观、烧录默认值与更新偏好存储在 `%LOCALAPPDATA%\FlashDesk\settings.json`。
 
+启动或运行期间可捕获的未处理 .NET / WinUI 异常会写入 `%LOCALAPPDATA%\FlashDesk\logs\crash.log`，包含异常消息和调用栈，可用于排查主窗口尚未打开时的闪退。
+
 ## 运行时
 
 应用为非打包、依赖框架的 WinUI 3。`Program.Main` 在加载 WinUI 前检查 Windows App Runtime 2.5.1，缺失时下载微软安装程序、校验固定的 SHA-256 后静默安装；已有兼容版本时直接使用。`FlashDesk.exe --prepare-runtime` 只准备运行时，不打开界面。升级 Windows App SDK 时需同时更新 `WindowsRuntime.cs` 中的版本、下载地址和哈希。
 
-调试探针通过 probe-rs 访问；部分探针（如 ST-Link）需要安装 WinUSB 驱动，详见 [probe-rs 文档](https://probe.rs/docs/getting-started/probe-setup/)。
+调试探针通过 probe-rs 访问。连接 ST-Link 时，应用自动检查所选探针的调试接口；缺少驱动或 WinUSB 接口 GUID 时，通过系统 UAC 授权运行短时安装进程，绑定 Windows 内置且已签名的 WinUSB、补齐接口 GUID，随后自动继续连接。此流程支持 x64 / ARM64，无需下载 ST 的旧版协同安装程序。已有正常驱动不重复安装；仅处理所选 ST-Link 的调试接口，不更改复合设备的串口或存储接口。取消管理员授权、设备拔出、安装失败或需要重启时，在连接对话框中显示具体提示。
+
+普通无存储功能的 ST-Link/V2 同样支持自动安装，其短序列号按 probe-rs 的编码规则匹配。已正常使用 WinUSB 的独立 V2 无需另加复合接口 GUID；V2-1/V3 的复合调试接口则需要可访问的接口 GUID。安装后必须确认设备已启动且访问路径已启用才继续连接。此流程要求运行与 Windows 架构一致的 FlashDesk；它不替其他型号烧录器安装驱动。
+
+其他探针的驱动要求见 [probe-rs 文档](https://probe.rs/docs/getting-started/probe-setup/)。
 
 ## 自动更新
 
@@ -95,6 +101,7 @@ dotnet run --project windows/Tests -- target/x86_64-pc-windows-msvc/debug/flashd
 ```
 
 - Rust 测试经由 Wire 编码调用导出函数，覆盖芯片搜索、配置与最近文件的往返（含中文路径与 1970 年前的时间戳）、无效配置 ID 的结构化错误、进度时间戳换算和 panic 边界。
-- `windows/Tests` 是可移植的 .NET 程序：更新部分覆盖签名验证、篡改与错误密钥、更新信息的结构限制、危险文件名、下载地址、包校验、取消与发布回退保护；传入已构建的 `flashdesk_csharp` 动态库时，还通过生成的 C# 绑定调用真实的 Rust Core（芯片搜索、内存映射、BIN 分析、结构化错误、配置与最近文件往返），不访问硬件。不传参数时只运行更新部分。
+- `windows/Tests` 是可移植的 .NET 程序：更新部分覆盖签名验证、篡改与错误密钥、更新信息的结构限制、危险文件名、下载地址、包校验、取消与发布回退保护；传入已构建的 `flashdesk_csharp` 动态库时，还通过生成的 C# 绑定调用真实的 Rust Core（芯片搜索、内存映射、BIN 分析、结构化错误、配置与最近文件往返），不连接目标芯片。不传参数时跳过 Rust/C# 桥接检查。
+- 在 Windows 上，`windows/Tests` 还检查 ST-Link 调试接口筛选、V2 短序列号编码、选择器兼容性、已有驱动保护、接口 GUID 修复，以及安装取消、失败、需要重启、接口延迟启用和设备拔出的处理。安装流程由模拟系统测试；真实 USB 检查只读验证设备状态、系统 WinUSB 和接口枚举，传入 Rust 动态库后还会核对真实探针选择器。测试不会安装驱动或连接目标芯片。
 
 `.github/workflows/windows.yml` 在 x64 与 ARM64 上运行 Rust Core 与 Interoptopus 桥接的 Clippy 和测试、WinUI 编译、绑定一致性检查、`windows/Tests` 和发布资源检查；macOS 不测试 Windows 桥接。界面通过人工验收。

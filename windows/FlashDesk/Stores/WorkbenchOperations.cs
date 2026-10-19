@@ -21,7 +21,23 @@ internal sealed partial class WorkbenchStore
     {
         if (!CanConnect) return;
         var request = new ConnectRequest { probe = ProbeSelector, target = TargetSelection };
-        var result = await Perform(WorkbenchOperation.Connect, () => RustCore.ConnectTarget(request));
+        InvalidateConnection();
+        var result = await Perform(WorkbenchOperation.Connect, async () =>
+        {
+            var probes = await RustCore.ListProbes();
+            Probes = probes;
+            HasScanned = true;
+            Notify();
+            var selected = StLinkDriver.SelectProbe(request.probe, probes);
+            // Pin the chosen probe while UAC and device restart are in progress.
+            if (selected is not null) request.probe = selected.identifier;
+            await StLinkDriver.EnsureInstalled(selected, message =>
+            {
+                SetStatus(message);
+                AppendLog("驱动", message);
+            });
+            return await RustCore.ConnectTarget(request);
+        });
         if (result is null) return;
         // These setters invalidate the connection, so apply them before storing it.
         SelectedProbe = result.probe;

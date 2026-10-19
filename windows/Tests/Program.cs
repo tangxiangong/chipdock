@@ -6,6 +6,12 @@ using FlashDesk.Tests;
 UpdateFeedTests.Run();
 await UpdateSourceTests.Run();
 Console.WriteLine($"Update checks passed ({Check.Count} assertions).");
+if (OperatingSystem.IsWindows())
+{
+    var driverBefore = Check.Count;
+    await StLinkDriverTests.Run();
+    Console.WriteLine($"ST-Link driver checks passed ({Check.Count - driverBefore} assertions).");
+}
 
 if (args.Length == 0)
 {
@@ -18,6 +24,7 @@ NativeLibrary.SetDllImportResolver(Assembly.GetExecutingAssembly(), (name, assem
     name == "flashdesk_csharp" ? NativeLibrary.Load(library) : nint.Zero);
 var before = Check.Count;
 await BridgeTests.Run();
+if (OperatingSystem.IsWindows()) await StLinkDriverTests.CheckProbeSelectors();
 Console.WriteLine($"Bridge checks passed ({Check.Count - before} assertions).");
 
 namespace FlashDesk.Tests

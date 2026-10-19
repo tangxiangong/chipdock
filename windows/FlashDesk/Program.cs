@@ -14,6 +14,15 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        AppDomain.CurrentDomain.UnhandledException += (_, error) =>
+        {
+            if (error.ExceptionObject is Exception exception) CrashLog.Write(exception, "Unhandled managed exception");
+        };
+        if (args.Length > 0 && args[0] == StLinkDriver.InstallArgument)
+        {
+            Environment.ExitCode = StLinkDriver.RunInstaller(args[1..]);
+            return;
+        }
         // Installer hooks must finish before WinUI, single-instance registration or Rust startup.
         // Downloaded updates are applied by Updater, never implicitly at launch.
         VelopackApp.Build().SetAutoApplyOnStartup(false).Run();

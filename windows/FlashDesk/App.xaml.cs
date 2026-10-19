@@ -7,7 +7,11 @@ public partial class App : Application
 {
     private MainWindow? main;
 
-    public App() => InitializeComponent();
+    public App()
+    {
+        UnhandledException += (_, args) => CrashLog.Write(args.Exception, args.Message);
+        InitializeComponent();
+    }
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
