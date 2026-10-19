@@ -7,8 +7,9 @@ using static FlashDesk.Formatting;
 
 namespace FlashDesk;
 
-/// Main area: a centred column reading top to bottom — firmware, settings,
-/// then the single primary action.
+/// Main area: one column reading top to bottom — firmware, settings, then
+/// the single primary action. The column fills the window: it widens with
+/// it, and extra height goes to the drop zone or above the action row.
 internal sealed class FlashView : UserControl
 {
     private readonly WorkbenchStore store;
@@ -35,21 +36,22 @@ internal sealed class FlashView : UserControl
     private List<RecentFirmwareRecord>? shownRecentFiles;
     private FirmwareUsage? shownUsage;
     private List<MemoryRegionLayout>? shownRegions;
-    private readonly StackPanel firmwareSection = new();
+    private readonly Grid firmwareSection = new();
+    private readonly RowDefinition firmwareRow = new(), spacerRow = new();
 
     private readonly Ellipse connectionDot = new() { Width = 8, Height = 8, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock targetName = Ui.Text(semibold: true);
     private readonly TextBlock targetState = Ui.Secondary("未连接");
-    private readonly TextBlock targetDetail = Ui.Secondary(size: 12);
+    private readonly TextBlock targetDetail = Ui.Secondary(size: 12, wrap: true);
     private readonly Button changeTarget, disconnectTarget;
     private readonly TextBox baseAddress = new() { Width = 150, PlaceholderText = "0x08000000" };
     private readonly StackPanel baseAddressError = Ui.Row(6, Ui.Glyph(Glyphs.Warning, 12, "CriticalGlyphStyle"), Ui.Text("无效的十六进制地址", 12, "CriticalTextStyle"));
     private readonly Border baseAddressCard;
     private readonly ComboBox eraseStrategy = new() { MinWidth = 150 };
-    private readonly TextBlock eraseDetail = Ui.Secondary(size: 12);
+    private readonly TextBlock eraseDetail = Ui.Secondary(size: 12, wrap: true);
     private readonly ToggleSwitch verify = Switch(), resetAfter = Switch(), dryRun = Switch();
 
-    private readonly TextBlock hint = Ui.Secondary(size: 13);
+    private readonly TextBlock hint = Ui.Secondary(size: 13, wrap: true);
     private readonly ProgressRing busy = new() { Width = 20, Height = 20, IsActive = true };
     private readonly Button action = new() { Style = Ui.Style("AccentButtonStyle"), Padding = new Thickness(20, 8, 20, 8), MinWidth = 140 };
     private readonly FontIcon actionIcon = Ui.Glyph(Glyphs.Link, 14);
@@ -84,13 +86,15 @@ internal sealed class FlashView : UserControl
         heading.Children.Add(firmwareMenu);
         usageDetails = Ui.Column(18, layout, facts);
         summary.Child = Ui.Column(20, heading, analyzing, firmwareError, usageDetails);
-        summary.SizeChanged += (_, args) => { if (Math.Abs(args.NewSize.Width - args.PreviousSize.Width) > 1) ArrangeFacts(); };
+        summary.VerticalAlignment = VerticalAlignment.Top;
+        facts.SizeChanged += (_, args) => { if (Math.Abs(args.NewSize.Width - args.PreviousSize.Width) > 1) ArrangeFacts(); };
 
         chooseFile = Ui.Button(Glyphs.Folder, "选择文件…", () => _ = window.PickFirmware());
         chooseFile.HorizontalAlignment = HorizontalAlignment.Center;
         chooseFile.Margin = new Thickness(0, 8, 0, 0);
         var dropTitle = Ui.Text("将固件拖到这里", 18, semibold: true);
-        var dropSubtitle = Ui.Secondary("支持 ELF、AXF、HEX 与 BIN 文件", 13);
+        var dropSubtitle = Ui.Secondary("支持 ELF、AXF、HEX 与 BIN 文件", 13, wrap: true);
+        dropSubtitle.TextAlignment = TextAlignment.Center;
         foreach (var element in new FrameworkElement[] { dropIcon, dropTitle, dropSubtitle }) element.HorizontalAlignment = HorizontalAlignment.Center;
         dropIcon.Margin = new Thickness(0, 0, 0, 4);
         var dropContent = Ui.Column(6, dropIcon, dropTitle, dropSubtitle, chooseFile);
@@ -105,10 +109,21 @@ internal sealed class FlashView : UserControl
         recentSection.Children.Add(Ui.Text("最近使用", 14, semibold: true));
         recentSection.Children.Add(new Border { Style = Ui.Style("CardStyle"), Padding = new Thickness(0, 4, 0, 4), Child = recentList });
         recentSection.Margin = new Thickness(0, 22, 0, 0);
+        firmwareSection.RowDefinitions.Add(new());
+        firmwareSection.RowDefinitions.Add(new() { Height = GridLength.Auto });
+        Grid.SetRow(recentSection, 1);
 
         changeTarget = Ui.Button(Glyphs.Edit, "更改…", () => _ = window.ShowTargetSetup());
         disconnectTarget = Ui.Button(Glyphs.Cancel, "断开连接", store.Disconnect, "断开目标（Ctrl+Shift+K）");
-        var targetTitle = Ui.Row(8, connectionDot, targetName, targetState);
+        var targetTitle = new Grid { ColumnSpacing = 8 };
+        targetTitle.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        targetTitle.ColumnDefinitions.Add(new());
+        targetTitle.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        Grid.SetColumn(targetName, 1);
+        Grid.SetColumn(targetState, 2);
+        targetTitle.Children.Add(connectionDot);
+        targetTitle.Children.Add(targetName);
+        targetTitle.Children.Add(targetState);
         var targetCard = Card(Glyphs.Chip, Ui.Column(2, targetTitle, targetDetail), Ui.Row(8, disconnectTarget, changeTarget));
 
         baseAddress.FontFamily = (FontFamily)Application.Current.Resources["MonoFontFamily"];
@@ -141,29 +156,81 @@ internal sealed class FlashView : UserControl
         erase = Ui.Button(Glyphs.Erase, "擦除芯片…", () => _ = window.ConfirmErase());
         erase.Padding = new Thickness(14, 8, 14, 8);
 
-        action.Content = Ui.Row(8, actionIcon, actionText);
+        var actionLabel = new Grid { ColumnSpacing = 8 };
+        actionLabel.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        actionLabel.ColumnDefinitions.Add(new());
+        Grid.SetColumn(actionText, 1);
+        actionLabel.Children.Add(actionIcon);
+        actionLabel.Children.Add(actionText);
+        actionText.MaxLines = 1;
+        action.Content = actionLabel;
         action.Click += (_, _) => _ = store.Connection is null ? store.Connect() : store.Flash();
+        var actionButtons = new Grid { ColumnSpacing = 12, HorizontalAlignment = HorizontalAlignment.Right };
+        actionButtons.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        actionButtons.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        actionButtons.ColumnDefinitions.Add(new());
+        Grid.SetColumn(erase, 1);
+        Grid.SetColumn(action, 2);
+        actionButtons.Children.Add(busy);
+        actionButtons.Children.Add(erase);
+        actionButtons.Children.Add(action);
         var actionRow = new Grid { ColumnSpacing = 16, Margin = new Thickness(0, 26, 0, 0) };
         actionRow.ColumnDefinitions.Add(new());
         actionRow.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-        actionRow.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-        actionRow.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        actionRow.RowDefinitions.Add(new() { Height = GridLength.Auto });
+        actionRow.RowDefinitions.Add(new() { Height = GridLength.Auto });
         hint.VerticalAlignment = busy.VerticalAlignment = erase.VerticalAlignment = VerticalAlignment.Center;
-        Grid.SetColumn(busy, 1);
-        Grid.SetColumn(erase, 2);
-        Grid.SetColumn(action, 3);
+        Grid.SetColumn(actionButtons, 1);
         actionRow.Children.Add(hint);
-        actionRow.Children.Add(busy);
-        actionRow.Children.Add(erase);
-        actionRow.Children.Add(action);
+        actionRow.Children.Add(actionButtons);
+        bool? actionsStacked = null;
+        actionRow.SizeChanged += (_, args) =>
+        {
+            var stacked = args.NewSize.Width < 620;
+            actionButtons.MaxWidth = Math.Max(0, args.NewSize.Width - (stacked ? 0 : 180));
+            if (actionsStacked == stacked) return;
+            actionsStacked = stacked;
+            Grid.SetColumnSpan(hint, stacked ? 2 : 1);
+            Grid.SetColumn(actionButtons, stacked ? 0 : 1);
+            Grid.SetRow(actionButtons, stacked ? 1 : 0);
+            Grid.SetColumnSpan(actionButtons, stacked ? 2 : 1);
+            actionRow.RowSpacing = stacked ? 12 : 0;
+        };
 
         var settingsTitle = Ui.Text("烧录设置", 14, semibold: true);
         settingsTitle.Margin = new Thickness(0, 28, 0, 8);
-        var column = Ui.Column(0, firmwareSection, settingsTitle, settings, actionRow);
-        column.MaxWidth = 640;
-        column.Padding = new Thickness(32, 28, 32, 28);
-        Content = new ScrollViewer { Content = column };
+        var column = new Grid { Padding = new Thickness(0, 28, 0, 28) };
+        column.RowDefinitions.Add(firmwareRow);
+        column.RowDefinitions.Add(new() { Height = GridLength.Auto });
+        column.RowDefinitions.Add(new() { Height = GridLength.Auto });
+        column.RowDefinitions.Add(spacerRow);
+        column.RowDefinitions.Add(new() { Height = GridLength.Auto });
+        Grid.SetRow(settingsTitle, 1);
+        Grid.SetRow(settings, 2);
+        Grid.SetRow(actionRow, 4);
+        foreach (var element in new UIElement[] { firmwareSection, settingsTitle, settings, actionRow }) column.Children.Add(element);
+        var scroll = new ScrollViewer
+        {
+            Content = column,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            HorizontalScrollMode = ScrollMode.Disabled,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+        };
+        scroll.SizeChanged += (_, args) =>
+        {
+            var width = ColumnWidth(args.NewSize.Width);
+            var margin = (args.NewSize.Width - width) / 2;
+            column.Margin = new Thickness(margin, 0, margin, 0);
+            column.MaxWidth = width;
+            column.MinHeight = args.NewSize.Height;
+        };
+        Content = scroll;
     }
+
+    /// The window width less side margins of a twentieth of it (at least 32 px).
+    private static double ColumnWidth(double width) =>
+        Math.Max(width - 2 * Math.Max(32, width * 0.05), 0);
 
     private MenuFlyout FirmwareMenu()
     {
@@ -177,7 +244,7 @@ internal sealed class FlashView : UserControl
 
     private static ToggleSwitch Switch() => new() { OnContent = "", OffContent = "", MinWidth = 0 };
 
-    private static StackPanel Description(string title, string detail) => Ui.Column(2, Ui.Text(title), Ui.Secondary(detail, 12));
+    private static StackPanel Description(string title, string detail) => Ui.Column(2, Ui.Text(title, wrap: true), Ui.Secondary(detail, 12, wrap: true));
 
     /// A Windows Settings-style row: icon, title and description, then the control.
     private static Border Card(string glyph, FrameworkElement text, FrameworkElement control)
@@ -186,6 +253,8 @@ internal sealed class FlashView : UserControl
         grid.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new());
         grid.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        grid.RowDefinitions.Add(new() { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new() { Height = GridLength.Auto });
         var icon = Ui.Glyph(glyph, 18);
         icon.VerticalAlignment = text.VerticalAlignment = control.VerticalAlignment = VerticalAlignment.Center;
         Grid.SetColumn(text, 1);
@@ -193,6 +262,19 @@ internal sealed class FlashView : UserControl
         grid.Children.Add(icon);
         grid.Children.Add(text);
         grid.Children.Add(control);
+        bool? controlStacked = null;
+        grid.SizeChanged += (_, args) =>
+        {
+            var stacked = args.NewSize.Width < 520;
+            if (controlStacked == stacked) return;
+            controlStacked = stacked;
+            Grid.SetColumnSpan(text, stacked ? 2 : 1);
+            Grid.SetColumn(control, stacked ? 1 : 2);
+            Grid.SetRow(control, stacked ? 1 : 0);
+            Grid.SetColumnSpan(control, stacked ? 2 : 1);
+            control.HorizontalAlignment = stacked ? HorizontalAlignment.Left : HorizontalAlignment.Right;
+            grid.RowSpacing = stacked ? 12 : 0;
+        };
         return new Border { Style = Ui.Style("CardStyle"), Padding = new Thickness(16, 12, 16, 12), Child = grid };
     }
 
@@ -200,6 +282,8 @@ internal sealed class FlashView : UserControl
     {
         var text = mono ? Ui.Mono(value, 14) : Ui.Text(value);
         text.IsTextSelectionEnabled = true;
+        text.TextWrapping = TextWrapping.Wrap;
+        text.TextTrimming = TextTrimming.None;
         return Ui.Column(3, Ui.Caption(title), text);
     }
 
@@ -219,6 +303,9 @@ internal sealed class FlashView : UserControl
             firmwareSection.Children.Clear();
             foreach (var section in sections) firmwareSection.Children.Add(section);
         }
+        // The drop zone takes the spare height; a loaded firmware leaves it above the action row.
+        firmwareRow.Height = path is null ? new GridLength(1, GridUnitType.Star) : GridLength.Auto;
+        spacerRow.Height = path is null ? GridLength.Auto : new GridLength(1, GridUnitType.Star);
         if (path is null) UpdateRecentFiles();
         else UpdateSummary(path);
         chooseFile.IsEnabled = recentList.IsEnabled = firmwareMenu.IsEnabled = !store.IsBusy;
@@ -281,20 +368,27 @@ internal sealed class FlashView : UserControl
         ArrangeFacts();
     }
 
-    /// Four facts on one line when they fit, otherwise two rows of two.
+    /// Reflow facts into four, two or one column within the summary's content width.
     private void ArrangeFacts()
     {
-        var wide = summary.ActualWidth == 0 || summary.ActualWidth >= 560;
-        facts.ColumnDefinitions.Clear();
-        facts.RowDefinitions.Clear();
-        var columns = wide ? 4 : 2;
-        for (var index = 0; index < columns; index++) facts.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        var columns = facts.ActualWidth >= 640 ? 4 : facts.ActualWidth >= 400 ? 2 : 1;
+        if (facts.ColumnDefinitions.Count != columns)
+        {
+            facts.ColumnDefinitions.Clear();
+            for (var index = 0; index < columns; index++)
+                facts.ColumnDefinitions.Add(new() { Width = index == columns - 1 ? new GridLength(1, GridUnitType.Star) : GridLength.Auto });
+        }
+        var rows = (facts.Children.Count + columns - 1) / columns;
+        if (facts.RowDefinitions.Count != rows)
+        {
+            facts.RowDefinitions.Clear();
+            for (var index = 0; index < rows; index++) facts.RowDefinitions.Add(new() { Height = GridLength.Auto });
+        }
         for (var index = 0; index < facts.Children.Count; index++)
         {
             var element = (FrameworkElement)facts.Children[index];
             Grid.SetColumn(element, index % columns);
             Grid.SetRow(element, index / columns);
-            if (index / columns >= facts.RowDefinitions.Count) facts.RowDefinitions.Add(new() { Height = GridLength.Auto });
         }
     }
 
@@ -310,12 +404,13 @@ internal sealed class FlashView : UserControl
     {
         var row = new Grid { ColumnSpacing = 10, Tag = file, Padding = new Thickness(0, 6, 0, 6) };
         row.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-        row.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new());
         row.ColumnDefinitions.Add(new());
         row.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         var icon = Ui.Glyph(Glyphs.Document, 14);
         icon.Foreground = Ui.Brush(file.format.Tint());
         var name = Ui.Text(System.IO.Path.GetFileName(file.path));
+        name.MaxLines = 1;
         var directory = Ui.Secondary(DisplayDirectory(file.path));
         directory.TextTrimming = TextTrimming.CharacterEllipsis;
         var time = Ui.Secondary(RelativeTime(FromUnixMilliseconds(file.used_at_ms)), 13);
@@ -358,6 +453,7 @@ internal sealed class FlashView : UserControl
         };
         actionIcon.Glyph = needsConnection ? Glyphs.Link : store.DryRun ? Glyphs.Shield : Glyphs.Flash;
         action.IsEnabled = needsConnection ? store.CanConnect : store.CanFlash;
+        ToolTipService.SetToolTip(action, actionText.Text);
         erase.IsEnabled = store.CanErase;
         ToolTipService.SetToolTip(erase, needsConnection ? "连接后即可擦除" : "擦除整个芯片，不烧录");
         Ui.Name(action, actionText.Text);

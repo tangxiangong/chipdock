@@ -1,29 +1,33 @@
 import AppKit
 import SwiftUI
 
-/// Main area: a centred column reading top to bottom — firmware, settings,
-/// then the single primary action.
+/// Main area: one column reading top to bottom — firmware, settings, then
+/// the single primary action. The column fills the window: it widens with
+/// it, and extra height goes to the drop zone or above the action row.
 struct FlashView: View {
     @Bindable var store: WorkbenchStore
     @State private var isDropTargeted = false
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                if let url = store.firmwareURL {
-                    FirmwareSummary(store: store, url: url)
-                } else {
-                    DropZone(store: store, isTargeted: isDropTargeted)
+        GeometryReader { geometry in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    if let url = store.firmwareURL {
+                        FirmwareSummary(store: store, url: url)
+                    } else {
+                        DropZone(store: store, isTargeted: isDropTargeted).layoutPriority(1)
+                    }
+                    Divider().padding(.vertical, 24)
+                    SettingsGrid(store: store)
+                    Spacer(minLength: 26)
+                    FlashAction(store: store)
                 }
-                Divider().padding(.vertical, 24)
-                SettingsGrid(store: store)
-                FlashAction(store: store).padding(.top, 26)
+                .frame(width: Self.columnWidth(in: geometry.size.width))
+                .frame(minHeight: max(geometry.size.height - 2 * Self.verticalMargin, 0), alignment: .top)
+                .padding(.vertical, Self.verticalMargin)
+                .frame(maxWidth: .infinity)
             }
-            .frame(maxWidth: 580)
-            .padding(.horizontal, 32)
-            .padding(.top, 28)
-            .padding(.bottom, 28)
-            .frame(maxWidth: .infinity)
+            .scrollBounceBehavior(.basedOnSize)
         }
         .overlay {
             if isDropTargeted && store.firmwareURL != nil {
@@ -39,6 +43,13 @@ struct FlashView: View {
             return true
         } isTargeted: { isDropTargeted = $0 }
         .onChange(of: store.binBaseAddress) { store.scheduleFirmwareAnalysis() }
+    }
+
+    static let verticalMargin: CGFloat = 28
+
+    /// The window width less side margins of a twentieth of it (at least 32 pt).
+    static func columnWidth(in width: CGFloat) -> CGFloat {
+        max(width - 2 * max(32, width * 0.05), 0)
     }
 }
 
@@ -67,6 +78,7 @@ private struct FirmwareSummary: View {
                         .lineLimit(1).truncationMode(.head)
                         .help(url.path)
                 }
+                .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
                 Spacer(minLength: 12)
                 Menu {
                     Button("更换固件…", systemImage: "arrow.triangle.2.circlepath") { store.showImporter = true }
@@ -107,6 +119,7 @@ private struct FirmwareSummary: View {
                         fact("地址范围", range, mono: true)
                         Spacer(minLength: 0)
                     }
+                    .fixedSize(horizontal: true, vertical: false)
                     Grid(alignment: .leading, horizontalSpacing: 36, verticalSpacing: 14) {
                         GridRow {
                             fact("格式", usage.format.title)
@@ -117,7 +130,15 @@ private struct FirmwareSummary: View {
                             fact("地址范围", range, mono: true)
                         }
                     }
+                    .fixedSize(horizontal: true, vertical: false)
+                    VStack(alignment: .leading, spacing: 14) {
+                        fact("格式", usage.format.title)
+                        fact("写入大小", byteCountLabel(usage.usedBytes))
+                        fact("区段", String(usage.segments.count))
+                        fact("地址范围", range, mono: true)
+                    }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }
@@ -128,7 +149,7 @@ private struct FirmwareSummary: View {
             Text(value)
                 .font(mono ? .system(.body, design: .monospaced) : .body)
                 .monospacedDigit()
-                .lineLimit(1)
+                .fixedSize(horizontal: false, vertical: true)
                 .textSelection(.enabled)
         }
     }
@@ -151,8 +172,8 @@ private struct DropZone: View {
                     .disabled(store.isBusy)
                     .padding(.top, 8)
             }
-            .frame(maxWidth: .infinity)
             .padding(.vertical, 26)
+            .frame(maxWidth: .infinity, minHeight: 190, maxHeight: .infinity)
             .background(isTargeted ? Color.accentColor.opacity(0.06) : Color.clear,
                         in: RoundedRectangle(cornerRadius: 10))
             .overlay {
@@ -221,27 +242,16 @@ private struct SettingsGrid: View {
         Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 14, verticalSpacing: 16) {
             GridRow {
                 label("目标")
-                HStack(alignment: .firstTextBaseline) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        HStack(spacing: 6) {
-                            Circle()
-                                .fill(store.connection == nil ? Color.secondary.opacity(0.4) : .green)
-                                .frame(width: 7, height: 7)
-                            Text(store.targetName).fontWeight(.medium)
-                            if store.connection == nil {
-                                Text("未连接").foregroundStyle(.secondary)
-                            }
-                        }
-                        Text(targetDetail).font(.callout).foregroundStyle(.secondary)
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .firstTextBaseline, spacing: 16) {
+                        targetSummary
+                        Spacer(minLength: 0)
+                        targetButtons
                     }
-                    Spacer(minLength: 8)
-                    if store.connection != nil {
-                        Button("断开连接", systemImage: "xmark.circle") { store.disconnect() }
-                            .disabled(!store.canDisconnect)
-                            .help("断开目标（⇧⌘K）")
+                    VStack(alignment: .leading, spacing: 10) {
+                        targetSummary
+                        targetButtons
                     }
-                    Button("更改…", systemImage: "slider.horizontal.3") { store.showTargetSetup = true }
-                        .disabled(store.isBusy)
                 }
             }
             if store.isBin {
@@ -284,6 +294,36 @@ private struct SettingsGrid: View {
         }
     }
 
+    private var targetSummary: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(store.connection == nil ? Color.secondary.opacity(0.4) : .green)
+                    .frame(width: 7, height: 7)
+                Text(store.targetName).fontWeight(.medium)
+                    .lineLimit(1).truncationMode(.middle).help(store.targetName)
+                if store.connection == nil {
+                    Text("未连接").foregroundStyle(.secondary).fixedSize()
+                }
+            }
+            Text(targetDetail).font(.callout).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var targetButtons: some View {
+        HStack(spacing: 8) {
+            if store.connection != nil {
+                Button("断开连接", systemImage: "xmark.circle") { store.disconnect() }
+                    .disabled(!store.canDisconnect)
+                    .help("断开目标（⇧⌘K）")
+            }
+            Button("更改…", systemImage: "slider.horizontal.3") { store.showTargetSetup = true }
+                .disabled(store.isBusy)
+        }
+        .fixedSize()
+    }
+
     private var targetDetail: String {
         if let connection = store.connection {
             let speed = connection.speedKhz.map { "\($0) kHz" } ?? "\(store.speed) kHz"
@@ -309,11 +349,28 @@ private struct FlashAction: View {
     private var needsConnection: Bool { store.connection == nil }
 
     var body: some View {
-        HStack(spacing: 16) {
-            Text(hint).font(.callout).foregroundStyle(.secondary)
-            Spacer(minLength: 0)
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 16) {
+                hintLabel.fixedSize()
+                Spacer(minLength: 0)
+                buttons.fixedSize()
+            }
+            VStack(alignment: .leading, spacing: 12) {
+                hintLabel
+                buttons.frame(maxWidth: .infinity, alignment: .trailing)
+            }
+        }
+    }
+
+    private var hintLabel: some View {
+        Text(hint).font(.callout).foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var buttons: some View {
+        HStack(spacing: 12) {
             if store.isBusy { ProgressView().controlSize(.small) }
-            EraseButton(store: store)
+            EraseButton(store: store).fixedSize()
             Button {
                 Task { needsConnection ? await store.connect() : await store.flash() }
             } label: {
@@ -323,9 +380,12 @@ private struct FlashAction: View {
                     Text(title)
                 }
             }
+            .lineLimit(1)
+            .truncationMode(.middle)
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
             .disabled(needsConnection ? !store.canConnect : !store.canFlash)
+            .help(title)
         }
     }
 
