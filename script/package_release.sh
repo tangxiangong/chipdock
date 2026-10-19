@@ -32,6 +32,12 @@ ARCHITECTURES="$(/usr/bin/lipo -archs "$APP_BUNDLE/Contents/MacOS/FlashDesk")"
     echo 'error: Release app must contain both arm64 and x86_64' >&2; exit 1;
 }
 
+ARCHIVE_NAME="FlashDesk-$APP_VERSION-macOS-universal.zip"
+if [[ -n "${RELEASE_NOTES_FILE:-}" ]]; then
+    cargo run --quiet --locked --manifest-path "$PROJECT_ROOT/Cargo.toml" -p flashdesk-release-notes -- \
+        macos "$RELEASE_NOTES_FILE" "$WORK_DIR/archives/${ARCHIVE_NAME%.zip}.md"
+fi
+
 # Re-sign nested Sparkle components inside-out for certificate-free distribution.
 # Preserve the vendor Downloader service's sandbox entitlements.
 while IFS= read -r -d '' EXECUTABLE; do
@@ -48,12 +54,8 @@ done < <(find "$APP_BUNDLE/Contents/Frameworks/Sparkle.framework" -type d \( -na
 /usr/bin/codesign --force --sign - "$APP_BUNDLE"
 /usr/bin/codesign --verify --deep --strict "$APP_BUNDLE"
 
-ARCHIVE_NAME="FlashDesk-$APP_VERSION-macOS-universal.zip"
 ARCHIVE="$WORK_DIR/archives/$ARCHIVE_NAME"
 /usr/bin/ditto -c -k --sequesterRsrc --keepParent "$APP_BUNDLE" "$ARCHIVE"
-if [[ -n "${RELEASE_NOTES_FILE:-}" ]]; then
-    cp "$RELEASE_NOTES_FILE" "$WORK_DIR/archives/${ARCHIVE_NAME%.zip}.md"
-fi
 DOWNLOAD_PREFIX="https://github.com/$GITHUB_REPOSITORY/releases/download/$RELEASE_TAG/"
 APPCAST_ARGS=(--maximum-deltas 0 --embed-release-notes --download-url-prefix "$DOWNLOAD_PREFIX"
     --link "https://github.com/$GITHUB_REPOSITORY/releases/tag/$RELEASE_TAG"

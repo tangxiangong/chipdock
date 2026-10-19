@@ -1,6 +1,6 @@
 name: Rust
 
-# Platform-independent checks of the shared Rust Core. Each platform's bridge
+# Platform-independent checks of the shared Rust Core and release notes. Each platform's bridge
 # (UniFFI on macOS, Interoptopus on Windows) is tested by that platform's workflow.
 on:
   push:
@@ -30,7 +30,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y pkg-config libudev-dev
       - name: Check formatting of every workspace crate
         run: cargo fmt --all -- --check
-      - name: Lint Rust Core
-        run: cargo clippy --locked -p flashdesk-core --all-targets -- -D warnings
-      - name: Test Rust Core without hardware
-        run: cargo test --locked -p flashdesk-core --all-targets
+      - name: Lint Rust Core and release notes
+        run: cargo clippy --locked -p flashdesk-core -p flashdesk-release-notes --all-targets -- -D warnings
+      - name: Test Rust Core and release note filtering without hardware
+        run: cargo test --locked -p flashdesk-core -p flashdesk-release-notes --all-targets

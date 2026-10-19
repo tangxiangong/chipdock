@@ -35,6 +35,14 @@ if (-not (Get-ProjectProperty 'UpdatePublicKey')) { throw 'UpdatePublicKey is mi
 
 # Isolate publish output so obsolete files from another build cannot enter a package.
 $Publish = Join-Path $Repo "target/publish/$Rid-$([guid]::NewGuid().ToString('N'))"
+$NotesArguments = @()
+if ($ReleaseNotes) {
+    $FilteredNotes = "$Publish-notes.md"
+    & cargo run --quiet --locked --manifest-path (Join-Path $Repo 'Cargo.toml') -p flashdesk-release-notes -- `
+        windows (Resolve-Path $ReleaseNotes).Path $FilteredNotes
+    if ($LASTEXITCODE -ne 0) { throw 'Release note platform filtering failed.' }
+    $NotesArguments = @('--releaseNotes', $FilteredNotes)
+}
 & dotnet publish $Project -c Release "-p:Platform=$Architecture" "-p:RuntimeIdentifier=$Rid" "-p:Version=$Version" -o $Publish
 if ($LASTEXITCODE -ne 0) { throw 'WinUI publish failed.' }
 foreach ($BundledRuntime in @('coreclr.dll', 'Microsoft.ui.xaml.dll')) {
@@ -53,7 +61,6 @@ if (-not (Test-Path $Vpk)) {
     if ($LASTEXITCODE -ne 0) { throw 'Velopack tool installation failed.' }
 }
 New-Item -ItemType Directory -Force $OutputDirectory | Out-Null
-$NotesArguments = if ($ReleaseNotes) { @('--releaseNotes', (Resolve-Path $ReleaseNotes).Path) } else { @() }
 # MSI versions are numeric; the CI run number keeps them increasing independently of SemVer.
 if ($BuildNumber -ge 16777216) { throw 'MSI build sequence exhausted.' }
 $MsiVersion = "1.$([math]::Floor($BuildNumber / 65536)).$($BuildNumber % 65536)"
@@ -80,4 +87,5 @@ if ($Packages.Count -ne 1 -or $Packages[0].Name -ne "FlashDesk-$Version-$Rid-ful
 }
 if (-not (Test-Path (Join-Path $OutputDirectory $Feed))) { throw "Velopack did not write $Feed." }
 Remove-Item -Recurse -Force $Publish
+if ($ReleaseNotes) { Remove-Item -Force $FilteredNotes }
 Get-ChildItem $OutputDirectory | Format-Table Name, Length

@@ -4,6 +4,7 @@ members = [
     "crates/flashdesk-bindgen",
     "crates/flashdesk-csharp",
     "crates/flashdesk-csharp-bindgen",
+    "crates/flashdesk-release-notes",
 ]
 default-members = ["crates/flashdesk-core"]
 resolver = "3"

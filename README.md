@@ -87,6 +87,7 @@ cargo fmt --all -- --check
 cargo clippy --locked -p flashdesk-core -p flashdesk-bindgen --all-targets -- -D warnings
 ./script/test_backend.sh
 ./script/test_updates.sh
+cargo test --locked -p flashdesk-release-notes
 xcodebuild -project macos/FlashDesk.xcodeproj -scheme FlashDesk \
   -configuration Debug -destination 'platform=macOS' \
   -derivedDataPath .build/Xcode test
@@ -94,6 +95,7 @@ xcodebuild -project macos/FlashDesk.xcodeproj -scheme FlashDesk \
 
 - `test_backend.sh` 运行 Rust Core 单元测试和独立的 Swift/UniFFI 集成测试，不启动应用或连接硬件。
 - `test_updates.sh` 验证更新包签名、文件长度、版本、下载地址，以及发布回退保护。
+- `flashdesk-release-notes` 的逻辑测试覆盖通用公告、平台筛选、Markdown 保留和错误标记拦截。
 - Xcode 测试覆盖应用集成、窗口回归、Sparkle 配置和硬件操作期间的重启保护。
 
 测试按平台划分，均不访问硬件：`Rust` 工作流在 Linux 上检查格式并测试与平台无关的 Rust Core；`macOS` 工作流在 Apple Silicon 和 Intel 上测试 Rust Core、UniFFI 桥接与应用，并保存 Xcode 测试报告；`Windows` 工作流在 x64 与 ARM64 上测试 Rust Core、Interoptopus 桥接与应用。Windows 的测试与 CI 见 [windows/README.md](windows/README.md#测试)。
@@ -127,6 +129,41 @@ CI 通过全部检查后，构建 Apple Silicon + Intel universal 应用，生�
 ```
 
 打包产物位于 `.build/ReleaseAssets/`。`--publish` 模式由 CI 使用。
+
+### 分平台更新公告
+
+GitHub Release 正文可以使用与 BibCiTeX 相同的平台标记。macOS 与 Windows 打包脚本使用同一个 `flashdesk-release-notes` 解析器，分别将“通用内容 + 本平台内容”写入 Sparkle appcast 和 Velopack 更新包；GitHub 保留完整正文。没有标记的旧公告仍全部显示。
+
+```markdown
+# 本次更新
+
+- 改进固件解析，所有平台可用。
+
+<!-- platform:macos -->
+## macOS
+- 改进窗口恢复。
+<!-- /platform -->
+
+<!-- platform:windows -->
+## Windows
+- 改进驱动安装提示。
+<!-- /platform -->
+```
+
+- 未标记内容及 `<!-- platform:all -->` 块为通用内容。
+- 平台名称区分大小写，支持 `macos`、`windows`、`linux`，以及 `macos,windows` 这样的逗号列表；`all` 必须单独使用。
+- 标记必须独占一行，每块以 `<!-- /platform -->` 结束，不能嵌套。平台专属标题也应放在对应块内。
+- 解析保留正文顺序、Markdown 和换行，移除平台标记。未知平台、空选择器、错误语法、未闭合或多余结束标记会终止打包，即使错误位于被排除的块内。代码围栏内也不能放置这些保留标记。
+- 提供公告文件时，筛选结果不能为空；至少保留通用版本标题或摘要。`linux` 仅用于兼容公告语法，目前没有 Linux 客户端。
+
+本地预览，无需构建应用或发布（`ReleaseNotes.md` 为待发布的完整正文）：
+
+```sh
+cargo run --locked -p flashdesk-release-notes -- macos ReleaseNotes.md .build/notes-macos.md
+cargo run --locked -p flashdesk-release-notes -- windows ReleaseNotes.md .build/notes-windows.md
+```
+
+本机 macOS 打包通过 `RELEASE_NOTES_FILE` 传入完整正文；Windows 使用 `publish.ps1 -ReleaseNotes`。CI 会自动读取 GitHub Release 正文并按平台筛选，不修改 GitHub 公告，也不回写已发布的更新源。
 
 ## 许可证
 
