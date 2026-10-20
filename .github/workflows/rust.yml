@@ -31,6 +31,6 @@ jobs:
       - name: Check formatting of every workspace crate
         run: cargo fmt --all -- --check
       - name: Lint Rust Core and release notes
-        run: cargo clippy --locked -p flashdesk-core -p flashdesk-release-notes --all-targets -- -D warnings
+        run: cargo clippy --locked -p chipdock-core -p chipdock-release-notes --all-targets -- -D warnings
       - name: Test Rust Core and release note filtering without hardware
-        run: cargo test --locked -p flashdesk-core -p flashdesk-release-notes --all-targets
+        run: cargo test --locked -p chipdock-core -p chipdock-release-notes --all-targets

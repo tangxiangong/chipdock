@@ -10,16 +10,16 @@ BINDINGS_DIR="$TEST_BUILD_DIR/Bindings"
 mkdir -p "$BINDINGS_DIR"
 
 # macOS ships the UniFFI bridge; the Interoptopus crates are tested on Windows.
-cargo test --manifest-path "$PROJECT_ROOT/Cargo.toml" --package flashdesk-core --package flashdesk-bindgen --all-targets --locked
-cargo build --manifest-path "$PROJECT_ROOT/Cargo.toml" --package flashdesk-core --lib --locked
-cargo run --manifest-path "$PROJECT_ROOT/Cargo.toml" --package flashdesk-bindgen --locked -- \
-    generate --library "$CARGO_TARGET_DIR/debug/libflashdesk_core.dylib" --language swift --out-dir "$BINDINGS_DIR"
-cp "$BINDINGS_DIR/FlashDeskCoreFFI.modulemap" "$BINDINGS_DIR/module.modulemap"
+cargo test --manifest-path "$PROJECT_ROOT/Cargo.toml" --package chipdock-core --package chipdock-bindgen --all-targets --locked
+cargo build --manifest-path "$PROJECT_ROOT/Cargo.toml" --package chipdock-core --lib --locked
+cargo run --manifest-path "$PROJECT_ROOT/Cargo.toml" --package chipdock-bindgen --locked -- \
+    generate --library "$CARGO_TARGET_DIR/debug/libchipdock_core.dylib" --language swift --out-dir "$BINDINGS_DIR"
+cp "$BINDINGS_DIR/ChipDockCoreFFI.modulemap" "$BINDINGS_DIR/module.modulemap"
 
 xcrun swiftc -swift-version 6 -parse-as-library -I "$BINDINGS_DIR" \
-    "$BINDINGS_DIR/FlashDeskCore.swift" \
-    "$PROJECT_ROOT/crates/flashdesk-core/tests/swift/CoreSmoke.swift" \
-    "$CARGO_TARGET_DIR/debug/libflashdesk_core.a" \
+    "$BINDINGS_DIR/ChipDockCore.swift" \
+    "$PROJECT_ROOT/crates/chipdock-core/tests/swift/CoreSmoke.swift" \
+    "$CARGO_TARGET_DIR/debug/libchipdock_core.a" \
     -framework IOKit -framework CoreFoundation -framework Security -framework SystemConfiguration \
     -liconv -lresolv -lc++ -o "$TEST_BUILD_DIR/BackendInteropTests"
 

@@ -1,7 +1,7 @@
 using System.Runtime.Versioning;
-using FlashDesk.Core;
+using ChipDock.Core;
 
-namespace FlashDesk.Tests;
+namespace ChipDock.Tests;
 
 internal static class ProbeDriverTests
 {

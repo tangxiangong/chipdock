@@ -2,7 +2,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using Velopack;
 
-namespace FlashDesk.Tests;
+namespace ChipDock.Tests;
 
 internal static class UpdateFeedTests
 {
@@ -10,7 +10,7 @@ internal static class UpdateFeedTests
 
     /// A feed in the shape `vpk pack` writes.
     internal static byte[] Feed(string version = "0.2.0", string? fileName = null, byte[]? package = null,
-        string type = "Full", string packageId = "FlashDesk", int count = 1, string? sha256 = null, long? size = null)
+        string type = "Full", string packageId = UpdateFeed.AppId, int count = 1, string? sha256 = null, long? size = null)
     {
         package ??= [1, 2, 3, 4];
         var asset = new Dictionary<string, object>
@@ -18,7 +18,7 @@ internal static class UpdateFeedTests
             ["PackageId"] = packageId,
             ["Version"] = version,
             ["Type"] = type,
-            ["FileName"] = fileName ?? $"FlashDesk-{version}-win-x64-full.nupkg",
+            ["FileName"] = fileName ?? $"{packageId}-{version}-win-x64-full.nupkg",
             ["SHA1"] = Convert.ToHexString(SHA1.HashData(package)),
             ["SHA256"] = sha256 ?? Convert.ToHexString(SHA256.HashData(package)),
             ["Size"] = size ?? package.Length,
@@ -47,7 +47,7 @@ internal static class UpdateFeedTests
         var asset = UpdateFeed.Open(envelope, publicKey).Assets.Single();
         Check.That(asset.Version.ToString() == "0.2.0" && asset.Size == 4 && asset.Type == VelopackAssetType.Full, "sealed feed round-trips");
         Check.That(asset.NotesMarkdown?.Contains("自动更新") == true, "release notes survive sealing");
-        Check.That(UpdateFeed.PackageUrl(asset) == "https://github.com/tangxiangong/chipdock/releases/download/v0.2.0/FlashDesk-0.2.0-win-x64-full.nupkg",
+        Check.That(UpdateFeed.PackageUrl(asset) == $"https://github.com/tangxiangong/chipdock/releases/download/v0.2.0/{UpdateFeed.AppId}-0.2.0-win-x64-full.nupkg",
             "package downloads from the immutable version release");
 
         Check.Throws<InvalidDataException>(() => UpdateFeed.Open(Reseal(envelope, feed => feed[^3] ^= 1), publicKey), "tampered feed", "签名无效");
@@ -69,7 +69,7 @@ internal static class UpdateFeedTests
         Check.Throws<InvalidDataException>(() => UpdateFeed.Parse(Feed(sha256: new string('z', 64))), "SHA-256 is hex", "SHA-256");
         Check.Throws<InvalidDataException>(() => UpdateFeed.Parse(Feed(size: 0)), "size required", "大小");
         Check.Throws<InvalidDataException>(() => UpdateFeed.Parse("not json"u8.ToArray()), "malformed feed", "格式无效");
-        foreach (var name in new[] { "../FlashDesk.nupkg", "a/b.nupkg", @"a\b.nupkg", "https://example.com/x.nupkg", "x?.nupkg", "FlashDesk.exe", "..", "" })
+        foreach (var name in new[] { "../ChipDock.nupkg", "a/b.nupkg", @"a\b.nupkg", "https://example.com/x.nupkg", "x?.nupkg", "ChipDock.exe", "..", "" })
             Check.Throws<InvalidDataException>(() => UpdateFeed.Parse(Feed(fileName: name)), $"unsafe package name {name}", "文件名无效");
         Check.Throws<InvalidDataException>(() => UpdateFeed.Seal(Feed(count: 2), Keys.Private), "unpublishable feeds are never sealed");
 
@@ -106,7 +106,7 @@ internal static class UpdateFeedTests
     private static async Task VerifyFileChecks()
     {
         var asset = UpdateFeed.Parse(Feed()).Assets[0];
-        var path = Path.Combine(Path.GetTempPath(), $"FlashDesk-test-{Guid.NewGuid():N}.nupkg");
+        var path = Path.Combine(Path.GetTempPath(), $"ChipDock-test-{Guid.NewGuid():N}.nupkg");
         try
         {
             await File.WriteAllBytesAsync(path, [1, 2, 3, 4]);

@@ -9,7 +9,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $Repo = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
-$Project = Join-Path $Repo 'windows/FlashDesk/FlashDesk.csproj'
+$Project = Join-Path $Repo 'windows/ChipDock/ChipDock.csproj'
 $Arch = $Architecture.ToLowerInvariant()
 $Rid = "win-$Arch"
 # The installer's OS guard matches TargetPlatformMinVersion.
@@ -23,22 +23,22 @@ if ((Test-Path $OutputDirectory) -and @(Get-ChildItem -Force $OutputDirectory).C
 # One version for the Rust Core, the app and the tag, as on macOS.
 $Metadata = & cargo metadata --format-version 1 --no-deps --locked --manifest-path (Join-Path $Repo 'Cargo.toml') | ConvertFrom-Json
 if ($LASTEXITCODE -ne 0) { throw 'cargo metadata failed.' }
-$CoreVersion = ($Metadata.packages | Where-Object name -eq 'flashdesk-core').version
-if ($CoreVersion -ne $Version) { throw "Release version $Version does not match flashdesk-core $CoreVersion" }
+$CoreVersion = ($Metadata.packages | Where-Object name -eq 'chipdock-core').version
+if ($CoreVersion -ne $Version) { throw "Release version $Version does not match chipdock-core $CoreVersion" }
 $ProjectXml = [xml](Get-Content -Raw $Project)
 function Get-ProjectProperty([string]$Name) {
     @($ProjectXml.SelectNodes("//$Name") | ForEach-Object { $_.InnerText.Trim() } | Where-Object { $_ }) | Select-Object -First 1
 }
 $AppVersion = Get-ProjectProperty 'Version'
-if ($AppVersion -ne $Version) { throw "Release version $Version does not match FlashDesk.csproj $AppVersion" }
-if (-not (Get-ProjectProperty 'UpdatePublicKey')) { throw 'UpdatePublicKey is missing from FlashDesk.csproj.' }
+if ($AppVersion -ne $Version) { throw "Release version $Version does not match ChipDock.csproj $AppVersion" }
+if (-not (Get-ProjectProperty 'UpdatePublicKey')) { throw 'UpdatePublicKey is missing from ChipDock.csproj.' }
 
 # Isolate publish output so obsolete files from another build cannot enter a package.
 $Publish = Join-Path $Repo "target/publish/$Rid-$([guid]::NewGuid().ToString('N'))"
 $NotesArguments = @()
 if ($ReleaseNotes) {
     $FilteredNotes = "$Publish-notes.md"
-    & cargo run --quiet --locked --manifest-path (Join-Path $Repo 'Cargo.toml') -p flashdesk-release-notes -- `
+    & cargo run --quiet --locked --manifest-path (Join-Path $Repo 'Cargo.toml') -p chipdock-release-notes -- `
         windows (Resolve-Path $ReleaseNotes).Path $FilteredNotes
     if ($LASTEXITCODE -ne 0) { throw 'Release note platform filtering failed.' }
     $NotesArguments = @('--releaseNotes', $FilteredNotes)
@@ -48,9 +48,9 @@ if ($LASTEXITCODE -ne 0) { throw 'WinUI publish failed.' }
 foreach ($BundledRuntime in @('coreclr.dll', 'Microsoft.ui.xaml.dll')) {
     if (Test-Path (Join-Path $Publish $BundledRuntime)) { throw "Unexpected bundled runtime: $BundledRuntime" }
 }
-$RuntimeConfig = Get-Content -Raw (Join-Path $Publish 'FlashDesk.runtimeconfig.json') | ConvertFrom-Json
+$RuntimeConfig = Get-Content -Raw (Join-Path $Publish 'ChipDock.runtimeconfig.json') | ConvertFrom-Json
 if ($RuntimeConfig.runtimeOptions.framework.name -ne 'Microsoft.NETCore.App') { throw 'Expected framework-dependent .NET publish output.' }
-foreach ($Required in @('Microsoft.WindowsAppRuntime.Bootstrap.dll', 'flashdesk_csharp.dll', 'Velopack.dll')) {
+foreach ($Required in @('Microsoft.WindowsAppRuntime.Bootstrap.dll', 'chipdock_csharp.dll', 'Velopack.dll')) {
     if (-not (Test-Path (Join-Path $Publish $Required))) { throw "$Required is missing from the publish output." }
 }
 
@@ -64,8 +64,9 @@ New-Item -ItemType Directory -Force $OutputDirectory | Out-Null
 # MSI versions are numeric; the CI run number keeps them increasing independently of SemVer.
 if ($BuildNumber -ge 16777216) { throw 'MSI build sequence exhausted.' }
 $MsiVersion = "1.$([math]::Floor($BuildNumber / 65536)).$($BuildNumber % 65536)"
+# Keep the deployed package ID while the product and executable use ChipDock.
 & $Vpk pack --packId FlashDesk --packVersion $Version --packTitle ChipDock --packAuthors tangxiangong `
-    --packDir $Publish --mainExe FlashDesk.exe --icon (Join-Path $Repo 'windows/FlashDesk/Assets/FlashDesk.ico') `
+    --packDir $Publish --mainExe ChipDock.exe --icon (Join-Path $Repo 'windows/ChipDock/Assets/ChipDock.ico') `
     --runtime $InstallerRuntime --framework "net10.0-$Arch-runtime,vcredist143-$Arch" --channel $Rid `
     @NotesArguments --outputDir $OutputDirectory --msi --msiVersion $MsiVersion
 if ($LASTEXITCODE -ne 0) { throw 'Velopack packaging failed.' }

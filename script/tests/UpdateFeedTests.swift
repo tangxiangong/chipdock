@@ -5,14 +5,14 @@ import Foundation
 struct UpdateFeedTests {
     static func main() throws {
         let executable = CommandLine.arguments[1]
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("FlashDeskUpdateTests-\(UUID().uuidString)")
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("ChipDockUpdateTests-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
-        let archive = directory.appendingPathComponent("FlashDesk-0.1.0-macOS-universal.zip")
+        let archive = directory.appendingPathComponent("ChipDock-0.1.0-macOS-universal.zip")
         let appcast = directory.appendingPathComponent("appcast.xml")
         let previous = directory.appendingPathComponent("previous.xml")
         let info = directory.appendingPathComponent("Info.plist")
-        let prefix = "https://github.com/tangxiangong/flashdesk/releases/download/v0.1.0/"
+        let prefix = "https://github.com/tangxiangong/chipdock/releases/download/v0.1.0/"
         let bytes = Data("signed update fixture".utf8)
         // Ephemeral fixture key: it never enters the Keychain or a key file.
         let signingKey = Curve25519.Signing.PrivateKey()

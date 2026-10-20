@@ -1,7 +1,7 @@
 using Velopack;
 using Velopack.Sources;
 
-namespace FlashDesk.Tests;
+namespace ChipDock.Tests;
 
 internal static class UpdateSourceTests
 {
@@ -16,7 +16,7 @@ internal static class UpdateSourceTests
         var asset = (await source.GetReleaseFeed(null!, UpdateFeed.AppId, "win-x64")).Assets.Single();
         Check.That(asset.Version.ToString() == "0.2.0", "signed feed is read from update-feed");
         await Check.ThrowsAsync<InvalidDataException>(() => source.GetReleaseFeed(null!, UpdateFeed.AppId, "win-x64/../../evil"), "channel cannot escape the feed URL");
-        await Check.ThrowsAsync<InvalidDataException>(() => source.GetReleaseFeed(null!, "Other", "win-x64"), "feed belongs to FlashDesk");
+        await Check.ThrowsAsync<InvalidDataException>(() => source.GetReleaseFeed(null!, "Other", "win-x64"), "feed belongs to ChipDock");
         downloader.Files[UpdateFeed.SignedFeedUrl("win-arm64")] = UpdateFeedTests.Feed();
         await Check.ThrowsAsync<InvalidDataException>(() => source.GetReleaseFeed(null!, UpdateFeed.AppId, "win-arm64"), "unsigned feed is refused");
         await Check.ThrowsAsync<HttpRequestException>(() => new UpdateSource(key, new FakeDownloader()).GetReleaseFeed(null!, UpdateFeed.AppId, "win-x64"),
@@ -40,7 +40,7 @@ internal static class UpdateSourceTests
             "an invalid new feed cannot fall back to an older feed");
         Check.That(migrating.Requests.Count == 1, "signature validation failure never retries the legacy feed");
 
-        var path = Path.Combine(Path.GetTempPath(), $"FlashDesk-test-{Guid.NewGuid():N}.nupkg");
+        var path = Path.Combine(Path.GetTempPath(), $"ChipDock-test-{Guid.NewGuid():N}.nupkg");
         try
         {
             var legacyPackage = UpdateFeed.PackageUrl(migrated, UpdateFeed.LegacyRepository);

@@ -1,4 +1,4 @@
-name: FlashDesk
+name: ChipDock
 options:
   bundleIdPrefix: com.xiaoyu
   deploymentTarget:
@@ -19,10 +19,12 @@ settings:
     SPARKLE_PUBLIC_ED_KEY: 'NgorrvaZPObmbOUEmKbbCvPbPqcD+kcw7E2NRTfxlKI='
     CODE_SIGN_IDENTITY: '-'
     CODE_SIGN_STYLE: Manual
+    DEAD_CODE_STRIPPING: YES
+    STRING_CATALOG_GENERATE_SYMBOLS: YES
     ENABLE_USER_SCRIPT_SANDBOXING: NO
     SWIFT_STRICT_CONCURRENCY: complete
 targets:
-  FlashDesk:
+  ChipDock:
     productName: ChipDock
     type: application
     platform: macOS
@@ -30,29 +32,29 @@ targets:
       - package: Sparkle
         product: Sparkle
     sources:
-      - path: FlashDesk
+      - path: ChipDock
         excludes: ['Resources', 'Generated']
-      - path: FlashDesk/Generated/FlashDeskCore.swift
-      - path: FlashDesk/Resources/FlashDesk.icon
+      - path: ChipDock/Generated/ChipDockCore.swift
+      - path: ChipDock/Resources/ChipDock.icon
         type: file
         buildPhase: resources
-      - path: FlashDesk/Resources/Licenses/Sparkle.txt
+      - path: ChipDock/Resources/Licenses/Sparkle.txt
         buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.xiaoyu.flashdesk
         PRODUCT_NAME: ChipDock
-        PRODUCT_MODULE_NAME: FlashDesk
+        PRODUCT_MODULE_NAME: ChipDock
         GENERATE_INFOPLIST_FILE: NO
-        INFOPLIST_FILE: FlashDesk/Resources/Info.plist
+        INFOPLIST_FILE: ChipDock/Resources/Info.plist
         ENABLE_APP_SANDBOX: NO
         ENABLE_HARDENED_RUNTIME: YES
         COMBINE_HIDPI_IMAGES: YES
-        ASSETCATALOG_COMPILER_APPICON_NAME: FlashDesk
-        HEADER_SEARCH_PATHS: '$(inherited) $(SRCROOT)/FlashDesk/Generated'
-        SWIFT_INCLUDE_PATHS: '$(inherited) $(SRCROOT)/FlashDesk/Generated'
+        ASSETCATALOG_COMPILER_APPICON_NAME: ChipDock
+        HEADER_SEARCH_PATHS: '$(inherited) $(SRCROOT)/ChipDock/Generated'
+        SWIFT_INCLUDE_PATHS: '$(inherited) $(SRCROOT)/ChipDock/Generated'
         LIBRARY_SEARCH_PATHS: '$(inherited) $(BUILT_PRODUCTS_DIR)'
-        OTHER_LDFLAGS: '$(inherited) -lflashdesk_core -framework IOKit -framework CoreFoundation -framework Security -framework SystemConfiguration -liconv -lresolv -lc++'
+        OTHER_LDFLAGS: '$(inherited) -lchipdock_core -framework IOKit -framework CoreFoundation -framework Security -framework SystemConfiguration -liconv -lresolv -lc++'
       configs:
         Debug:
           ENABLE_HARDENED_RUNTIME: NO
@@ -61,30 +63,30 @@ targets:
         script: '"${SRCROOT}/../script/build_rust.sh"'
         basedOnDependencyAnalysis: false
         outputFiles:
-          - '$(BUILT_PRODUCTS_DIR)/libflashdesk_core.a'
-  FlashDeskTests:
+          - '$(BUILT_PRODUCTS_DIR)/libchipdock_core.a'
+  ChipDockTests:
     type: bundle.unit-test
     platform: macOS
-    sources: [FlashDeskTests]
+    sources: [ChipDockTests]
     dependencies:
-      - target: FlashDesk
+      - target: ChipDock
       - package: Sparkle
         product: Sparkle
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.xiaoyu.flashdesk.tests
+        PRODUCT_BUNDLE_IDENTIFIER: com.xiaoyu.chipdock.tests
         GENERATE_INFOPLIST_FILE: YES
-        HEADER_SEARCH_PATHS: '$(inherited) $(SRCROOT)/FlashDesk/Generated'
-        SWIFT_INCLUDE_PATHS: '$(inherited) $(SRCROOT)/FlashDesk/Generated'
+        HEADER_SEARCH_PATHS: '$(inherited) $(SRCROOT)/ChipDock/Generated'
+        SWIFT_INCLUDE_PATHS: '$(inherited) $(SRCROOT)/ChipDock/Generated'
 schemes:
-  FlashDesk:
+  ChipDock:
     build:
       targets:
-        FlashDesk: all
+        ChipDock: all
     run:
       config: Debug
     test:
       config: Debug
-      targets: [FlashDeskTests]
+      targets: [ChipDockTests]
     archive:
       config: Release

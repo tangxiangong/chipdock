@@ -1,15 +1,15 @@
 using System.Security.Cryptography;
 using System.Xml.Linq;
-using FlashDesk;
+using ChipDock;
 using Velopack;
 
 // Usage:
 //   keygen <private-key-file>
 //       Writes a new private key to a file that must not exist yet and prints the public key.
-//   seal <directory> <architecture> <public-key | FlashDesk.csproj>
+//   seal <directory> <architecture> <public-key | ChipDock.csproj>
 //       Signs releases.win-<arch>.json with WINDOWS_UPDATE_PRIVATE_KEY into
 //       releases.win-<arch>.signed.json, after proving the secret matches the shipped public key.
-//   verify <directory> <architecture> <version> <public-key | FlashDesk.csproj> [previous-signed-feed]
+//   verify <directory> <architecture> <version> <public-key | ChipDock.csproj> [previous-signed-feed]
 //       Checks the signed feed and its package, and that it may replace the previously published feed.
 try
 {

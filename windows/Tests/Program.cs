@@ -1,8 +1,8 @@
 using System.Reflection;
 using System.Runtime.InteropServices;
-using FlashDesk.Tests;
+using ChipDock.Tests;
 
-// Usage: FlashDesk.Tests [path to the built flashdesk_csharp library]
+// Usage: ChipDock.Tests [path to the built chipdock_csharp library]
 var driverRulesOnly = args.SequenceEqual(["--driver-rules-only"]);
 if (!driverRulesOnly)
 {
@@ -26,19 +26,19 @@ if (OperatingSystem.IsWindows())
 
 if (args.Length == 0)
 {
-    Console.WriteLine("Bridge checks skipped: pass the built flashdesk_csharp library to run them.");
+    Console.WriteLine("Bridge checks skipped: pass the built chipdock_csharp library to run them.");
     return;
 }
 var library = Path.GetFullPath(args[0]);
 if (!File.Exists(library)) throw new FileNotFoundException("Rust bridge library not found", library);
 NativeLibrary.SetDllImportResolver(Assembly.GetExecutingAssembly(), (name, assembly, searchPath) =>
-    name == "flashdesk_csharp" ? NativeLibrary.Load(library) : nint.Zero);
+    name == "chipdock_csharp" ? NativeLibrary.Load(library) : nint.Zero);
 var before = Check.Count;
 await BridgeTests.Run();
 if (OperatingSystem.IsWindows()) await ProbeDriverTests.CheckProbeSelectors();
 Console.WriteLine($"Bridge checks passed ({Check.Count - before} assertions).");
 
-namespace FlashDesk.Tests
+namespace ChipDock.Tests
 {
     internal static class Check
     {

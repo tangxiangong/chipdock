@@ -6,8 +6,8 @@ export PATH="$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-14.0}"
 export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$PROJECT_ROOT/target}"
 PRODUCTS_DIR="${BUILT_PRODUCTS_DIR:-$PROJECT_ROOT/.build/Rust}"
-GENERATED_DIR="$PROJECT_ROOT/macos/FlashDesk/Generated"
-TEMP_GENERATED_DIR="${DERIVED_FILE_DIR:-$PROJECT_ROOT/.build}/UniFFI"
+GENERATED_DIR="$PROJECT_ROOT/macos/ChipDock/Generated"
+TEMP_GENERATED_DIR="${DERIVED_FILE_DIR:-$PROJECT_ROOT/.build}/UniFFI/ChipDock"
 RUST_PROFILE=debug
 CARGO_PROFILE=dev
 if [[ "${CONFIGURATION:-Debug}" == Release ]]; then
@@ -33,20 +33,27 @@ for ARCHITECTURE in ${ARCHS:-$(uname -m)}; do
         rustup target add "$RUST_TARGET"
     fi
     cargo build --manifest-path "$PROJECT_ROOT/Cargo.toml" --locked \
-        --package flashdesk-core --lib --target "$RUST_TARGET" --profile "$CARGO_PROFILE"
-    LIBRARIES+=("$CARGO_TARGET_DIR/$RUST_TARGET/$RUST_PROFILE/libflashdesk_core.a")
+        --package chipdock-core --lib --target "$RUST_TARGET" --profile "$CARGO_PROFILE"
+    LIBRARIES+=("$CARGO_TARGET_DIR/$RUST_TARGET/$RUST_PROFILE/libchipdock_core.a")
     if [[ -z "$FIRST_LIBRARY" ]]; then
-        FIRST_LIBRARY="$CARGO_TARGET_DIR/$RUST_TARGET/$RUST_PROFILE/libflashdesk_core.dylib"
+        FIRST_LIBRARY="$CARGO_TARGET_DIR/$RUST_TARGET/$RUST_PROFILE/libchipdock_core.dylib"
     fi
 done
 
-/usr/bin/lipo -create "${LIBRARIES[@]}" -output "$PRODUCTS_DIR/libflashdesk_core.a"
-cargo run --manifest-path "$PROJECT_ROOT/Cargo.toml" --locked --package flashdesk-bindgen -- \
+/usr/bin/lipo -create "${LIBRARIES[@]}" -output "$PRODUCTS_DIR/libchipdock_core.a"
+cargo run --manifest-path "$PROJECT_ROOT/Cargo.toml" --locked --package chipdock-bindgen -- \
     generate --library "$FIRST_LIBRARY" --language swift \
     --out-dir "$TEMP_GENERATED_DIR"
 
 for GENERATED_FILE in "$TEMP_GENERATED_DIR"/*; do
     GENERATED_NAME="$(basename "$GENERATED_FILE")"
+    if [[ "$GENERATED_NAME" == *.h ]]; then
+        # UniFFI emits whitespace-only lines; keep checked-in headers reproducible and clean.
+        awk '{ sub(/[[:blank:]]+$/, ""); lines[NR] = $0; if (length($0)) last = NR }
+             END { for (line = 1; line <= last; line++) print lines[line] }' \
+            "$GENERATED_FILE" > "$TEMP_GENERATED_DIR/.${GENERATED_NAME}.clean"
+        mv "$TEMP_GENERATED_DIR/.${GENERATED_NAME}.clean" "$GENERATED_FILE"
+    fi
     if [[ "$GENERATED_NAME" == *.modulemap ]]; then GENERATED_NAME=module.modulemap; fi
     DESTINATION="$GENERATED_DIR/$GENERATED_NAME"
     if ! cmp -s "$GENERATED_FILE" "$DESTINATION"; then

@@ -1,0 +1,680 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0EE49919D5371D662C5A3A70 /* WorkbenchOperations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51A3A56738941F0E42BAE7C6 /* WorkbenchOperations.swift */; };
+		140B7392531778BB352D33DB /* SaveProfileSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC82A8563883BC2DEE74AE53 /* SaveProfileSheet.swift */; };
+		15376F70D7F9334F2C192831 /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45F1436DAE39C935D3FF9D20 /* Components.swift */; };
+		2A9500A5D7A187FB1C6FCD15 /* ChipDockCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 293228E64BE6AB646094449C /* ChipDockCore.swift */; };
+		301B00981788B8AFF00F6D83 /* RustService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E869DE22F8EEC687CDD070B /* RustService.swift */; };
+		5B26CE6778EAF7E1953070A8 /* Sparkle.txt in Resources */ = {isa = PBXBuildFile; fileRef = 46B64CCFA9746C7BCCB812F2 /* Sparkle.txt */; };
+		5FCA3086FB009B44F4828CB3 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 4F07CFCC191CFDD73E81149E /* Sparkle */; };
+		7028EB0EC0A2A78FE74E034C /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 912CA876CAB236D34E3E2351 /* ContentView.swift */; };
+		7588BB56234FB6BBBF4149A2 /* ChipDock.icon in Resources */ = {isa = PBXBuildFile; fileRef = 4E9484289CC041F40AF4408B /* ChipDock.icon */; };
+		8C8A570D5ACB886021F62946 /* CoreIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB2A7428D56EC90E56AD81A0 /* CoreIntegrationTests.swift */; };
+		9C4C492FE4093F425D48154B /* UpdateService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2E87475B6FFEC18430225F8 /* UpdateService.swift */; };
+		9DDFE9DFF35C013BD5A527C6 /* WindowLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EA50036D727BE8C4BF0225E /* WindowLayoutTests.swift */; };
+		A95D488854BA43E077137F31 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDF174A247AC8A639C4174E5 /* SettingsView.swift */; };
+		AA65BCFAE355FAF63E0E459D /* Formatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B73FB3E8332C9397DD28EA8 /* Formatting.swift */; };
+		AB9CC247E714CEDF4E72DAEC /* LogsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17D7CDC7BD1D20734BF6D71C /* LogsView.swift */; };
+		B0104A1DB0373443A97C5A5D /* MemoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000491E55ECB8E7442F209 /* MemoryView.swift */; };
+		BD63A5D07234B550A4F9D4CA /* ChipDockApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D88E375C755A5928122815F9 /* ChipDockApp.swift */; };
+		C65A916BB581FB9351C20374 /* ExportDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 326EAB73B96BBCF6CD831CC0 /* ExportDocument.swift */; };
+		C6848DAD9660C66656B773B3 /* WorkbenchStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2030C8D28EBF79E7E029B727 /* WorkbenchStore.swift */; };
+		CCD8AA68E67D35C0607C9EC6 /* TargetSetupSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFD61FCCA0ECC683B074494D /* TargetSetupSheet.swift */; };
+		D374DC085BBF7DA26BB2BAAB /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 63492589CE39A90E943D7EDF /* Sparkle */; };
+		D431599DBA97108AFA63003F /* FlashView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAFB9AB1DD670FA7A2457665 /* FlashView.swift */; };
+		D805993623D828B0FB2D4AF7 /* WorkbenchCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2060FF2F711287D27FE683CB /* WorkbenchCommands.swift */; };
+		E2468F01AE1819EBE2CB2150 /* FirmwareDataView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BF8B77779E93689270FDDB2 /* FirmwareDataView.swift */; };
+		E3A715916A6D95635D499C09 /* FirmwareLayoutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F62F3478286499C5F5F8BF8F /* FirmwareLayoutView.swift */; };
+		E533F29967B565A7E301152F /* WorkspaceModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EC9EF1E2BCDDAD0F2C7D658 /* WorkspaceModels.swift */; };
+		EF67EEDC02F42632E0F7CA7C /* UpdateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19FD81776014C0DA90BEA8DD /* UpdateTests.swift */; };
+		FB9BFCB1351C6ED298CDA737 /* ChipPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5068AA0C98AB9930DAB52A3 /* ChipPicker.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		E0E73532633AC9E4A269BDAF /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D89A6A40C25CAC33DAFB81EE /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = F663582F515ECB3BC5FE32DF;
+			remoteInfo = ChipDock;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		0E869DE22F8EEC687CDD070B /* RustService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RustService.swift; sourceTree = "<group>"; };
+		0EA50036D727BE8C4BF0225E /* WindowLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowLayoutTests.swift; sourceTree = "<group>"; };
+		17D7CDC7BD1D20734BF6D71C /* LogsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogsView.swift; sourceTree = "<group>"; };
+		19FD81776014C0DA90BEA8DD /* UpdateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateTests.swift; sourceTree = "<group>"; };
+		2030C8D28EBF79E7E029B727 /* WorkbenchStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkbenchStore.swift; sourceTree = "<group>"; };
+		2060FF2F711287D27FE683CB /* WorkbenchCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkbenchCommands.swift; sourceTree = "<group>"; };
+		293228E64BE6AB646094449C /* ChipDockCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChipDockCore.swift; sourceTree = "<group>"; };
+		326EAB73B96BBCF6CD831CC0 /* ExportDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportDocument.swift; sourceTree = "<group>"; };
+		45F1436DAE39C935D3FF9D20 /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
+		46B64CCFA9746C7BCCB812F2 /* Sparkle.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = Sparkle.txt; sourceTree = "<group>"; };
+		4E9484289CC041F40AF4408B /* ChipDock.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = ChipDock.icon; sourceTree = "<group>"; };
+		51A3A56738941F0E42BAE7C6 /* WorkbenchOperations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkbenchOperations.swift; sourceTree = "<group>"; };
+		6122B0E0F02540A881250AFF /* ChipDockTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ChipDockTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		6B73FB3E8332C9397DD28EA8 /* Formatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Formatting.swift; sourceTree = "<group>"; };
+		7BF8B77779E93689270FDDB2 /* FirmwareDataView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirmwareDataView.swift; sourceTree = "<group>"; };
+		8EC9EF1E2BCDDAD0F2C7D658 /* WorkspaceModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceModels.swift; sourceTree = "<group>"; };
+		912CA876CAB236D34E3E2351 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		A0000491E55ECB8E7442F209 /* MemoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryView.swift; sourceTree = "<group>"; };
+		BAFB9AB1DD670FA7A2457665 /* FlashView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlashView.swift; sourceTree = "<group>"; };
+		BB2A7428D56EC90E56AD81A0 /* CoreIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreIntegrationTests.swift; sourceTree = "<group>"; };
+		BFD61FCCA0ECC683B074494D /* TargetSetupSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TargetSetupSheet.swift; sourceTree = "<group>"; };
+		C5068AA0C98AB9930DAB52A3 /* ChipPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChipPicker.swift; sourceTree = "<group>"; };
+		D2E87475B6FFEC18430225F8 /* UpdateService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateService.swift; sourceTree = "<group>"; };
+		D88E375C755A5928122815F9 /* ChipDockApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChipDockApp.swift; sourceTree = "<group>"; };
+		E17F7EDA72AD6856663FC614 /* ChipDock.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ChipDock.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		EDF174A247AC8A639C4174E5 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		F62F3478286499C5F5F8BF8F /* FirmwareLayoutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirmwareLayoutView.swift; sourceTree = "<group>"; };
+		FC82A8563883BC2DEE74AE53 /* SaveProfileSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveProfileSheet.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		5D7AF752C1023B88D754B268 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D374DC085BBF7DA26BB2BAAB /* Sparkle in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A69A16B8728D9D9A1E69EB6B /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5FCA3086FB009B44F4828CB3 /* Sparkle in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		147EA765D4BBEF9ED30E759B /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				0E869DE22F8EEC687CDD070B /* RustService.swift */,
+				D2E87475B6FFEC18430225F8 /* UpdateService.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		25335344D228841BF60C558A /* Support */ = {
+			isa = PBXGroup;
+			children = (
+				326EAB73B96BBCF6CD831CC0 /* ExportDocument.swift */,
+				6B73FB3E8332C9397DD28EA8 /* Formatting.swift */,
+			);
+			path = Support;
+			sourceTree = "<group>";
+		};
+		2E926BBA56702A6F25AF1BB5 /* ChipDock */ = {
+			isa = PBXGroup;
+			children = (
+				4F657BA165F7AF032C7F239F /* App */,
+				75A60D8C2813DC1CF525FDED /* Generated */,
+				46445AE1CB9E641475502CA0 /* Models */,
+				621A1C6B6CD36A6626636DF2 /* Resources */,
+				147EA765D4BBEF9ED30E759B /* Services */,
+				DAFC62B32934FFDA27ED1E0E /* Stores */,
+				25335344D228841BF60C558A /* Support */,
+				B8C2527D365BB01BAF971D40 /* Views */,
+			);
+			path = ChipDock;
+			sourceTree = "<group>";
+		};
+		42976E38B9E2B203DC06D42B /* Licenses */ = {
+			isa = PBXGroup;
+			children = (
+				46B64CCFA9746C7BCCB812F2 /* Sparkle.txt */,
+			);
+			path = Licenses;
+			sourceTree = "<group>";
+		};
+		46445AE1CB9E641475502CA0 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				8EC9EF1E2BCDDAD0F2C7D658 /* WorkspaceModels.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		4F657BA165F7AF032C7F239F /* App */ = {
+			isa = PBXGroup;
+			children = (
+				D88E375C755A5928122815F9 /* ChipDockApp.swift */,
+				2060FF2F711287D27FE683CB /* WorkbenchCommands.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		621A1C6B6CD36A6626636DF2 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				4E9484289CC041F40AF4408B /* ChipDock.icon */,
+				42976E38B9E2B203DC06D42B /* Licenses */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		75A60D8C2813DC1CF525FDED /* Generated */ = {
+			isa = PBXGroup;
+			children = (
+				293228E64BE6AB646094449C /* ChipDockCore.swift */,
+			);
+			path = Generated;
+			sourceTree = "<group>";
+		};
+		B648D1D7B6F356F12F921765 = {
+			isa = PBXGroup;
+			children = (
+				2E926BBA56702A6F25AF1BB5 /* ChipDock */,
+				EF17AA65D1FD5F277F628BF9 /* ChipDockTests */,
+				F2F03C5C168FF5760E3BA880 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		B8C2527D365BB01BAF971D40 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				C5068AA0C98AB9930DAB52A3 /* ChipPicker.swift */,
+				45F1436DAE39C935D3FF9D20 /* Components.swift */,
+				912CA876CAB236D34E3E2351 /* ContentView.swift */,
+				7BF8B77779E93689270FDDB2 /* FirmwareDataView.swift */,
+				F62F3478286499C5F5F8BF8F /* FirmwareLayoutView.swift */,
+				BAFB9AB1DD670FA7A2457665 /* FlashView.swift */,
+				17D7CDC7BD1D20734BF6D71C /* LogsView.swift */,
+				A0000491E55ECB8E7442F209 /* MemoryView.swift */,
+				FC82A8563883BC2DEE74AE53 /* SaveProfileSheet.swift */,
+				EDF174A247AC8A639C4174E5 /* SettingsView.swift */,
+				BFD61FCCA0ECC683B074494D /* TargetSetupSheet.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		DAFC62B32934FFDA27ED1E0E /* Stores */ = {
+			isa = PBXGroup;
+			children = (
+				51A3A56738941F0E42BAE7C6 /* WorkbenchOperations.swift */,
+				2030C8D28EBF79E7E029B727 /* WorkbenchStore.swift */,
+			);
+			path = Stores;
+			sourceTree = "<group>";
+		};
+		EF17AA65D1FD5F277F628BF9 /* ChipDockTests */ = {
+			isa = PBXGroup;
+			children = (
+				BB2A7428D56EC90E56AD81A0 /* CoreIntegrationTests.swift */,
+				19FD81776014C0DA90BEA8DD /* UpdateTests.swift */,
+				0EA50036D727BE8C4BF0225E /* WindowLayoutTests.swift */,
+			);
+			path = ChipDockTests;
+			sourceTree = "<group>";
+		};
+		F2F03C5C168FF5760E3BA880 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				E17F7EDA72AD6856663FC614 /* ChipDock.app */,
+				6122B0E0F02540A881250AFF /* ChipDockTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		D042F6FA148808E69A857BBD /* ChipDockTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 39A91DC98A23A90526F8B1FA /* Build configuration list for PBXNativeTarget "ChipDockTests" */;
+			buildPhases = (
+				B0DEBEF18E38B651DAD1BADF /* Sources */,
+				A69A16B8728D9D9A1E69EB6B /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				E12A88D41F60013851C35738 /* PBXTargetDependency */,
+			);
+			name = ChipDockTests;
+			packageProductDependencies = (
+				4F07CFCC191CFDD73E81149E /* Sparkle */,
+			);
+			productName = ChipDockTests;
+			productReference = 6122B0E0F02540A881250AFF /* ChipDockTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		F663582F515ECB3BC5FE32DF /* ChipDock */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2489F01526961B2674DB2ED1 /* Build configuration list for PBXNativeTarget "ChipDock" */;
+			buildPhases = (
+				2F39922CAB8670F5413DC94F /* Build Rust Core and generate UniFFI bindings */,
+				A67E17B2E745A821AC26750F /* Sources */,
+				48D5448F8519F3D4F0D4DD33 /* Resources */,
+				5D7AF752C1023B88D754B268 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ChipDock;
+			packageProductDependencies = (
+				63492589CE39A90E943D7EDF /* Sparkle */,
+			);
+			productName = ChipDock;
+			productReference = E17F7EDA72AD6856663FC614 /* ChipDock.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		D89A6A40C25CAC33DAFB81EE /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 2600;
+				TargetAttributes = {
+					D042F6FA148808E69A857BBD = {
+						ProvisioningStyle = Manual;
+					};
+					F663582F515ECB3BC5FE32DF = {
+						ProvisioningStyle = Manual;
+					};
+				};
+			};
+			buildConfigurationList = 304F44BA293845E4DE600AB6 /* Build configuration list for PBXProject "ChipDock" */;
+			developmentRegion = "zh-Hans";
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				"zh-Hans",
+			);
+			mainGroup = B648D1D7B6F356F12F921765;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				9158BE70DD3D3EF2908F85F0 /* XCRemoteSwiftPackageReference "Sparkle" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = F2F03C5C168FF5760E3BA880 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				F663582F515ECB3BC5FE32DF /* ChipDock */,
+				D042F6FA148808E69A857BBD /* ChipDockTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		48D5448F8519F3D4F0D4DD33 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7588BB56234FB6BBBF4149A2 /* ChipDock.icon in Resources */,
+				5B26CE6778EAF7E1953070A8 /* Sparkle.txt in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		2F39922CAB8670F5413DC94F /* Build Rust Core and generate UniFFI bindings */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Build Rust Core and generate UniFFI bindings";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(BUILT_PRODUCTS_DIR)/libchipdock_core.a",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${SRCROOT}/../script/build_rust.sh\"";
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A67E17B2E745A821AC26750F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BD63A5D07234B550A4F9D4CA /* ChipDockApp.swift in Sources */,
+				2A9500A5D7A187FB1C6FCD15 /* ChipDockCore.swift in Sources */,
+				FB9BFCB1351C6ED298CDA737 /* ChipPicker.swift in Sources */,
+				15376F70D7F9334F2C192831 /* Components.swift in Sources */,
+				7028EB0EC0A2A78FE74E034C /* ContentView.swift in Sources */,
+				C65A916BB581FB9351C20374 /* ExportDocument.swift in Sources */,
+				E2468F01AE1819EBE2CB2150 /* FirmwareDataView.swift in Sources */,
+				E3A715916A6D95635D499C09 /* FirmwareLayoutView.swift in Sources */,
+				D431599DBA97108AFA63003F /* FlashView.swift in Sources */,
+				AA65BCFAE355FAF63E0E459D /* Formatting.swift in Sources */,
+				AB9CC247E714CEDF4E72DAEC /* LogsView.swift in Sources */,
+				B0104A1DB0373443A97C5A5D /* MemoryView.swift in Sources */,
+				301B00981788B8AFF00F6D83 /* RustService.swift in Sources */,
+				140B7392531778BB352D33DB /* SaveProfileSheet.swift in Sources */,
+				A95D488854BA43E077137F31 /* SettingsView.swift in Sources */,
+				CCD8AA68E67D35C0607C9EC6 /* TargetSetupSheet.swift in Sources */,
+				9C4C492FE4093F425D48154B /* UpdateService.swift in Sources */,
+				D805993623D828B0FB2D4AF7 /* WorkbenchCommands.swift in Sources */,
+				0EE49919D5371D662C5A3A70 /* WorkbenchOperations.swift in Sources */,
+				C6848DAD9660C66656B773B3 /* WorkbenchStore.swift in Sources */,
+				E533F29967B565A7E301152F /* WorkspaceModels.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B0DEBEF18E38B651DAD1BADF /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8C8A570D5ACB886021F62946 /* CoreIntegrationTests.swift in Sources */,
+				EF67EEDC02F42632E0F7CA7C /* UpdateTests.swift in Sources */,
+				9DDFE9DFF35C013BD5A527C6 /* WindowLayoutTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		E12A88D41F60013851C35738 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = F663582F515ECB3BC5FE32DF /* ChipDock */;
+			targetProxy = E0E73532633AC9E4A269BDAF /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		0CEAADB8DE7779DDD7E30330 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.1.2;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SPARKLE_PUBLIC_ED_KEY = "NgorrvaZPObmbOUEmKbbCvPbPqcD+kcw7E2NRTfxlKI=";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		8EDD597C2257CBF611CE6336 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = "$(inherited) $(SRCROOT)/ChipDock/Generated";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.xiaoyu.chipdock.tests;
+				SDKROOT = macosx;
+				SWIFT_INCLUDE_PATHS = "$(inherited) $(SRCROOT)/ChipDock/Generated";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ChipDock.app/Contents/MacOS/ChipDock";
+			};
+			name = Debug;
+		};
+		F0A34F0698E40603F92D66BA /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = "$(inherited) $(SRCROOT)/ChipDock/Generated";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.xiaoyu.chipdock.tests;
+				SDKROOT = macosx;
+				SWIFT_INCLUDE_PATHS = "$(inherited) $(SRCROOT)/ChipDock/Generated";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ChipDock.app/Contents/MacOS/ChipDock";
+			};
+			name = Release;
+		};
+		F427769CF55D61802ABE3DDA /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.1.2;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SPARKLE_PUBLIC_ED_KEY = "NgorrvaZPObmbOUEmKbbCvPbPqcD+kcw7E2NRTfxlKI=";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		FB9FEEC55D6C7E019D20DE8C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = ChipDock;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				HEADER_SEARCH_PATHS = "$(inherited) $(SRCROOT)/ChipDock/Generated";
+				INFOPLIST_FILE = ChipDock/Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				LIBRARY_SEARCH_PATHS = "$(inherited) $(BUILT_PRODUCTS_DIR)";
+				OTHER_LDFLAGS = "$(inherited) -lchipdock_core -framework IOKit -framework CoreFoundation -framework Security -framework SystemConfiguration -liconv -lresolv -lc++";
+				PRODUCT_BUNDLE_IDENTIFIER = com.xiaoyu.flashdesk;
+				PRODUCT_MODULE_NAME = ChipDock;
+				PRODUCT_NAME = ChipDock;
+				SDKROOT = macosx;
+				SWIFT_INCLUDE_PATHS = "$(inherited) $(SRCROOT)/ChipDock/Generated";
+			};
+			name = Release;
+		};
+		FF21503E03B5864AB211C85C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = ChipDock;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				HEADER_SEARCH_PATHS = "$(inherited) $(SRCROOT)/ChipDock/Generated";
+				INFOPLIST_FILE = ChipDock/Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				LIBRARY_SEARCH_PATHS = "$(inherited) $(BUILT_PRODUCTS_DIR)";
+				OTHER_LDFLAGS = "$(inherited) -lchipdock_core -framework IOKit -framework CoreFoundation -framework Security -framework SystemConfiguration -liconv -lresolv -lc++";
+				PRODUCT_BUNDLE_IDENTIFIER = com.xiaoyu.flashdesk;
+				PRODUCT_MODULE_NAME = ChipDock;
+				PRODUCT_NAME = ChipDock;
+				SDKROOT = macosx;
+				SWIFT_INCLUDE_PATHS = "$(inherited) $(SRCROOT)/ChipDock/Generated";
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		2489F01526961B2674DB2ED1 /* Build configuration list for PBXNativeTarget "ChipDock" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FF21503E03B5864AB211C85C /* Debug */,
+				FB9FEEC55D6C7E019D20DE8C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		304F44BA293845E4DE600AB6 /* Build configuration list for PBXProject "ChipDock" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F427769CF55D61802ABE3DDA /* Debug */,
+				0CEAADB8DE7779DDD7E30330 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		39A91DC98A23A90526F8B1FA /* Build configuration list for PBXNativeTarget "ChipDockTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8EDD597C2257CBF611CE6336 /* Debug */,
+				F0A34F0698E40603F92D66BA /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		9158BE70DD3D3EF2908F85F0 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = exactVersion;
+				version = 2.10.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		4F07CFCC191CFDD73E81149E /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9158BE70DD3D3EF2908F85F0 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
+		};
+		63492589CE39A90E943D7EDF /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9158BE70DD3D3EF2908F85F0 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = D89A6A40C25CAC33DAFB81EE /* Project object */;
+}

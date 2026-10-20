@@ -1,0 +1,31 @@
+<Project>
+  <!-- WinUI copies compiled XAML and the PRI into build output, but the .NET
+       publish graph does not include those generated files automatically. -->
+  <Target Name="IncludeWinUIResourcesInPublish" AfterTargets="ComputeFilesToPublish"
+          DependsOnTargets="CustomOutputGroupForPackaging">
+    <Error Condition="!Exists('$(ProjectPriFullPath)')"
+           Text="The application PRI is missing: $(ProjectPriFullPath). Build before publishing." />
+    <Error Condition="'@(CustomOutputGroupForPackagingOutput)' == ''"
+           Text="No compiled XAML resources were found for publishing." />
+    <ItemGroup>
+      <ResolvedFileToPublish Include="@(CustomOutputGroupForPackagingOutput)"
+                             Exclude="@(ResolvedFileToPublish)">
+        <RelativePath>%(CustomOutputGroupForPackagingOutput.TargetPath)</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish Include="$(ProjectPriFullPath)"
+                             Exclude="@(ResolvedFileToPublish)">
+        <RelativePath>$(ProjectPriFileName)</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
+  <Target Name="ValidatePublishedWinUIResources" AfterTargets="Publish">
+    <Error Condition="!Exists('$(PublishDir)App.xbf')"
+           Text="Published App.xbf is missing; the application cannot load its startup XAML." />
+    <Error Condition="!Exists('$(PublishDir)$(ProjectPriFileName)')"
+           Text="Published application PRI is missing: $(ProjectPriFileName)." />
+    <Error Condition="!Exists('$(PublishDir)chipdock_csharp.dll')"
+           Text="Published Rust Core chipdock_csharp.dll is missing." />
+  </Target>
+</Project>

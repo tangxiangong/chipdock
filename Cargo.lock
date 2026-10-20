@@ -274,6 +274,58 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f079e83a288787bcd14a6aea84cee5c87a67c5a3e660c30f557a3d24761b3527"
 
 [[package]]
+name = "chipdock-bindgen"
+version = "0.1.2"
+dependencies = [
+ "uniffi",
+]
+
+[[package]]
+name = "chipdock-core"
+version = "0.1.2"
+dependencies = [
+ "chrono",
+ "ihex",
+ "interoptopus",
+ "nusb",
+ "object 0.40.0",
+ "probe-rs",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "uniffi",
+ "uuid",
+]
+
+[[package]]
+name = "chipdock-csharp"
+version = "0.1.2"
+dependencies = [
+ "chipdock-core",
+ "chrono",
+ "interoptopus",
+ "tempfile",
+ "uuid",
+]
+
+[[package]]
+name = "chipdock-csharp-bindgen"
+version = "0.1.2"
+dependencies = [
+ "chipdock-csharp",
+ "interoptopus_csharp",
+]
+
+[[package]]
+name = "chipdock-release-notes"
+version = "0.1.2"
+dependencies = [
+ "anyhow",
+ "tempfile",
+]
+
+[[package]]
 name = "chrono"
 version = "0.4.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -482,58 +534,6 @@ name = "find-msvc-tools"
 version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d45db016d36b838f563236e9193d0ee6ce38f3f68b6c94e914b4929c96bbb890"
-
-[[package]]
-name = "flashdesk-bindgen"
-version = "0.1.2"
-dependencies = [
- "uniffi",
-]
-
-[[package]]
-name = "flashdesk-core"
-version = "0.1.2"
-dependencies = [
- "chrono",
- "ihex",
- "interoptopus",
- "nusb",
- "object 0.40.0",
- "probe-rs",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror",
- "uniffi",
- "uuid",
-]
-
-[[package]]
-name = "flashdesk-csharp"
-version = "0.1.2"
-dependencies = [
- "chrono",
- "flashdesk-core",
- "interoptopus",
- "tempfile",
- "uuid",
-]
-
-[[package]]
-name = "flashdesk-csharp-bindgen"
-version = "0.1.2"
-dependencies = [
- "flashdesk-csharp",
- "interoptopus_csharp",
-]
-
-[[package]]
-name = "flashdesk-release-notes"
-version = "0.1.2"
-dependencies = [
- "anyhow",
- "tempfile",
-]
 
 [[package]]
 name = "flate2"

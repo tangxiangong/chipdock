@@ -40,25 +40,25 @@ jobs:
             bash -n "$SCRIPT_FILE"
           done
       - name: Lint Rust Core and the UniFFI bridge
-        run: cargo clippy --locked -p flashdesk-core -p flashdesk-bindgen --all-targets -- -D warnings
+        run: cargo clippy --locked -p chipdock-core -p chipdock-bindgen --all-targets -- -D warnings
       - name: Test Rust Core and Swift/UniFFI backend without hardware
         run: ./script/test_backend.sh
       - name: Test update signature and metadata validation
         run: ./script/test_updates.sh
       - name: Test native app and update checking
         run: |
-          xcodebuild -project macos/FlashDesk.xcodeproj -scheme FlashDesk \
+          xcodebuild -project macos/ChipDock.xcodeproj -scheme ChipDock \
             -configuration Debug -destination 'platform=macOS' \
             -derivedDataPath .build/Xcode -clonedSourcePackagesDirPath .build/SourcePackages \
-            -resultBundlePath .build/TestResults/FlashDesk.xcresult SWIFT_TREAT_WARNINGS_AS_ERRORS=YES test
+            -resultBundlePath .build/TestResults/ChipDock.xcresult SWIFT_TREAT_WARNINGS_AS_ERRORS=YES test
       - name: Verify generated bindings are current
-        run: git diff --exit-code -- macos/FlashDesk/Generated
+        run: git diff --exit-code -- macos/ChipDock/Generated
       - name: Upload Xcode test results
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: xcode-test-results-${{ matrix.arch }}
-          path: .build/TestResults/FlashDesk.xcresult
+          path: .build/TestResults/ChipDock.xcresult
           if-no-files-found: ignore
           include-hidden-files: true
 
@@ -86,7 +86,7 @@ jobs:
       - name: Verify release tag matches Rust version
         run: |
           CORE_VERSION="$(cargo metadata --format-version 1 --no-deps --locked | \
-            python3 -c 'import json, sys; print(next(p["version"] for p in json.load(sys.stdin)["packages"] if p["name"] == "flashdesk-core"))')"
+            python3 -c 'import json, sys; print(next(p["version"] for p in json.load(sys.stdin)["packages"] if p["name"] == "chipdock-core"))')"
           if [[ "$RELEASE_TAG" != "v$CORE_VERSION" ]]; then
             echo "error: Release tag $RELEASE_TAG does not match Rust version v$CORE_VERSION" >&2
             exit 1
@@ -95,7 +95,7 @@ jobs:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
       - name: Build universal native app
         run: |
-          xcodebuild -project macos/FlashDesk.xcodeproj -scheme FlashDesk \
+          xcodebuild -project macos/ChipDock.xcodeproj -scheme ChipDock \
             -configuration Release -destination 'generic/platform=macOS' \
             -derivedDataPath .build/Release -clonedSourcePackagesDirPath .build/SourcePackages \
             ONLY_ACTIVE_ARCH=NO CURRENT_PROJECT_VERSION="$BUILD_NUMBER" build

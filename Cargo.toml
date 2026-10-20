@@ -1,12 +1,12 @@
 [workspace]
 members = [
-    "crates/flashdesk-core",
-    "crates/flashdesk-bindgen",
-    "crates/flashdesk-csharp",
-    "crates/flashdesk-csharp-bindgen",
-    "crates/flashdesk-release-notes",
+    "crates/chipdock-core",
+    "crates/chipdock-bindgen",
+    "crates/chipdock-csharp",
+    "crates/chipdock-csharp-bindgen",
+    "crates/chipdock-release-notes",
 ]
-default-members = ["crates/flashdesk-core"]
+default-members = ["crates/chipdock-core"]
 resolver = "3"
 
 [workspace.package]
@@ -19,8 +19,8 @@ authors = ["tangxiangong <tangxiangong@gmail.com>"]
 uniffi = "=0.32.2"
 interoptopus = "0.16"
 interoptopus_csharp = "0.16"
-flashdesk-core = { path = "crates/flashdesk-core" }
-flashdesk-csharp = { path = "crates/flashdesk-csharp" }
+chipdock-core = { path = "crates/chipdock-core" }
+chipdock-csharp = { path = "crates/chipdock-csharp" }
 tempfile = "3"
 
 [profile.release]

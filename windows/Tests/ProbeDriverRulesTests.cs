@@ -1,4 +1,4 @@
-namespace FlashDesk.Tests;
+namespace ChipDock.Tests;
 
 internal static class ProbeDriverRulesTests
 {

@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Portable driver policies and simulations, updates, Windows USB discovery and the Rust/C# bridge.
+       Run with the built chipdock_csharp library to include the bridge checks. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>ChipDock</RootNamespace>
+    <AssemblyName>ChipDock.Tests</AssemblyName>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Velopack" Version="1.2.161" />
+    <Compile Include="../ChipDock/Services/UpdateFeed.cs" Link="Linked/UpdateFeed.cs" />
+    <Compile Include="../ChipDock/Services/UpdateSource.cs" Link="Linked/UpdateSource.cs" />
+    <Compile Include="../ChipDock/Services/RustCore.cs" Link="Linked/RustCore.cs" />
+    <Compile Include="../ChipDock/Services/RecentFirmwareHistory.cs" Link="Linked/RecentFirmwareHistory.cs" />
+    <Compile Include="../ChipDock/Support/ActivityText.cs" Link="Linked/ActivityText.cs" />
+    <Compile Include="../ChipDock/Services/ProbeDriver.cs" Link="Linked/ProbeDriver.cs" />
+    <Compile Include="../ChipDock/Services/ProbeUsb.cs" Link="Linked/ProbeUsb.cs" />
+    <Compile Include="../ChipDock/Services/ProbeDriverRules.cs" Link="Linked/ProbeDriverRules.cs" />
+    <Compile Include="../ChipDock/Generated/*.cs" Link="Generated/%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>

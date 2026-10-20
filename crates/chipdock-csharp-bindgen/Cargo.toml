@@ -1,0 +1,10 @@
+[package]
+name = "chipdock-csharp-bindgen"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+chipdock-csharp.workspace = true
+interoptopus_csharp.workspace = true

@@ -27,8 +27,8 @@ macOS 上常见 USB 调试探针通常无需额外驱动。使用 Apple 芯片�
 
 需要 **macOS 14+、Xcode 26+**，以及通过 [rustup](https://rustup.rs/) 安装的稳定版 Rust。
 
-1. 打开 `macos/FlashDesk.xcodeproj`。
-2. 选择 **FlashDesk → My Mac**。
+1. 打开 `macos/ChipDock.xcodeproj`。
+2. 选择 **ChipDock → My Mac**。
 3. 按 **⌘R** 构建运行。
 
 Xcode 会解析 Sparkle 包依赖、编译 Rust 静态库、生成 UniFFI 绑定并链接应用。首次构建需要下载依赖。
@@ -41,13 +41,13 @@ Xcode 会解析 Sparkle 包依赖、编译 Rust 静态库、生成 UniFFI 绑定
 
 ### Windows
 
-需要 Visual Studio 2026（Windows 应用开发与 C++ 桌面开发工具）、.NET 10 和 Rust MSVC 工具链。打开 `windows/FlashDesk.sln`，选择 `x64` 或 `ARM64` 后生成运行；MSBuild 会编译 Rust 动态库并生成 C# 绑定。
+需要 Visual Studio 2026（Windows 应用开发与 C++ 桌面开发工具）、.NET 10 和 Rust MSVC 工具链。打开 `windows/ChipDock.sln`，选择 `x64` 或 `ARM64` 后生成运行；MSBuild 会编译 Rust 动态库并生成 C# 绑定。
 
 ## 架构
 
 ```text
 macos/
-  FlashDesk/                SwiftUI 应用
+  ChipDock/                SwiftUI 应用
     App/                    应用入口与菜单
     Views/                  原生界面
     Stores/                 应用状态与操作流程
@@ -55,11 +55,11 @@ macos/
     Models/ Support/        数据模型与辅助功能
     Generated/              UniFFI 生成的 Swift / C 绑定
     Resources/              应用元数据、图标与许可证
-  FlashDeskTests/           应用集成与更新回归测试
-  FlashDesk.xcodeproj/      Xcode 工程与 Swift 包锁文件
+  ChipDockTests/           应用集成与更新回归测试
+  ChipDock.xcodeproj/      Xcode 工程与 Swift 包锁文件
   project.yml               XcodeGen 工程定义
 windows/
-  FlashDesk/                WinUI 3 应用
+  ChipDock/                WinUI 3 应用
     Views/ Stores/          原生界面与应用状态
     Services/               Rust 调用、运行时引导、设置与 Velopack 更新
     Generated/              Interoptopus 生成的 C# 绑定
@@ -67,12 +67,12 @@ windows/
   Tests/                    更新验证与 Rust/C# 桥接测试
   UpdateTool/               更新密钥生成、签名与发布校验
   scripts/                  安装包构建与发布
-  FlashDesk.sln             Visual Studio 解决方案
+  ChipDock.sln             Visual Studio 解决方案
 crates/
-  flashdesk-core/           固件分析、目标连接、烧录、内存与存储
-  flashdesk-bindgen/        UniFFI 绑定生成工具
-  flashdesk-csharp/         Windows 的 Interoptopus 导出层
-  flashdesk-csharp-bindgen/ C# 绑定生成工具
+  chipdock-core/           固件分析、目标连接、烧录、内存与存储
+  chipdock-bindgen/        UniFFI 绑定生成工具
+  chipdock-csharp/         Windows 的 Interoptopus 导出层
+  chipdock-csharp-bindgen/ C# 绑定生成工具
 script/                     构建、运行、测试与发布工具
 ```
 
@@ -84,18 +84,18 @@ Rust Core 提供类型化 API、结构化错误和进度事件。硬件操作串
 
 ```sh
 cargo fmt --all -- --check
-cargo clippy --locked -p flashdesk-core -p flashdesk-bindgen --all-targets -- -D warnings
+cargo clippy --locked -p chipdock-core -p chipdock-bindgen --all-targets -- -D warnings
 ./script/test_backend.sh
 ./script/test_updates.sh
-cargo test --locked -p flashdesk-release-notes
-xcodebuild -project macos/FlashDesk.xcodeproj -scheme FlashDesk \
+cargo test --locked -p chipdock-release-notes
+xcodebuild -project macos/ChipDock.xcodeproj -scheme ChipDock \
   -configuration Debug -destination 'platform=macOS' \
   -derivedDataPath .build/Xcode test
 ```
 
 - `test_backend.sh` 运行 Rust Core 单元测试和独立的 Swift/UniFFI 集成测试，不启动应用或连接硬件。
 - `test_updates.sh` 验证更新包签名、文件长度、版本、下载地址，以及发布回退保护。
-- `flashdesk-release-notes` 的逻辑测试覆盖通用公告、平台筛选、Markdown 保留和错误标记拦截。
+- `chipdock-release-notes` 的逻辑测试覆盖通用公告、平台筛选、Markdown 保留和错误标记拦截。
 - Xcode 测试覆盖应用集成、窗口回归、Sparkle 配置和硬件操作期间的重启保护。
 
 测试按平台划分，均不访问硬件：`Rust` 工作流在 Linux 上检查格式并测试与平台无关的 Rust Core；`macOS` 工作流在 Apple Silicon 和 Intel 上测试 Rust Core、UniFFI 桥接与应用，并保存 Xcode 测试报告；`Windows` 工作流在 x64 与 ARM64 上测试 Rust Core、Interoptopus 桥接与应用。Windows 的测试与 CI 见 [windows/README.md](windows/README.md#测试)。
@@ -108,13 +108,13 @@ xcodebuild -project macos/FlashDesk.xcodeproj -scheme FlashDesk \
 
 Sparkle 验证 Ed25519 签名后安装更新并重新启动应用。硬件操作未完成时，应用会延后更新重启。
 
-macOS 启动时优先选择 `tangxiangong/chipdock` 的 `update-feed/appcast.xml`，新源尚不可用时使用 `tangxiangong/flashdesk`。Windows 每次检查均优先新仓库，网络失败时回退旧仓库；更新包下载也支持两个地址，签名或哈希错误不会触发回退。两端继续使用原签名密钥、安装标识与配置目录，Windows 的 Velopack 包 ID 和可执行文件名保留 `FlashDesk`，以支持原地升级。
+macOS 启动时优先选择 `tangxiangong/chipdock` 的 `update-feed/appcast.xml`，新源尚不可用时使用 `tangxiangong/flashdesk`。Windows 每次检查均优先新仓库，网络失败时回退旧仓库；更新包下载也支持两个地址，签名或哈希错误不会触发回退。两端继续使用原签名密钥、安装标识与配置目录，Windows 的 Velopack 包 ID 保留 `FlashDesk`，源码中的可执行文件名已统一为 `ChipDock.exe`。
 
 先发布 v0.1.2，再将 GitHub 仓库改名为 `chipdock`；发布脚本会随 `GITHUB_REPOSITORY` 自动使用当前仓库。请保留 GitHub 的旧地址重定向，不要重新占用 `flashdesk` 名称。
 
 ## 发布
 
-1. 同步 `Cargo.toml`、`macos/project.yml` 和 `windows/FlashDesk/FlashDesk.csproj` 中的版本，在 `macos/` 下运行 `xcodegen generate`。
+1. 同步 `Cargo.toml`、`macos/project.yml` 和 `windows/ChipDock/ChipDock.csproj` 中的版本，在 `macos/` 下运行 `xcodegen generate`。
 2. GitHub 仓库的 `release` 环境需要 `SPARKLE_PRIVATE_ED_KEY` 与 `WINDOWS_UPDATE_PRIVATE_KEY` secret，分别对应工程内的 Sparkle 公钥和 Windows 更新公钥（均已配置）。
 3. 创建与版本一致的标签，例如 `v0.1.0`，并发布 GitHub Release。
 
@@ -122,7 +122,7 @@ macOS 启动时优先选择 `tangxiangong/chipdock` 的 `update-feed/appcast.xml
 
 CI 通过全部检查后，构建 Apple Silicon + Intel universal 应用，生成 `ChipDock-<版本号>-macOS-universal.zip` 和签名 appcast。版本包上传完成后，才会更新 `update-feed`；流程会拒绝版本回退或覆盖内容不同的已发布安装包。
 
-应用使用 ad-hoc 代码签名，更新包使用独立的 Sparkle Ed25519 签名。FlashDesk 的本机签名密钥保存在登录钥匙串的 `com.xiaoyu.flashdesk` 账户下；私钥不属于项目文件。
+应用使用 ad-hoc 代码签名，更新包使用独立的 Sparkle Ed25519 签名。ChipDock 的本机签名密钥保存在登录钥匙串的 `com.xiaoyu.flashdesk` 账户下；私钥不属于项目文件。
 
 本机已构建 Release 应用时，可直接打包并验证：
 
@@ -134,7 +134,7 @@ CI 通过全部检查后，构建 Apple Silicon + Intel universal 应用，生�
 
 ### 分平台更新公告
 
-GitHub Release 正文可以使用与 BibCiTeX 相同的平台标记。macOS 与 Windows 打包脚本使用同一个 `flashdesk-release-notes` 解析器，分别将“通用内容 + 本平台内容”写入 Sparkle appcast 和 Velopack 更新包；GitHub 保留完整正文。没有标记的旧公告仍全部显示。
+GitHub Release 正文可以使用与 BibCiTeX 相同的平台标记。macOS 与 Windows 打包脚本使用同一个 `chipdock-release-notes` 解析器，分别将“通用内容 + 本平台内容”写入 Sparkle appcast 和 Velopack 更新包；GitHub 保留完整正文。没有标记的旧公告仍全部显示。
 
 ```markdown
 # 本次更新
@@ -161,8 +161,8 @@ GitHub Release 正文可以使用与 BibCiTeX 相同的平台标记。macOS 与 
 本地预览，无需构建应用或发布（`ReleaseNotes.md` 为待发布的完整正文）：
 
 ```sh
-cargo run --locked -p flashdesk-release-notes -- macos ReleaseNotes.md .build/notes-macos.md
-cargo run --locked -p flashdesk-release-notes -- windows ReleaseNotes.md .build/notes-windows.md
+cargo run --locked -p chipdock-release-notes -- macos ReleaseNotes.md .build/notes-macos.md
+cargo run --locked -p chipdock-release-notes -- windows ReleaseNotes.md .build/notes-windows.md
 ```
 
 本机 macOS 打包通过 `RELEASE_NOTES_FILE` 传入完整正文；Windows 使用 `publish.ps1 -ReleaseNotes`。CI 会自动读取 GitHub Release 正文并按平台筛选，不修改 GitHub 公告，也不回写已发布的更新源。

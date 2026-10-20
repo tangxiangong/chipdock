@@ -8,8 +8,8 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_BUNDLE="${APP_BUNDLE:-$PROJECT_ROOT/.build/Release/Build/Products/Release/ChipDock.app}"
 OUTPUT_DIR="${RELEASE_OUTPUT_DIR:-$PROJECT_ROOT/.build/ReleaseAssets}"
 SPARKLE_BIN="${SPARKLE_BIN:-$PROJECT_ROOT/.build/SourcePackages/artifacts/sparkle/Sparkle/bin}"
-GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-tangxiangong/flashdesk}"
-WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/flashdesk-release.XXXXXX")"
+GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-tangxiangong/chipdock}"
+WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/chipdock-release.XXXXXX")"
 trap 'rm -rf "$WORK_DIR"' EXIT
 mkdir -p "$OUTPUT_DIR" "$WORK_DIR/archives"
 [[ -x "$APP_BUNDLE/Contents/MacOS/ChipDock" && -x "$SPARKLE_BIN/generate_appcast" ]] || {
@@ -39,7 +39,7 @@ ARCHITECTURES="$(/usr/bin/lipo -archs "$APP_BUNDLE/Contents/MacOS/ChipDock")"
 
 ARCHIVE_NAME="ChipDock-$APP_VERSION-macOS-universal.zip"
 if [[ -n "${RELEASE_NOTES_FILE:-}" ]]; then
-    cargo run --quiet --locked --manifest-path "$PROJECT_ROOT/Cargo.toml" -p flashdesk-release-notes -- \
+    cargo run --quiet --locked --manifest-path "$PROJECT_ROOT/Cargo.toml" -p chipdock-release-notes -- \
         macos "$RELEASE_NOTES_FILE" "$WORK_DIR/archives/${ARCHIVE_NAME%.zip}.md"
 fi
 

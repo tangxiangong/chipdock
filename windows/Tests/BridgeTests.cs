@@ -1,6 +1,6 @@
-using FlashDesk.Core;
+using ChipDock.Core;
 
-namespace FlashDesk.Tests;
+namespace ChipDock.Tests;
 
 /// Exercises the real Rust/C# boundary without debug hardware.
 internal static class BridgeTests
@@ -15,7 +15,7 @@ internal static class BridgeTests
         var map = await RustCore.TargetMemoryMap(chips[0]);
         Check.That(map.Any(region => region.kind.IsNvm) && map.Any(region => region.kind.IsRam), "memory map lists flash and RAM");
 
-        var directory = Path.Combine(Path.GetTempPath(), $"FlashDesk-bridge-{Guid.NewGuid():N}");
+        var directory = Path.Combine(Path.GetTempPath(), $"ChipDock-bridge-{Guid.NewGuid():N}");
         Directory.CreateDirectory(directory);
         try
         {
@@ -56,7 +56,7 @@ internal static class BridgeTests
 
             var read = await Failure(() => RustCore.ReadMemory(new MemoryRequest
             {
-                probe = "ffff:ffff:flashdesk-missing-probe",
+                probe = "ffff:ffff:chipdock-missing-probe",
                 target = target,
                 address = 0x0800_0000,
                 length = 64,

@@ -25,7 +25,7 @@ if pgrep -x ChipDock >/dev/null; then
     fi
 fi
 
-xcodebuild -project "$PROJECT_ROOT/macos/FlashDesk.xcodeproj" -scheme FlashDesk \
+xcodebuild -project "$PROJECT_ROOT/macos/ChipDock.xcodeproj" -scheme ChipDock \
     -configuration Debug -destination 'platform=macOS' -derivedDataPath "$DERIVED_DATA" build
 
 case "$MODE" in

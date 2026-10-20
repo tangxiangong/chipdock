@@ -8,20 +8,20 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $Repo = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
-$Project = Join-Path $Repo 'windows/FlashDesk/FlashDesk.csproj'
-$Repository = if ($env:GITHUB_REPOSITORY) { $env:GITHUB_REPOSITORY } else { 'tangxiangong/flashdesk' }
+$Project = Join-Path $Repo 'windows/ChipDock/ChipDock.csproj'
+$Repository = if ($env:GITHUB_REPOSITORY) { $env:GITHUB_REPOSITORY } else { 'tangxiangong/chipdock' }
 $Tag = "v$Version"
 $Architectures = @('x64', 'arm64')
 if (-not $env:WINDOWS_UPDATE_PRIVATE_KEY) { throw 'Configure the WINDOWS_UPDATE_PRIVATE_KEY release secret before publishing.' }
 if (-not $env:GH_TOKEN) { throw 'GH_TOKEN is required for publication.' }
 
-$Work = Join-Path ([IO.Path]::GetTempPath()) "flashdesk-windows-release-$([guid]::NewGuid().ToString('N'))"
+$Work = Join-Path ([IO.Path]::GetTempPath()) "chipdock-windows-release-$([guid]::NewGuid().ToString('N'))"
 New-Item -ItemType Directory $Work | Out-Null
 try {
-    & dotnet build (Join-Path $Repo 'windows/UpdateTool/FlashDesk.UpdateTool.csproj') -c Release -o (Join-Path $Work 'tool')
+    & dotnet build (Join-Path $Repo 'windows/UpdateTool/ChipDock.UpdateTool.csproj') -c Release -o (Join-Path $Work 'tool')
     if ($LASTEXITCODE -ne 0) { throw 'Update tool build failed.' }
     function Invoke-UpdateTool {
-        & dotnet (Join-Path $Work 'tool/FlashDesk.UpdateTool.dll') @args
+        & dotnet (Join-Path $Work 'tool/ChipDock.UpdateTool.dll') @args
         if ($LASTEXITCODE -ne 0) { throw "Update tool failed: $($args[0])" }
     }
 

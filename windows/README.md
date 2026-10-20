@@ -21,27 +21,27 @@ C# / WinUI 3（Windows App SDK 2.5.1）原生客户端，与 macOS 版共享 Rus
 
 ## Visual Studio
 
-安装 Visual Studio 2026 的 Windows 应用开发、C++ 桌面开发工具和对应 Windows SDK，.NET 10 LTS、Rust MSVC 工具链。打开 `windows/FlashDesk.sln`，选择 `Debug` / `Release` 和 `x64` / `ARM64` 后直接生成并运行。
+安装 Visual Studio 2026 的 Windows 应用开发、C++ 桌面开发工具和对应 Windows SDK，.NET 10 LTS、Rust MSVC 工具链。打开 `windows/ChipDock.sln`，选择 `Debug` / `Release` 和 `x64` / `ARM64` 后直接生成并运行。
 
-MSBuild（`FlashDesk/Build/Rust.targets`）会依次构建 `flashdesk-csharp` 动态库、运行 Interoptopus 生成器，再编译 WinUI；不需要预先执行脚本。有 rustup 时自动补齐所选目标和生成器宿主目标；找不到 Cargo 时依次检查 PATH 和 `%USERPROFILE%/.cargo/bin/cargo.exe`。设计时 IntelliSense 使用已签入的绑定，不启动 Cargo。
+MSBuild（`ChipDock/Build/Rust.targets`）会依次构建 `chipdock-csharp` 动态库、运行 Interoptopus 生成器，再编译 WinUI；不需要预先执行脚本。有 rustup 时自动补齐所选目标和生成器宿主目标；找不到 Cargo 时依次检查 PATH 和 `%USERPROFILE%/.cargo/bin/cargo.exe`。设计时 IntelliSense 使用已签入的绑定，不启动 Cargo。
 
 命令行使用同一构建链：
 
 ```powershell
-dotnet build windows/FlashDesk.sln -c Debug -p:Platform=x64
-dotnet build windows/FlashDesk.sln -c Release -p:Platform=ARM64
+dotnet build windows/ChipDock.sln -c Debug -p:Platform=x64
+dotnet build windows/ChipDock.sln -c Release -p:Platform=ARM64
 ```
 
-Rust 动态库位于 `target/<目标三元组>/<debug或release>/flashdesk_csharp.dll`，构建时复制到应用目录。
+Rust 动态库位于 `target/<目标三元组>/<debug或release>/chipdock_csharp.dll`，构建时复制到应用目录。
 
 ## 桥接
 
 与 BibCiTeX 相同，Windows 使用 Interoptopus 0.16 生成 C# 绑定，macOS 继续使用 UniFFI：
 
-- `crates/flashdesk-core`：`csharp` 特性为共享模型添加 Interoptopus 类型元数据，业务逻辑不重复。
-- `crates/flashdesk-csharp`：薄导出层。请求和响应均为类型化 Wire 结构，错误以 `ErrorResponse` 返回，保留候选目标与恢复建议；Rust panic 在边界转换为结果。时间戳在 C# 侧为 Unix 毫秒。
-- `crates/flashdesk-csharp-bindgen`：生成 `FlashDesk/Generated/Interop.cs`（命名空间 `FlashDesk.Core`）。修改 Rust API 后 MSBuild 会重新生成，也可以手动运行 `cargo run -p flashdesk-csharp-bindgen`。
-- `FlashDesk/Services/RustCore.cs`：在线程池调用阻塞的硬件与文件操作，释放 Wire 缓冲区并把错误转换为 `CoreException`。烧录和擦除期间 UI 线程每 100 ms 取一次进度事件。
+- `crates/chipdock-core`：`csharp` 特性为共享模型添加 Interoptopus 类型元数据，业务逻辑不重复。
+- `crates/chipdock-csharp`：薄导出层。请求和响应均为类型化 Wire 结构，错误以 `ErrorResponse` 返回，保留候选目标与恢复建议；Rust panic 在边界转换为结果。时间戳在 C# 侧为 Unix 毫秒。
+- `crates/chipdock-csharp-bindgen`：生成 `ChipDock/Generated/Interop.cs`（命名空间 `ChipDock.Core`）。修改 Rust API 后 MSBuild 会重新生成，也可以手动运行 `cargo run -p chipdock-csharp-bindgen`。
+- `ChipDock/Services/RustCore.cs`：在线程池调用阻塞的硬件与文件操作，释放 Wire 缓冲区并把错误转换为 `CoreException`。烧录和擦除期间 UI 线程每 100 ms 取一次进度事件。
 
 配置与最近使用的固件由 Rust Core 存储在 `%APPDATA%\FlashDesk`；外观、烧录默认值与更新偏好存储在 `%LOCALAPPDATA%\FlashDesk\settings.json`。
 
@@ -49,9 +49,9 @@ Rust 动态库位于 `target/<目标三元组>/<debug或release>/flashdesk_cshar
 
 ## 运行时
 
-应用为非打包、依赖框架的 WinUI 3。`Program.Main` 在加载 WinUI 前检查 Windows App Runtime 2.5.1，缺失时下载微软安装程序、校验固定的 SHA-256 后静默安装；已有兼容版本时直接使用。`FlashDesk.exe --prepare-runtime` 只准备运行时，不打开界面。升级 Windows App SDK 时需同时更新 `WindowsRuntime.cs` 中的版本、下载地址和哈希。
+应用为非打包、依赖框架的 WinUI 3。`Program.Main` 在加载 WinUI 前检查 Windows App Runtime 2.5.1，缺失时下载微软安装程序、校验固定的 SHA-256 后静默安装；已有兼容版本时直接使用。`ChipDock.exe --prepare-runtime` 只准备运行时，不打开界面。升级 Windows App SDK 时需同时更新 `WindowsRuntime.cs` 中的版本、下载地址和哈希。
 
-调试探针通过 probe-rs 访问。连接时，应用检查所选探针的 USB 调试接口；缺少驱动、已绑定可识别的旧版驱动或缺少 WinUSB 接口 GUID 时，通过 UAC 授权运行短时安装进程，尝试绑定 Windows 内置且已签名的 WinUSB、补齐接口 GUID，然后等待设备启动且访问路径启用后继续连接。要求使用与 Windows 架构一致的 x64 / ARM64 版 FlashDesk，无需下载旧版协同安装程序。已有正常 WinUSB 不重复安装；取消授权、拔出设备、安装失败或需要重启均会显示具体提示。
+调试探针通过 probe-rs 访问。连接时，应用检查所选探针的 USB 调试接口；缺少驱动、已绑定可识别的旧版驱动或缺少 WinUSB 接口 GUID 时，通过 UAC 授权运行短时安装进程，尝试绑定 Windows 内置且已签名的 WinUSB、补齐接口 GUID，然后等待设备启动且访问路径启用后继续连接。要求使用与 Windows 架构一致的 x64 / ARM64 版 ChipDock，无需下载旧版协同安装程序。已有正常 WinUSB 不重复安装；取消授权、拔出设备、安装失败或需要重启均会显示具体提示。
 
 | 类型 | 自动安装 / 修复范围 |
 | --- | --- |
@@ -78,18 +78,18 @@ Rust 动态库位于 `target/<目标三元组>/<debug或release>/flashdesk_cshar
 Windows 构建没有代码签名证书，因此更新信息单独签名：
 
 - 每个架构使用一个通道（`win-x64`、`win-arm64`）。`update-feed` Release 上的 `releases.win-<arch>.signed.json` 把 Velopack 的 `releases.win-<arch>.json` 和它的 ECDSA P-256 签名放在同一个文件中，替换期间不会出现更新信息与签名不匹配。
-- 应用先用 `FlashDesk.csproj` 中 `UpdatePublicKey` 嵌入的公钥验证签名，再解析内容：只接受一个 `FlashDesk` 的稳定版完整包，文件名必须是安全的 `.nupkg` 基本名，并给出大小和 SHA-256。安装包从对应的 `v<版本号>` Release 下载，下载后校验大小与 SHA-256，不一致时删除；Velopack 不会安装比当前更旧的版本。
+- 应用先用 `ChipDock.csproj` 中 `UpdatePublicKey` 嵌入的公钥验证签名，再解析内容：只接受一个包 ID 为 `FlashDesk` 的稳定版完整包，文件名必须是安全的 `.nupkg` 基本名，并给出大小和 SHA-256。安装包从对应的 `v<版本号>` Release 下载，下载后校验大小与 SHA-256，不一致时删除；Velopack 不会安装比当前更旧的版本。
 - 首次发布前没有更新信息，检查更新会提示暂时无法获取更新信息。
 
 ### 签名密钥
 
-公钥已写入 `FlashDesk.csproj` 的 `<UpdatePublicKey>`，对应的私钥保存在 GitHub `release` 环境的 `WINDOWS_UPDATE_PRIVATE_KEY` secret 中，不在仓库内。发布时会先用私钥签名，再用工程公钥验证，两者不匹配即失败。
+公钥已写入 `ChipDock.csproj` 的 `<UpdatePublicKey>`，对应的私钥保存在 GitHub `release` 环境的 `WINDOWS_UPDATE_PRIVATE_KEY` secret 中，不在仓库内。发布时会先用私钥签名，再用工程公钥验证，两者不匹配即失败。
 
 需要更换密钥时运行 `dotnet run --project windows/UpdateTool -c Release -- keygen <私钥文件>`，用输出的公钥替换 `<UpdatePublicKey>`，再以 `gh secret set WINDOWS_UPDATE_PRIVATE_KEY --env release < 私钥文件` 更新 secret 并删除私钥文件。更换后，旧版本无法验证新的更新信息，需要用户手动安装新版本。
 
 ## 发布
 
-1. 同步 `Cargo.toml`、`macos/project.yml` 与 `windows/FlashDesk/FlashDesk.csproj` 中的版本；CI 会检查 Rust Core 与 Windows 应用版本一致。
+1. 同步 `Cargo.toml`、`macos/project.yml` 与 `windows/ChipDock/ChipDock.csproj` 中的版本；CI 会检查 Rust Core 与 Windows 应用版本一致。
 2. 创建与版本一致的标签（例如 `v0.1.0`）并发布 GitHub Release；Release 正文作为更新说明。
 
 `Windows` 工作流在 x64 与 ARM64 检查全部通过后，分别在对应架构的 Windows Runner 上运行 `windows/scripts/publish.ps1`：校验标签、Rust Core 与应用版本一致且已配置公钥，`dotnet publish` 依赖框架的输出，再用 `vpk pack` 生成：
@@ -108,18 +108,18 @@ Windows 构建没有代码签名证书，因此更新信息单独签名：
 ## 测试
 
 ```powershell
-cargo test --locked -p flashdesk-core -p flashdesk-csharp --all-targets --all-features
-dotnet run --project windows/Tests -- target/x86_64-pc-windows-msvc/debug/flashdesk_csharp.dll
+cargo test --locked -p chipdock-core -p chipdock-csharp --all-targets --all-features
+dotnet run --project windows/Tests -- target/x86_64-pc-windows-msvc/debug/chipdock_csharp.dll
 dotnet run --project windows/Tests -- --workbench-only
 ```
 
 - Rust 测试经由 Wire 编码调用导出函数，覆盖芯片搜索、配置与最近文件的往返（含中文路径与 1970 年前的时间戳）、无效配置 ID 的结构化错误、进度时间戳换算和 panic 边界。
 - `--workbench-only` 仅运行可移植的历史记录与进度文字逻辑检查，覆盖文件失效与恢复、清理、并发保存顺序、保存失败后的恢复、Windows 路径大小写和百分比处理，不启动 WinUI 或调用设备 API。
-- `windows/Tests` 是可移植的 .NET 程序：更新部分覆盖签名验证、篡改与错误密钥、更新信息的结构限制、危险文件名、下载地址、包校验、取消与发布回退保护；传入已构建的 `flashdesk_csharp` 动态库时，还通过生成的 C# 绑定调用真实的 Rust Core（芯片搜索、内存映射、BIN 分析、结构化错误、配置与最近文件往返），不连接目标芯片。不传参数时跳过 Rust/C# 桥接检查。
+- `windows/Tests` 是可移植的 .NET 程序：更新部分覆盖签名验证、篡改与错误密钥、更新信息的结构限制、危险文件名、下载地址、包校验、取消与发布回退保护；传入已构建的 `chipdock_csharp` 动态库时，还通过生成的 C# 绑定调用真实的 Rust Core（芯片搜索、内存映射、BIN 分析、结构化错误、配置与最近文件往返），不连接目标芯片。不传参数时跳过 Rust/C# 桥接检查。
 - USB 驱动策略和模拟安装流程可在宿主机独立运行：`dotnet run --project windows/Tests -- --driver-rules-only`。覆盖型号与接口筛选、HID/串口/存储保护、旧驱动迁移、单设备补充发现、多设备歧义、FTDI 通道、Glasgow 接口对、ST-Link 短序列号、GUID 修复，以及取消、失败、重启要求、延迟就绪和设备拔出。它们不调用 Windows 安装 API。仅在 Windows 上额外运行真实 SetupAPI 只读枚举、WinUSB 预检与接口状态检查；传入 Rust 动态库后还核对真实 ST-Link 选择器。测试不会安装驱动或连接目标芯片；模拟测试不能替代 Windows x64 / ARM64 实机驱动验收。
 
 `.github/workflows/windows.yml` 在 x64 与 ARM64 上运行 Rust Core 与 Interoptopus 桥接的 Clippy 和测试、WinUI 编译、绑定一致性检查、`windows/Tests` 和发布资源检查；macOS 不测试 Windows 桥接。界面通过人工验收。
 
 ### v0.1.2 改名过渡
 
-应用与安装程序显示为 ChipDock；`FlashDesk.exe`、Velopack 包 ID、配置目录与更新验证公钥保持不变。更新检查优先 `tangxiangong/chipdock`，网络不可用时回退 `tangxiangong/flashdesk`；包下载使用相同迁移策略，签名或哈希失败直接拒绝更新。发布脚本使用 `GITHUB_REPOSITORY`，支持在仓库改名前后继续发布。
+应用与安装程序显示为 ChipDock；源码工程与可执行文件名统一为 `ChipDock` / `ChipDock.exe`，Velopack 包 ID `FlashDesk`、原配置目录与更新验证公钥保持不变。更新检查优先 `tangxiangong/chipdock`，网络不可用时回退 `tangxiangong/flashdesk`；包下载使用相同迁移策略，签名或哈希失败直接拒绝更新。发布脚本使用 `GITHUB_REPOSITORY`，支持在仓库改名前后继续发布。

@@ -1,6 +1,6 @@
-using FlashDesk.Core;
+using ChipDock.Core;
 
-namespace FlashDesk.Tests;
+namespace ChipDock.Tests;
 
 /// Portable history and display logic; no WinUI or native device APIs are used.
 internal static class WorkbenchTests
@@ -22,7 +22,7 @@ internal static class WorkbenchTests
 
     private static async Task MissingFilesCanBeRefreshedAndRemoved()
     {
-        var directory = Path.Combine(Path.GetTempPath(), $"FlashDesk-history-{Guid.NewGuid():N}");
+        var directory = Path.Combine(Path.GetTempPath(), $"ChipDock-history-{Guid.NewGuid():N}");
         Directory.CreateDirectory(directory);
         try
         {
