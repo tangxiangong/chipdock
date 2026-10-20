@@ -1,8 +1,8 @@
-# FlashDesk
+# ChipDock
 
-FlashDesk 是原生嵌入式固件工作台：macOS 版使用 **SwiftUI + UniFFI**，Windows 版使用 **WinUI 3 + Interoptopus**，两者共享同一个 **Rust Core**。
+ChipDock（原 FlashDesk）是原生嵌入式开发工具集：macOS 版使用 **SwiftUI + UniFFI**，Windows 版使用 **WinUI 3 + Interoptopus**，两者共享同一个 **Rust Core**。
 
-当前版本：**v0.1.0**。源代码：[tangxiangong/flashdesk](https://github.com/tangxiangong/flashdesk)。
+当前版本：**v0.1.2**（改名过渡版）。目标仓库：[tangxiangong/chipdock](https://github.com/tangxiangong/chipdock)。仓库改名前仍从原 FlashDesk 仓库发布。
 
 ## 功能
 
@@ -104,11 +104,13 @@ xcodebuild -project macos/FlashDesk.xcodeproj -scheme FlashDesk \
 
 以下为 macOS；Windows 的行为相同，细节见 [windows/README.md](windows/README.md#自动更新)。
 
-从 **FlashDesk → 检查更新…** 或设置的“关于”页面手动检查。默认每 6 小时自动检查；自动检查和自动下载安装均可在设置中关闭。
+从 **ChipDock → 检查更新…** 或设置的“关于”页面手动检查。默认每 6 小时自动检查；自动检查和自动下载安装均可在设置中关闭。
 
 Sparkle 验证 Ed25519 签名后安装更新并重新启动应用。硬件操作未完成时，应用会延后更新重启。
 
-更新源使用 GitHub Release 中的 `update-feed/appcast.xml`。首次发布前没有 appcast，检查更新会提示暂时无法获取更新信息。
+macOS 启动时优先选择 `tangxiangong/chipdock` 的 `update-feed/appcast.xml`，新源尚不可用时使用 `tangxiangong/flashdesk`。Windows 每次检查均优先新仓库，网络失败时回退旧仓库；更新包下载也支持两个地址，签名或哈希错误不会触发回退。两端继续使用原签名密钥、安装标识与配置目录，Windows 的 Velopack 包 ID 和可执行文件名保留 `FlashDesk`，以支持原地升级。
+
+先发布 v0.1.2，再将 GitHub 仓库改名为 `chipdock`；发布脚本会随 `GITHUB_REPOSITORY` 自动使用当前仓库。请保留 GitHub 的旧地址重定向，不要重新占用 `flashdesk` 名称。
 
 ## 发布
 
@@ -118,7 +120,7 @@ Sparkle 验证 Ed25519 签名后安装更新并重新启动应用。硬件操作
 
 `macOS` 与 `Windows` 两个工作流各自构建并上传本平台的安装包，再更新 `update-feed` 中本平台的更新信息。
 
-CI 通过全部检查后，构建 Apple Silicon + Intel universal 应用，生成 `FlashDesk-<版本号>-macOS-universal.zip` 和签名 appcast。版本包上传完成后，才会更新 `update-feed`；流程会拒绝版本回退或覆盖内容不同的已发布安装包。
+CI 通过全部检查后，构建 Apple Silicon + Intel universal 应用，生成 `ChipDock-<版本号>-macOS-universal.zip` 和签名 appcast。版本包上传完成后，才会更新 `update-feed`；流程会拒绝版本回退或覆盖内容不同的已发布安装包。
 
 应用使用 ad-hoc 代码签名，更新包使用独立的 Sparkle Ed25519 签名。FlashDesk 的本机签名密钥保存在登录钥匙串的 `com.xiaoyu.flashdesk` 账户下；私钥不属于项目文件。
 

@@ -64,7 +64,7 @@ New-Item -ItemType Directory -Force $OutputDirectory | Out-Null
 # MSI versions are numeric; the CI run number keeps them increasing independently of SemVer.
 if ($BuildNumber -ge 16777216) { throw 'MSI build sequence exhausted.' }
 $MsiVersion = "1.$([math]::Floor($BuildNumber / 65536)).$($BuildNumber % 65536)"
-& $Vpk pack --packId FlashDesk --packVersion $Version --packTitle FlashDesk --packAuthors tangxiangong `
+& $Vpk pack --packId FlashDesk --packVersion $Version --packTitle ChipDock --packAuthors tangxiangong `
     --packDir $Publish --mainExe FlashDesk.exe --icon (Join-Path $Repo 'windows/FlashDesk/Assets/FlashDesk.ico') `
     --runtime $InstallerRuntime --framework "net10.0-$Arch-runtime,vcredist143-$Arch" --channel $Rid `
     @NotesArguments --outputDir $OutputDirectory --msi --msiVersion $MsiVersion
@@ -73,7 +73,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Velopack packaging failed.' }
 foreach ($Extension in @('exe', 'msi')) {
     $Installers = @(Get-ChildItem $OutputDirectory -File -Filter "*.$Extension")
     if ($Installers.Count -ne 1) { throw "Expected one $Extension installer." }
-    Move-Item $Installers[0].FullName (Join-Path $OutputDirectory "FlashDesk-$Version-windows-$Arch.$Extension")
+    Move-Item $Installers[0].FullName (Join-Path $OutputDirectory "ChipDock-$Version-windows-$Arch.$Extension")
 }
 # Updates consume the full package through the signed feed; portable archives and
 # Velopack's other index files are not part of this distribution.

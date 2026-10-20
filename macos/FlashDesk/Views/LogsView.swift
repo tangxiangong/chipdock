@@ -43,7 +43,7 @@ struct LogsView: View {
                     .help("复制全部日志")
                     Button("导出…", systemImage: "square.and.arrow.up") {
                         store.requestExport(PendingExport(data: Data(store.logExportText.utf8), contentType: .plainText,
-                                                          filename: "FlashDesk.log", operation: "导出日志"))
+                                                          filename: "ChipDock.log", operation: "导出日志"))
                     }
                         .help("导出日志")
                     Button("清空", systemImage: "trash") { store.logs.removeAll() }

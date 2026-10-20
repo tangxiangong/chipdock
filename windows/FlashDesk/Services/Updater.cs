@@ -84,7 +84,7 @@ internal sealed class Updater
                 AllowVersionDowngrade = false,
                 MaximumDeltasBeforeFallback = -1,
             });
-            unavailable = manager.IsInstalled ? null : "开发构建不支持自动更新，请使用安装包安装 FlashDesk";
+            unavailable = manager.IsInstalled ? null : "开发构建不支持自动更新，请使用安装包安装 ChipDock";
             return manager.IsInstalled ? manager : null;
         }
         catch (Exception error)
@@ -176,7 +176,7 @@ internal sealed class Updater
             if (manual) AppSettings.LastUpdateCheck = DateTimeOffset.Now;
             if (update is null)
             {
-                if (manual) await ShowMessage("当前已是最新版本", $"FlashDesk {CurrentVersion} 是目前的最新版本。");
+                if (manual) await ShowMessage("当前已是最新版本", $"ChipDock {CurrentVersion} 是目前的最新版本。");
                 return;
             }
             var version = update.TargetFullRelease.Version.ToString();
@@ -208,7 +208,7 @@ internal sealed class Updater
             await manager!.DownloadUpdatesAsync(update, cancelToken: cancellation.Token);
             if (cancellation.IsCancellationRequested || !AutomaticDownloads) return;
             AppSettings.PendingUpdate = version;
-            store.AppendLog("更新", $"FlashDesk {version} 已下载，将在退出时安装");
+            store.AppendLog("更新", $"ChipDock {version} 已下载，将在退出时安装");
         }
         catch (OperationCanceledException) { }
         finally { backgroundDownload = null; }
@@ -228,7 +228,7 @@ internal sealed class Updater
             Padding = new Thickness(0),
         };
         var content = Ui.Column(12,
-            Ui.Text($"FlashDesk {version} 现已推出，当前版本为 {CurrentVersion}。", wrap: true),
+            Ui.Text($"ChipDock {version} 现已推出，当前版本为 {CurrentVersion}。", wrap: true),
             Notes(target.NotesMarkdown),
             releaseLink,
             progress,

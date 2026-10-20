@@ -24,7 +24,7 @@ internal sealed class MainWindow : Window
     internal Updater Updater { get; }
 
     private readonly Grid root = new();
-    private readonly TextBlock titleText = Ui.Text("FlashDesk", 12);
+    private readonly TextBlock titleText = Ui.Text("ChipDock", 12);
     private readonly ActivityView activity;
     private readonly FlashView flash;
     private readonly LogsView logs;
@@ -55,7 +55,7 @@ internal sealed class MainWindow : Window
 
     internal MainWindow()
     {
-        Title = "FlashDesk";
+        Title = "ChipDock";
         ExtendsContentIntoTitleBar = true;
         SystemBackdrop = MicaController.IsSupported() ? new MicaBackdrop() : new DesktopAcrylicBackdrop();
         AppWindow.TitleBar.PreferredHeightOption = TitleBarHeightOption.Tall;
@@ -102,11 +102,11 @@ internal sealed class MainWindow : Window
         menu.Items.Add(MenuGroup("查看", logsItem, memoryItem, new MenuFlyoutSeparator(),
             Ui.MenuItem("设置…", Glyphs.Settings, () => _ = ShowSettings(), "Ctrl+,")));
         menu.Items.Add(MenuGroup("帮助",
-            Ui.MenuItem("FlashDesk 源代码", null, () => OpenUri("https://github.com/tangxiangong/flashdesk")),
+            Ui.MenuItem("ChipDock 源代码", null, () => OpenUri("https://github.com/tangxiangong/chipdock")),
             Ui.MenuItem("probe-rs 文档", null, () => OpenUri("https://probe.rs/docs/")),
             new MenuFlyoutSeparator(),
             checkUpdatesItem,
-            Ui.MenuItem("关于 FlashDesk", Glyphs.Info, () => _ = ShowSettings())));
+            Ui.MenuItem("关于 ChipDock", Glyphs.Info, () => _ = ShowSettings())));
 
         var toolbar = new Grid { Padding = new Thickness(4, 0, 12, 8), ColumnSpacing = 12 };
         toolbar.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
@@ -333,7 +333,7 @@ internal sealed class MainWindow : Window
     private void Update()
     {
         var name = Store.FirmwarePath is { } path ? Path.GetFileName(path) : null;
-        AppWindow.Title = titleText.Text = name is null ? "FlashDesk" : $"{name} - FlashDesk";
+        AppWindow.Title = titleText.Text = name is null ? "ChipDock" : $"{name} - ChipDock";
 
         var busy = Store.IsBusy;
         openItem.IsEnabled = !busy;
@@ -490,7 +490,7 @@ internal sealed class MainWindow : Window
         var dialog = new ContentDialog
         {
             Title = $"“{Store.Operation?.Title()}”正在进行",
-            Content = Ui.Text("中断可能使芯片处于不完整的状态。请等待操作完成后再退出 FlashDesk。", wrap: true),
+            Content = Ui.Text("中断可能使芯片处于不完整的状态。请等待操作完成后再退出 ChipDock。", wrap: true),
             CloseButtonText = "好",
         };
         await dialog.Show(root);

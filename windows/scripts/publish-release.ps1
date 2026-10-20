@@ -70,12 +70,12 @@ try {
     if (-not $FeedRelease) {
         $Target = if ($env:GITHUB_SHA) { $env:GITHUB_SHA } else { (& git -C $Repo rev-parse HEAD).Trim() }
         & gh release create update-feed --repo $Repository --target $Target `
-            --title 'FlashDesk update feed' --notes 'Sparkle and Velopack update metadata.' --prerelease --latest=false
+            --title 'ChipDock update feed' --notes 'Sparkle and Velopack update metadata.' --prerelease --latest=false
         if ($LASTEXITCODE -ne 0) { throw 'Could not create the update-feed release.' }
     }
     # Publish the feeds only after the immutable packages are available.
     & gh release upload update-feed @Feeds --repo $Repository --clobber
     if ($LASTEXITCODE -ne 0) { throw 'Feed upload failed.' }
-    Write-Host "Published FlashDesk $Version for Windows: $($Uploads.Name -join ', ')"
+    Write-Host "Published ChipDock $Version for Windows: $($Uploads.Name -join ', ')"
 }
 finally { Remove-Item -Recurse -Force $Work -ErrorAction SilentlyContinue }

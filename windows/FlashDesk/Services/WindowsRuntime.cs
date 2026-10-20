@@ -90,7 +90,7 @@ internal static class WindowsRuntime
     }
 
     internal static void ShowError(Exception error) =>
-        MessageBox(0, "无法安装或初始化 Windows App Runtime。请检查网络后重新启动 FlashDesk。\n\n" + error.Message, "FlashDesk", 0x10);
+        MessageBox(0, "无法安装或初始化 Windows App Runtime。请检查网络后重新启动 ChipDock。\n\n" + error.Message, "ChipDock", 0x10);
 
     [DllImport("Microsoft.WindowsAppRuntime.Bootstrap.dll", EntryPoint = "MddBootstrapInitialize2", CharSet = CharSet.Unicode, ExactSpelling = true)]
     private static extern int Initialize(uint majorMinor, string versionTag, ulong minimumVersion, uint options);

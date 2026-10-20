@@ -47,7 +47,7 @@ internal sealed class SettingsDialog : ContentDialog
         };
         automaticDownloads.Click += (_, _) => updater.AutomaticDownloads = automaticDownloads.IsChecked == true;
         var updateNote = Ui.Caption(updater.UnavailableReason
-            ?? (store.IsBusy ? "请等待当前硬件操作完成后检查更新。" : "自动下载的更新会在退出 FlashDesk 时安装。"));
+            ?? (store.IsBusy ? "请等待当前硬件操作完成后检查更新。" : "自动下载的更新会在退出 ChipDock 时安装。"));
         updateNote.TextWrapping = TextWrapping.Wrap;
 
         var icon = new Image
@@ -57,11 +57,11 @@ internal sealed class SettingsDialog : ContentDialog
             Height = 56,
         };
         var links = Ui.Row(4,
-            Link("源代码", "https://github.com/tangxiangong/flashdesk"),
-            Link("发布记录", "https://github.com/tangxiangong/flashdesk/releases"),
+            Link("源代码", "https://github.com/tangxiangong/chipdock"),
+            Link("发布记录", "https://github.com/tangxiangong/chipdock/releases"),
             Link("probe-rs 文档", "https://probe.rs/docs/"));
         var identity = Ui.Column(2,
-            Ui.Text("FlashDesk", 18, semibold: true),
+            Ui.Text("ChipDock", 18, semibold: true),
             Ui.Secondary($"版本 {store.CoreVersion}", 13),
             Ui.Caption("WinUI 3 · Rust · Interoptopus"));
         identity.VerticalAlignment = VerticalAlignment.Center;

@@ -22,9 +22,32 @@ internal static class UpdateSourceTests
         await Check.ThrowsAsync<HttpRequestException>(() => new UpdateSource(key, new FakeDownloader()).GetReleaseFeed(null!, UpdateFeed.AppId, "win-x64"),
             "missing feed surfaces as an HTTP error");
 
+        var migrating = new FakeDownloader();
+        var legacyFeed = UpdateFeed.SignedFeedUrl("win-x64", UpdateFeed.LegacyRepository);
+        migrating.Files[legacyFeed] = UpdateFeed.Seal(UpdateFeedTests.Feed(package: package), UpdateFeedTests.Keys.Private);
+        var migrationSource = new UpdateSource(key, migrating);
+        var migrated = (await migrationSource.GetReleaseFeed(null!, UpdateFeed.AppId, "win-x64")).Assets.Single();
+        Check.That(migrating.Requests.SequenceEqual(new[] { UpdateFeed.SignedFeedUrl("win-x64"), legacyFeed }),
+            "new repository is preferred and the old feed works before rename");
+        migrating.Files[UpdateFeed.SignedFeedUrl("win-x64")] = migrating.Files[legacyFeed];
+        migrating.Requests.Clear();
+        await migrationSource.GetReleaseFeed(null!, UpdateFeed.AppId, "win-x64");
+        Check.That(migrating.Requests.Count == 1 && migrating.Requests[0] == UpdateFeed.SignedFeedUrl("win-x64"),
+            "each check returns to the new repository after rename");
+        migrating.Files[UpdateFeed.SignedFeedUrl("win-x64")] = UpdateFeedTests.Feed();
+        migrating.Requests.Clear();
+        await Check.ThrowsAsync<InvalidDataException>(() => migrationSource.GetReleaseFeed(null!, UpdateFeed.AppId, "win-x64"),
+            "an invalid new feed cannot fall back to an older feed");
+        Check.That(migrating.Requests.Count == 1, "signature validation failure never retries the legacy feed");
+
         var path = Path.Combine(Path.GetTempPath(), $"FlashDesk-test-{Guid.NewGuid():N}.nupkg");
         try
         {
+            var legacyPackage = UpdateFeed.PackageUrl(migrated, UpdateFeed.LegacyRepository);
+            migrating.Files[legacyPackage] = package;
+            await migrationSource.DownloadReleaseEntry(null!, migrated, path, _ => { });
+            Check.That(migrating.Requests[^1] == legacyPackage && File.ReadAllBytes(path).SequenceEqual(package),
+                "package download also survives repository migration");
             downloader.Files[UpdateFeed.PackageUrl(asset)] = package;
             await source.DownloadReleaseEntry(null!, asset, path, _ => { });
             Check.That(File.ReadAllBytes(path).SequenceEqual(package) && downloader.Requests[^1] == UpdateFeed.PackageUrl(asset),

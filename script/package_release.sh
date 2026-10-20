@@ -5,14 +5,14 @@ set +x
 MODE="${1:-package}"
 case "$MODE" in package|--publish) ;; *) echo "usage: $0 [package|--publish]" >&2; exit 2 ;; esac
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP_BUNDLE="${APP_BUNDLE:-$PROJECT_ROOT/.build/Release/Build/Products/Release/FlashDesk.app}"
+APP_BUNDLE="${APP_BUNDLE:-$PROJECT_ROOT/.build/Release/Build/Products/Release/ChipDock.app}"
 OUTPUT_DIR="${RELEASE_OUTPUT_DIR:-$PROJECT_ROOT/.build/ReleaseAssets}"
 SPARKLE_BIN="${SPARKLE_BIN:-$PROJECT_ROOT/.build/SourcePackages/artifacts/sparkle/Sparkle/bin}"
 GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-tangxiangong/flashdesk}"
 WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/flashdesk-release.XXXXXX")"
 trap 'rm -rf "$WORK_DIR"' EXIT
 mkdir -p "$OUTPUT_DIR" "$WORK_DIR/archives"
-[[ -x "$APP_BUNDLE/Contents/MacOS/FlashDesk" && -x "$SPARKLE_BIN/generate_appcast" ]] || {
+[[ -x "$APP_BUNDLE/Contents/MacOS/ChipDock" && -x "$SPARKLE_BIN/generate_appcast" ]] || {
     echo 'error: Build the Release app and resolve Sparkle before packaging' >&2; exit 1;
 }
 APP_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_BUNDLE/Contents/Info.plist")"
@@ -20,19 +20,24 @@ RELEASE_TAG="${RELEASE_TAG:-v$APP_VERSION}"
 [[ "$RELEASE_TAG" == "v$APP_VERSION" && "$APP_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
     echo 'error: Release tag must match the stable application version' >&2; exit 1;
 }
-FEED_URL="$(/usr/libexec/PlistBuddy -c 'Print :SUFeedURL' "$APP_BUNDLE/Contents/Info.plist")"
-[[ "$FEED_URL" == "https://github.com/$GITHUB_REPOSITORY/releases/download/update-feed/appcast.xml" ]] || {
-    echo 'error: Update feed does not match the release repository' >&2; exit 1;
-}
+python3 - "$APP_BUNDLE/Contents/Info.plist" "$GITHUB_REPOSITORY" <<'PYCODE'
+import plistlib, sys
+with open(sys.argv[1], 'rb') as source:
+    info = plistlib.load(source)
+feeds = [info.get('SUFeedURL')] + info.get('SUFallbackFeedURLs', [])
+expected = f'https://github.com/{sys.argv[2]}/releases/download/update-feed/appcast.xml'
+if expected not in feeds:
+    sys.exit('error: Update feeds do not include the release repository')
+PYCODE
 if [[ "${CI:-false}" == true && -z "${SPARKLE_PRIVATE_ED_KEY:-}" ]]; then
     echo 'error: Configure the SPARKLE_PRIVATE_ED_KEY release secret before publishing' >&2; exit 1
 fi
-ARCHITECTURES="$(/usr/bin/lipo -archs "$APP_BUNDLE/Contents/MacOS/FlashDesk")"
+ARCHITECTURES="$(/usr/bin/lipo -archs "$APP_BUNDLE/Contents/MacOS/ChipDock")"
 [[ " $ARCHITECTURES " == *" arm64 "* && " $ARCHITECTURES " == *" x86_64 "* ]] || {
     echo 'error: Release app must contain both arm64 and x86_64' >&2; exit 1;
 }
 
-ARCHIVE_NAME="FlashDesk-$APP_VERSION-macOS-universal.zip"
+ARCHIVE_NAME="ChipDock-$APP_VERSION-macOS-universal.zip"
 if [[ -n "${RELEASE_NOTES_FILE:-}" ]]; then
     cargo run --quiet --locked --manifest-path "$PROJECT_ROOT/Cargo.toml" -p flashdesk-release-notes -- \
         macos "$RELEASE_NOTES_FILE" "$WORK_DIR/archives/${ARCHIVE_NAME%.zip}.md"
@@ -101,7 +106,7 @@ PYCODE
     fi
     if [[ "$FEED_EXISTS" == false ]]; then
         gh release create update-feed --repo "$GITHUB_REPOSITORY" --target "${GITHUB_SHA:?}" \
-            --title 'FlashDesk update feed' --notes 'Sparkle update metadata.' --prerelease --latest=false
+            --title 'ChipDock update feed' --notes 'Sparkle update metadata.' --prerelease --latest=false
     fi
     # Publish the feed only after the immutable archive is available.
     gh release upload update-feed "$OUTPUT_DIR/appcast.xml" --repo "$GITHUB_REPOSITORY" --clobber

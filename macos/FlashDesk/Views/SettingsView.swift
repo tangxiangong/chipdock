@@ -27,12 +27,12 @@ struct SettingsView: View {
             VStack(spacing: 14) {
                 Image(nsImage: NSImage(named: NSImage.applicationIconName) ?? NSImage())
                     .resizable().frame(width: 76, height: 76)
-                Text("FlashDesk").font(.title2.weight(.semibold))
+                Text("ChipDock").font(.title2.weight(.semibold))
                 Text("版本 \(coreVersion)").foregroundStyle(.secondary)
                 Text("SwiftUI · Rust · UniFFI").font(.caption).foregroundStyle(.secondary)
                 HStack(spacing: 20) {
-                    Link("源代码", destination: URL(string: "https://github.com/tangxiangong/flashdesk")!)
-                    Link("发布记录", destination: URL(string: "https://github.com/tangxiangong/flashdesk/releases")!)
+                    Link("源代码", destination: URL(string: "https://github.com/tangxiangong/chipdock")!)
+                    Link("发布记录", destination: URL(string: "https://github.com/tangxiangong/chipdock/releases")!)
                     Button("检查更新…", action: updater.checkForUpdates)
                         .disabled(!updater.canCheckForUpdates)
                 }

@@ -3,11 +3,12 @@ import Foundation
 import Observation
 import Sparkle
 
-struct UpdateConfiguration {
+struct UpdateConfiguration: Sendable {
     let feedURL: URL
+    let fallbackFeedURLs: [URL]
     let publicKey: String
 
-    init(feedURL: String?, publicKey: String?) throws {
+    init(feedURL: String?, publicKey: String?, fallbackFeedURLs: [String] = []) throws {
         guard let feedURL, let url = URL(string: feedURL),
               url.scheme == "https", url.host?.isEmpty == false else {
             throw ConfigurationError.invalidFeed
@@ -16,12 +17,36 @@ struct UpdateConfiguration {
             throw ConfigurationError.missingPublicKey
         }
         self.feedURL = url
+        self.fallbackFeedURLs = try fallbackFeedURLs.map { value in
+            guard let url = URL(string: value), url.scheme == "https", url.host?.isEmpty == false else {
+                throw ConfigurationError.invalidFeed
+            }
+            return url
+        }
         self.publicKey = publicKey
     }
 
     init(bundle: Bundle) throws {
         try self.init(feedURL: bundle.object(forInfoDictionaryKey: "SUFeedURL") as? String,
-                      publicKey: bundle.object(forInfoDictionaryKey: "SUPublicEDKey") as? String)
+                      publicKey: bundle.object(forInfoDictionaryKey: "SUPublicEDKey") as? String,
+                      fallbackFeedURLs: bundle.object(forInfoDictionaryKey: "SUFallbackFeedURLs") as? [String] ?? [])
+    }
+
+    // Resolve the repository at launch; Sparkle still verifies the downloaded update.
+    func availableFeedURL(check: @Sendable (URL) async -> Bool) async -> URL {
+        for url in [feedURL] + fallbackFeedURLs {
+            if await check(url) { return url }
+        }
+        return feedURL
+    }
+
+    static func isAvailable(_ url: URL) async -> Bool {
+        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 8)
+        request.httpMethod = "HEAD"
+        do {
+            let (_, response) = try await URLSession.shared.data(for: request)
+            return (response as? HTTPURLResponse).map { (200..<300).contains($0.statusCode) } ?? false
+        } catch { return false }
     }
 
     enum ConfigurationError: LocalizedError {
@@ -65,6 +90,8 @@ final class UpdateService: NSObject, SPUUpdaterDelegate {
     @ObservationIgnored private var observations = Set<AnyCancellable>()
     @ObservationIgnored private var pendingRelaunch: (() -> Void)?
     @ObservationIgnored private var resumeTask: Task<Void, Never>?
+    @ObservationIgnored private var selectedFeedURL: URL?
+    private var starting = false
     private let isBusy: @MainActor () -> Bool
 
     init(isBusy: @escaping @MainActor () -> Bool = { false }) {
@@ -72,10 +99,16 @@ final class UpdateService: NSObject, SPUUpdaterDelegate {
         super.init()
     }
 
-    func start() {
-        guard controller == nil, unavailableReason == nil else { return }
-        do { _ = try UpdateConfiguration(bundle: .main) }
+    func start() async {
+        guard !starting, controller == nil, unavailableReason == nil else { return }
+        starting = true
+        defer { starting = false }
+        let configuration: UpdateConfiguration
+        do { configuration = try UpdateConfiguration(bundle: .main) }
         catch { unavailableReason = error.localizedDescription; return }
+
+        selectedFeedURL = await configuration.availableFeedURL(check: UpdateConfiguration.isAvailable)
+        guard !Task.isCancelled else { return }
 
         let controller = SPUStandardUpdaterController(startingUpdater: false, updaterDelegate: self, userDriverDelegate: nil)
         self.controller = controller
@@ -99,6 +132,10 @@ final class UpdateService: NSObject, SPUUpdaterDelegate {
     func checkForUpdates() {
         guard canCheckForUpdates else { return }
         controller?.checkForUpdates(nil)
+    }
+
+    func feedURLString(for updater: SPUUpdater) -> String? {
+        selectedFeedURL?.absoluteString
     }
 
     func updater(_ updater: SPUUpdater, mayPerform updateCheck: SPUUpdateCheck) throws {

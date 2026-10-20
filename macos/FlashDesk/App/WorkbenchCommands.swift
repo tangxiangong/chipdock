@@ -83,7 +83,7 @@ struct WorkbenchCommands: Commands {
             Divider()
         }
         CommandGroup(replacing: .help) {
-            Link("FlashDesk 源代码", destination: URL(string: "https://github.com/tangxiangong/flashdesk")!)
+            Link("ChipDock 源代码", destination: URL(string: "https://github.com/tangxiangong/chipdock")!)
             Link("probe-rs 文档", destination: URL(string: "https://probe.rs/docs/")!)
         }
     }

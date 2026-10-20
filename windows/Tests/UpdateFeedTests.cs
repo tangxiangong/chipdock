@@ -33,7 +33,7 @@ internal static class UpdateFeedTests
         Check.That(UpdateFeed.Channel("x64") == "win-x64" && UpdateFeed.Channel("arm64") == "win-arm64", "architecture channels");
         Check.Throws<ArgumentException>(() => UpdateFeed.Channel("x86"), "unsupported architecture");
         Check.That(UpdateFeed.IsChannel("win-arm64") && !UpdateFeed.IsChannel("win-x64/../x") && !UpdateFeed.IsChannel(null), "channel allow-list");
-        Check.That(UpdateFeed.SignedFeedUrl("win-x64") == "https://github.com/tangxiangong/flashdesk/releases/download/update-feed/releases.win-x64.signed.json",
+        Check.That(UpdateFeed.SignedFeedUrl("win-x64") == "https://github.com/tangxiangong/chipdock/releases/download/update-feed/releases.win-x64.signed.json",
             "feed lives on the update-feed release");
 
         using var publicKey = UpdateFeed.ImportPublicKey(Keys.Public) ?? throw new InvalidOperationException("FAIL: generated public key imports");
@@ -47,7 +47,7 @@ internal static class UpdateFeedTests
         var asset = UpdateFeed.Open(envelope, publicKey).Assets.Single();
         Check.That(asset.Version.ToString() == "0.2.0" && asset.Size == 4 && asset.Type == VelopackAssetType.Full, "sealed feed round-trips");
         Check.That(asset.NotesMarkdown?.Contains("自动更新") == true, "release notes survive sealing");
-        Check.That(UpdateFeed.PackageUrl(asset) == "https://github.com/tangxiangong/flashdesk/releases/download/v0.2.0/FlashDesk-0.2.0-win-x64-full.nupkg",
+        Check.That(UpdateFeed.PackageUrl(asset) == "https://github.com/tangxiangong/chipdock/releases/download/v0.2.0/FlashDesk-0.2.0-win-x64-full.nupkg",
             "package downloads from the immutable version release");
 
         Check.Throws<InvalidDataException>(() => UpdateFeed.Open(Reseal(envelope, feed => feed[^3] ^= 1), publicKey), "tampered feed", "签名无效");

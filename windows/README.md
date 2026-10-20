@@ -1,4 +1,4 @@
-# FlashDesk for Windows
+# ChipDock for Windows
 
 C# / WinUI 3（Windows App SDK 2.5.1）原生客户端，与 macOS 版共享 Rust Core。主窗口使用系统 Mica（不支持时使用 Desktop Acrylic），界面由系统控件在代码中构建，图标使用 Segoe Fluent Icons。
 
@@ -71,7 +71,7 @@ Rust 动态库位于 `target/<目标三元组>/<debug或release>/flashdesk_cshar
 
 安装包和更新由 [Velopack](https://velopack.io/) 1.2 提供，行为与 macOS 版的 Sparkle 一致：
 
-- 从 **帮助 → 检查更新…** 或设置的“更新”部分手动检查。默认每 6 小时自动检查一次（跨启动计时），并在后台下载；下载的更新在退出 FlashDesk 时静默安装，未能安装时在下次启动、打开窗口前安装。自动检查和自动下载安装均可在设置中关闭；关闭自动下载会撤销已准备的更新。
+- 从 **帮助 → 检查更新…** 或设置的“更新”部分手动检查。默认每 6 小时自动检查一次（跨启动计时），并在后台下载；下载的更新在退出 ChipDock 时静默安装，未能安装时在下次启动、打开窗口前安装。自动检查和自动下载安装均可在设置中关闭；关闭自动下载会撤销已准备的更新。
 - 手动检查发现新版本时显示发布说明，可立即下载并重新启动。硬件操作进行中不能检查更新，下载完成后的重启也会等待操作结束；窗口在硬件操作期间不能关闭，因此退出时安装也不会打断操作。
 - 只有通过安装包安装的副本会检查更新；从 Visual Studio 运行的开发构建和未配置公钥的构建会在设置中说明原因。
 
@@ -94,7 +94,7 @@ Windows 构建没有代码签名证书，因此更新信息单独签名：
 
 `Windows` 工作流在 x64 与 ARM64 检查全部通过后，分别在对应架构的 Windows Runner 上运行 `windows/scripts/publish.ps1`：校验标签、Rust Core 与应用版本一致且已配置公钥，`dotnet publish` 依赖框架的输出，再用 `vpk pack` 生成：
 
-- `FlashDesk-<版本号>-windows-<arch>.exe` 与 `FlashDesk-<版本号>-windows-<arch>.msi`：安装程序，缺少时会安装 .NET 10 运行时和 VC++ 运行库；Windows App Runtime 仍由应用首次启动时准备。
+- `ChipDock-<版本号>-windows-<arch>.exe` 与 `ChipDock-<版本号>-windows-<arch>.msi`：安装程序，缺少时会安装 .NET 10 运行时和 VC++ 运行库；Windows App Runtime 仍由应用首次启动时准备。
 - `FlashDesk-<版本号>-win-<arch>-full.nupkg`：应用内更新下载的完整包，用户安装使用 exe 或 msi。
 
 随后 `publish` 作业（`release` 环境）运行 `windows/scripts/publish-release.ps1`：用私钥签名两个架构的更新信息并立即用工程公钥验证，确认版本、包名、大小和 SHA-256，并与已发布的更新信息比较，拒绝版本回退或替换同版本中内容不同的安装包。版本 Release 中已存在的同名文件必须字节一致；全部安装包上传后才更新 `update-feed`。该作业与 macOS 发布共用 `flashdesk-update-feed` 并发组，两个平台不会同时修改更新源。
@@ -119,3 +119,7 @@ dotnet run --project windows/Tests -- --workbench-only
 - USB 驱动策略和模拟安装流程可在宿主机独立运行：`dotnet run --project windows/Tests -- --driver-rules-only`。覆盖型号与接口筛选、HID/串口/存储保护、旧驱动迁移、单设备补充发现、多设备歧义、FTDI 通道、Glasgow 接口对、ST-Link 短序列号、GUID 修复，以及取消、失败、重启要求、延迟就绪和设备拔出。它们不调用 Windows 安装 API。仅在 Windows 上额外运行真实 SetupAPI 只读枚举、WinUSB 预检与接口状态检查；传入 Rust 动态库后还核对真实 ST-Link 选择器。测试不会安装驱动或连接目标芯片；模拟测试不能替代 Windows x64 / ARM64 实机驱动验收。
 
 `.github/workflows/windows.yml` 在 x64 与 ARM64 上运行 Rust Core 与 Interoptopus 桥接的 Clippy 和测试、WinUI 编译、绑定一致性检查、`windows/Tests` 和发布资源检查；macOS 不测试 Windows 桥接。界面通过人工验收。
+
+### v0.1.2 改名过渡
+
+应用与安装程序显示为 ChipDock；`FlashDesk.exe`、Velopack 包 ID、配置目录与更新验证公钥保持不变。更新检查优先 `tangxiangong/chipdock`，网络不可用时回退 `tangxiangong/flashdesk`；包下载使用相同迁移策略，签名或哈希失败直接拒绝更新。发布脚本使用 `GITHUB_REPOSITORY`，支持在仓库改名前后继续发布。

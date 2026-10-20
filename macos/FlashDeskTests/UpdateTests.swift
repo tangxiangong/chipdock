@@ -27,10 +27,27 @@ final class UpdateTests: XCTestCase {
 
     func testAppContainsStableFeedAndRequiresArchiveVerification() {
         XCTAssertEqual(Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") as? String,
-                       "https://github.com/tangxiangong/flashdesk/releases/download/update-feed/appcast.xml")
+                       "https://github.com/tangxiangong/chipdock/releases/download/update-feed/appcast.xml")
         XCTAssertNoThrow(try UpdateConfiguration(bundle: .main))
+        XCTAssertEqual(Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String, "ChipDock")
+        XCTAssertEqual(Bundle.main.bundleIdentifier, "com.xiaoyu.flashdesk")
+        XCTAssertEqual((try? UpdateConfiguration(bundle: .main))?.fallbackFeedURLs.map(\.absoluteString),
+                       ["https://github.com/tangxiangong/flashdesk/releases/download/update-feed/appcast.xml"])
         XCTAssertEqual(Bundle.main.object(forInfoDictionaryKey: "SUVerifyUpdateBeforeExtraction") as? Bool, true)
         XCTAssertEqual(Bundle.main.object(forInfoDictionaryKey: "SUAutomaticallyUpdate") as? Bool, true)
+    }
+
+    func testRepositoryMigrationPrefersNewFeedAndFallsBackBeforeRename() async throws {
+        let primary = "https://github.com/tangxiangong/chipdock/releases/download/update-feed/appcast.xml"
+        let legacy = "https://github.com/tangxiangong/flashdesk/releases/download/update-feed/appcast.xml"
+        let configuration = try UpdateConfiguration(feedURL: primary, publicKey: testPublicKey, fallbackFeedURLs: [legacy])
+        let preferred = await configuration.availableFeedURL { _ in true }
+        XCTAssertEqual(preferred.absoluteString, primary)
+        let fallback = await configuration.availableFeedURL { $0.absoluteString == legacy }
+        XCTAssertEqual(fallback.absoluteString, legacy)
+        let unavailable = await configuration.availableFeedURL { _ in false }
+        XCTAssertEqual(unavailable.absoluteString, primary)
+        XCTAssertThrowsError(try UpdateConfiguration(feedURL: primary, publicKey: testPublicKey, fallbackFeedURLs: ["http://example.com/feed"]))
     }
 
     func testSparkleFrameworkIsEmbeddedInApplication() {

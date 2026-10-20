@@ -72,7 +72,7 @@
 		B7025575D43628910A0B566A /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
 		BA716DEBD37DF38BB5E2CD1B /* Sparkle.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = Sparkle.txt; sourceTree = "<group>"; };
 		C69DBA017FD5DB3C23EB03CE /* WorkspaceModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceModels.swift; sourceTree = "<group>"; };
-		D2B8FB7D3B2A65FA1C8B7343 /* FlashDesk.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FlashDesk.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		D2B8FB7D3B2A65FA1C8B7343 /* ChipDock.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ChipDock.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		FB55020249FDA9F67BCD2FC4 /* Formatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Formatting.swift; sourceTree = "<group>"; };
 		FC29B0F063FA27FCE15663E7 /* CoreIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreIntegrationTests.swift; sourceTree = "<group>"; };
 		FF642640559B2662D78CD10B /* FirmwareDataView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirmwareDataView.swift; sourceTree = "<group>"; };
@@ -136,7 +136,7 @@
 		6E512F49A12120E561F75612 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				D2B8FB7D3B2A65FA1C8B7343 /* FlashDesk.app */,
+				D2B8FB7D3B2A65FA1C8B7343 /* ChipDock.app */,
 				8DCA87BCB189B1BE0B59DFE4 /* FlashDeskTests.xctest */,
 			);
 			name = Products;
@@ -249,7 +249,7 @@
 				5E9B0A5A2251E6A6E0C1A12C /* Sparkle */,
 			);
 			productName = FlashDesk;
-			productReference = D2B8FB7D3B2A65FA1C8B7343 /* FlashDesk.app */;
+			productReference = D2B8FB7D3B2A65FA1C8B7343 /* ChipDock.app */;
 			productType = "com.apple.product-type.application";
 		};
 		C0739811739BFB58855F1928 /* FlashDeskTests */ = {
@@ -435,6 +435,8 @@
 					"-lc++",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.xiaoyu.flashdesk;
+				PRODUCT_NAME = ChipDock;
+				PRODUCT_MODULE_NAME = FlashDesk;
 				SDKROOT = macosx;
 				SWIFT_INCLUDE_PATHS = "$(inherited) $(SRCROOT)/FlashDesk/Generated";
 			};
@@ -497,7 +499,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.1.1;
+				MARKETING_VERSION = 0.1.2;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -550,6 +552,8 @@
 					"-lc++",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.xiaoyu.flashdesk;
+				PRODUCT_NAME = ChipDock;
+				PRODUCT_MODULE_NAME = FlashDesk;
 				SDKROOT = macosx;
 				SWIFT_INCLUDE_PATHS = "$(inherited) $(SRCROOT)/FlashDesk/Generated";
 			};
@@ -574,7 +578,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.xiaoyu.flashdesk.tests;
 				SDKROOT = macosx;
 				SWIFT_INCLUDE_PATHS = "$(inherited) $(SRCROOT)/FlashDesk/Generated";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/FlashDesk.app/Contents/MacOS/FlashDesk";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ChipDock.app/Contents/MacOS/ChipDock";
 			};
 			name = Debug;
 		};
@@ -629,7 +633,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.1.1;
+				MARKETING_VERSION = 0.1.2;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -662,7 +666,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.xiaoyu.flashdesk.tests;
 				SDKROOT = macosx;
 				SWIFT_INCLUDE_PATHS = "$(inherited) $(SRCROOT)/FlashDesk/Generated";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/FlashDesk.app/Contents/MacOS/FlashDesk";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ChipDock.app/Contents/MacOS/ChipDock";
 			};
 			name = Release;
 		};

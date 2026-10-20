@@ -15,7 +15,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "AF77CC599218154C734D8695"
-               BuildableName = "FlashDesk.app"
+               BuildableName = "ChipDock.app"
                BlueprintName = "FlashDesk"
                ReferencedContainer = "container:FlashDesk.xcodeproj">
             </BuildableReference>
@@ -31,7 +31,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "AF77CC599218154C734D8695"
-            BuildableName = "FlashDesk.app"
+            BuildableName = "ChipDock.app"
             BlueprintName = "FlashDesk"
             ReferencedContainer = "container:FlashDesk.xcodeproj">
          </BuildableReference>
@@ -65,7 +65,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "AF77CC599218154C734D8695"
-            BuildableName = "FlashDesk.app"
+            BuildableName = "ChipDock.app"
             BlueprintName = "FlashDesk"
             ReferencedContainer = "container:FlashDesk.xcodeproj">
          </BuildableReference>
@@ -82,7 +82,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "AF77CC599218154C734D8695"
-            BuildableName = "FlashDesk.app"
+            BuildableName = "ChipDock.app"
             BlueprintName = "FlashDesk"
             ReferencedContainer = "container:FlashDesk.xcodeproj">
          </BuildableReference>

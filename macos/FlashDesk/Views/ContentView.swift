@@ -8,7 +8,7 @@ struct ContentView: View {
     var body: some View {
         document
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .navigationTitle(store.firmwareURL?.lastPathComponent ?? "FlashDesk")
+        .navigationTitle(store.firmwareURL?.lastPathComponent ?? "ChipDock")
         .toolbar {
             ToolbarItem(placement: .principal) {
                 ActivityView(store: store)
