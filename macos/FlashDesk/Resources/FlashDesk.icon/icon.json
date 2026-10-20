@@ -8,7 +8,7 @@
         {
           "glass" : false,
           "image-name" : "AppIcon.svg",
-          "name" : "AppIcon"
+          "name" : "ChipDock"
         }
       ],
       "shadow" : {
