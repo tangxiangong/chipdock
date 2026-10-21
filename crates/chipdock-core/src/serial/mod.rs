@@ -144,6 +144,14 @@ impl SerialManager {
         let mut ports = tokio_serial::available_ports()
             .map_err(|error| anyhow!("无法读取串口列表：{error}"))?
             .into_iter()
+            .filter(|port| {
+                !cfg!(target_os = "macos")
+                    || (!port.port_name.starts_with("/dev/tty.")
+                        && !matches!(
+                            port.port_name.as_str(),
+                            "/dev/cu.debug-console" | "/dev/cu.Bluetooth-Incoming-Port"
+                        ))
+            })
             .map(port_info)
             .collect::<Vec<_>>();
         ports.sort_by(|a, b| a.path.cmp(&b.path));
