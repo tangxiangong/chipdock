@@ -204,14 +204,14 @@ public sealed partial class SerialView : UserControl
         SendButton.IsEnabled = CanSend;
         SendLabel.Text = sending ? "发送中…" : "发送";
         var automatic = autoSender.IsRunning;
-        SendOptions.IsEnabled = !automatic;
+        SendFormatPicker.IsEnabled = ChecksumPicker.IsEnabled = !automatic;
         InputBox.IsReadOnly = automatic;
         AutoSendInterval.IsEnabled = !automatic;
         AutoSendButton.IsEnabled = automatic || (CanSend && TryGetAutoSendInterval(out _));
         AutoSendLabel.Text = automatic ? "停止自动发送" : "自动发送";
         AutoSendIcon.Glyph = automatic ? "\uE71A" : "\uE8EE";
         InputCount.Text = InputBox.Text.Length == 0 ? "" : $"{new System.Globalization.StringInfo(InputBox.Text).LengthInTextElements:N0} 字符";
-        EndingPicker.IsEnabled = SendFormatPicker.SelectedIndex != 0;
+        EndingPicker.IsEnabled = !automatic && SendFormatPicker.SelectedIndex != 0;
         InputBox.PlaceholderText = SendFormatPicker.SelectedIndex == 0 ? "十六进制数据，例如 AA 01 FF" : "输入文本或设备指令…";
         ToolTipService.SetToolTip(InputBox, SendFormatPicker.SelectedIndex == 0 ? "HEX 按原始字节发送，不追加行尾。" : "Ctrl+Enter 发送 · Enter 换行");
         EmptyState.Visibility = visibleFrames.Count == 0 ? Visibility.Visible : Visibility.Collapsed;

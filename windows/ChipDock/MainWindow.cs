@@ -30,7 +30,7 @@ internal sealed class MainWindow : Window
     private readonly SerialView serial;
     private readonly SelectorBar toolsSelector = new();
     private readonly SelectorBarItem flashTool = new() { Text = "固件烧录", Icon = new SymbolIcon(Symbol.Download) };
-    private readonly SelectorBarItem serialTool = new() { Text = "串口终端", Icon = new SymbolIcon(Symbol.Link) };
+    private readonly SelectorBarItem serialTool = new() { Text = "串口连接", Icon = new SymbolIcon(Symbol.Link) };
     private bool SerialSelected => toolsSelector.SelectedItem == serialTool;
     private readonly LogsView logs;
     private readonly MemoryView memory;
@@ -107,7 +107,7 @@ internal sealed class MainWindow : Window
             new MenuFlyoutSeparator(), chipItem, saveProfileItem, loadProfileMenu));
         menu.Items.Add(MenuGroup("操作", flashItem, readItem, new MenuFlyoutSeparator(), eraseItem));
         menu.Items.Add(MenuGroup("查看", Ui.MenuItem("固件烧录", Glyphs.Flash, () => toolsSelector.SelectedItem = flashTool, "Ctrl+1"),
-            Ui.MenuItem("串口终端", Glyphs.Link, () => toolsSelector.SelectedItem = serialTool, "Ctrl+2"),
+            Ui.MenuItem("串口连接", Glyphs.Link, () => toolsSelector.SelectedItem = serialTool, "Ctrl+2"),
             new MenuFlyoutSeparator(), logsItem, memoryItem, new MenuFlyoutSeparator(),
             Ui.MenuItem("设置…", Glyphs.Settings, () => _ = ShowSettings(), "Ctrl+,")));
         menu.Items.Add(MenuGroup("帮助",
