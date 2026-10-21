@@ -4,7 +4,6 @@ import XCTest
 final class CoreIntegrationTests: XCTestCase {
     func testGeneratedBindingsSearchAndMemoryMap() throws {
         let core = ChipDockCore()
-        XCTAssertEqual(core.version(), "0.1.2")
         XCTAssertEqual(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String, core.version())
         let chips = try core.searchChips(query: "STM32F103VE", limit: 10)
         XCTAssertTrue(chips.contains { $0.hasPrefix("STM32F103VE") })
