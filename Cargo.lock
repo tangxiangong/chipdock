@@ -275,14 +275,14 @@ checksum = "f079e83a288787bcd14a6aea84cee5c87a67c5a3e660c30f557a3d24761b3527"
 
 [[package]]
 name = "chipdock-bindgen"
-version = "0.1.2"
+version = "0.2.0"
 dependencies = [
  "uniffi",
 ]
 
 [[package]]
 name = "chipdock-core"
-version = "0.1.2"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -305,7 +305,7 @@ dependencies = [
 
 [[package]]
 name = "chipdock-csharp"
-version = "0.1.2"
+version = "0.2.0"
 dependencies = [
  "chipdock-core",
  "chrono",
@@ -316,7 +316,7 @@ dependencies = [
 
 [[package]]
 name = "chipdock-csharp-bindgen"
-version = "0.1.2"
+version = "0.2.0"
 dependencies = [
  "chipdock-csharp",
  "interoptopus_csharp",
@@ -324,7 +324,7 @@ dependencies = [
 
 [[package]]
 name = "chipdock-release-notes"
-version = "0.1.2"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "tempfile",

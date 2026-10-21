@@ -2,7 +2,7 @@
 
 ChipDock（原 FlashDesk）是原生嵌入式开发工具集：macOS 版使用 **SwiftUI + UniFFI**，Windows 版使用 **WinUI 3 + Interoptopus**，两者共享同一个 **Rust Core**。
 
-当前发布版本：**v0.1.2**。项目仓库：[tangxiangong/chipdock](https://github.com/tangxiangong/chipdock)。
+当前发布版本：**v0.2.0**。项目仓库：[tangxiangong/chipdock](https://github.com/tangxiangong/chipdock)。
 
 ## 功能
 

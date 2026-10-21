@@ -17,7 +17,7 @@
     <WindowsPackageType>None</WindowsPackageType>
     <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
     <DefaultLanguage>zh-CN</DefaultLanguage>
-    <Version>0.1.2</Version>
+    <Version>0.2.0</Version>
     <Title>ChipDock</Title>
     <Product>ChipDock</Product>
     <Description>ChipDock 嵌入式开发工具集</Description>
