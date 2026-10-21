@@ -5,14 +5,17 @@ namespace ChipDock;
 
 internal sealed partial class WorkbenchStore
 {
-    internal async Task ScanProbes()
+    internal async Task ScanProbes(bool updateSelection = true)
     {
         var result = await Perform(WorkbenchOperation.Scan, ProbeDriver.ListProbes);
         if (result is null) return;
         HasScanned = true;
         Probes = result;
-        if (result.Count == 1) SelectedProbe = result[0].identifier;
-        else if (!result.Any(probe => probe.identifier == SelectedProbe)) { SelectedProbe = ""; InvalidateConnection(); }
+        if (updateSelection)
+        {
+            if (result.Count == 1) SelectedProbe = result[0].identifier;
+            else if (!result.Any(probe => probe.identifier == SelectedProbe)) { SelectedProbe = ""; InvalidateConnection(); }
+        }
         SetStatus(result.Count == 0 ? "未发现调试探针" : $"发现 {result.Count} 个调试探针");
         AppendLog("探针", Status);
     }

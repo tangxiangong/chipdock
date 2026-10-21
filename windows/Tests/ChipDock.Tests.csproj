@@ -21,6 +21,7 @@
     <Compile Include="../ChipDock/Services/RustCore.cs" Link="Linked/RustCore.cs" />
     <Compile Include="../ChipDock/Services/RecentFirmwareHistory.cs" Link="Linked/RecentFirmwareHistory.cs" />
     <Compile Include="../ChipDock/Support/ActivityText.cs" Link="Linked/ActivityText.cs" />
+    <Compile Include="../ChipDock/Support/WindowLayout.cs" Link="Linked/WindowLayout.cs" />
     <Compile Include="../ChipDock/Services/ProbeDriver.cs" Link="Linked/ProbeDriver.cs" />
     <Compile Include="../ChipDock/Services/ProbeUsb.cs" Link="Linked/ProbeUsb.cs" />
     <Compile Include="../ChipDock/Services/ProbeDriverRules.cs" Link="Linked/ProbeDriverRules.cs" />

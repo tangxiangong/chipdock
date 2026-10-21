@@ -35,8 +35,7 @@ internal sealed class MainWindow : Window
     private readonly LogsView logs;
     private readonly MemoryView memory;
     private readonly Grid inspector = new() { Visibility = Visibility.Collapsed };
-    private readonly Border inspectorDivider = Ui.Divider(vertical: true);
-    private readonly ColumnDefinition inspectorColumn = new() { Width = new GridLength(0) };
+    private readonly SplitView workspace = new() { PanePlacement = SplitViewPanePlacement.Right, OpenPaneLength = InspectorWidth };
     private readonly SelectorBar selector = new();
     private readonly SelectorBarItem logsTab = new() { Text = "日志", Icon = new FontIcon { Glyph = Glyphs.Logs } };
     private readonly SelectorBarItem memoryTab = new() { Text = "内存", Icon = new FontIcon { Glyph = Glyphs.Memory } };
@@ -56,7 +55,9 @@ internal sealed class MainWindow : Window
 
     private InspectorPane? openPane;
     private TargetSetupDialog? targetDialog;
-    private bool dropTargeted;
+    private bool dropTargeted, fittingWindow;
+    private Windows.Graphics.RectInt32? previousWorkArea;
+    private double previousScale;
 
     internal MainWindow()
     {
@@ -65,9 +66,11 @@ internal sealed class MainWindow : Window
         SystemBackdrop = MicaController.IsSupported() ? new MicaBackdrop() : new DesktopAcrylicBackdrop();
         AppWindow.TitleBar.PreferredHeightOption = TitleBarHeightOption.Tall;
         AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "ChipDock.ico"));
-        var scale = Scale;
-        AppWindow.Resize(new Windows.Graphics.SizeInt32((int)(1160 * scale), (int)(780 * scale)));
-        SetMinimumSize();
+        FitWindow(initialize: true);
+        AppWindow.Changed += (_, args) =>
+        {
+            if (args.DidPositionChange || args.DidSizeChange || args.DidPresenterChange) FitWindow();
+        };
 
         serial = new SerialView();
         serial.ActivityChanged += Update;
@@ -138,19 +141,18 @@ internal sealed class MainWindow : Window
         ToolTipService.SetToolTip(profilesButton, "存储或载入配置");
 
         var content = new Grid();
-        content.ColumnDefinitions.Add(new() { MinWidth = 420 });
-        content.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-        content.ColumnDefinitions.Add(inspectorColumn);
         content.Children.Add(flash);
-        Grid.SetColumnSpan(serial, 3);
         content.Children.Add(serial);
         content.Children.Add(dropOverlay);
-        Grid.SetColumn(inspectorDivider, 1);
-        Ui.SetVisible(inspectorDivider, false);
-        content.Children.Add(inspectorDivider);
         BuildInspector();
-        Grid.SetColumn(inspector, 2);
-        content.Children.Add(inspector);
+        workspace.Content = content;
+        workspace.Pane = inspector;
+        workspace.SizeChanged += (_, args) =>
+        {
+            workspace.DisplayMode = args.NewSize.Width < 1000 ? SplitViewDisplayMode.Overlay : SplitViewDisplayMode.Inline;
+            workspace.OpenPaneLength = Math.Min(InspectorWidth, args.NewSize.Width);
+        };
+        workspace.PaneClosed += (_, _) => { if (openPane is not null) ClosePane(); };
         toolsSelector.Items.Add(flashTool);
         toolsSelector.Items.Add(serialTool);
         toolsSelector.SelectedItem = flashTool;
@@ -160,8 +162,8 @@ internal sealed class MainWindow : Window
         toolContent.RowDefinitions.Add(new() { Height = GridLength.Auto });
         toolContent.RowDefinitions.Add(new());
         toolContent.Children.Add(toolsSelector);
-        Grid.SetRow(content, 1);
-        toolContent.Children.Add(content);
+        Grid.SetRow(workspace, 1);
+        toolContent.Children.Add(workspace);
         var layer = new Border { Style = Ui.Style("ContentLayerStyle"), Child = toolContent };
         Grid.SetRow(layer, 2);
         root.Children.Add(layer);
@@ -178,7 +180,7 @@ internal sealed class MainWindow : Window
         root.Loaded += async (_, _) =>
         {
             UpdateTitleBarTheme();
-            root.XamlRoot.Changed += (_, _) => SetMinimumSize();
+            root.XamlRoot.Changed += (_, _) => FitWindow();
             await Store.Start();
             _ = Updater.Start();
         };
@@ -217,12 +219,31 @@ internal sealed class MainWindow : Window
 
     private double Scale => GetDpiForWindow(WinRT.Interop.WindowNative.GetWindowHandle(this)) / 96.0;
 
-    private void SetMinimumSize()
+    private void FitWindow(bool initialize = false)
     {
-        if (AppWindow.Presenter is not OverlappedPresenter presenter) return;
-        var scale = Scale;
-        presenter.PreferredMinimumWidth = (int)(900 * scale);
-        presenter.PreferredMinimumHeight = (int)(600 * scale);
+        if (fittingWindow || AppWindow.Presenter is not OverlappedPresenter presenter) return;
+        fittingWindow = true;
+        try
+        {
+            var scale = Scale;
+            var area = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary).WorkArea;
+            presenter.PreferredMinimumWidth = Math.Min((int)(720 * scale), area.Width);
+            presenter.PreferredMinimumHeight = Math.Min((int)(480 * scale), area.Height);
+            var areaChanged = previousWorkArea is not { } previous || previous.X != area.X || previous.Y != area.Y
+                || previous.Width != area.Width || previous.Height != area.Height || previousScale != scale;
+            previousWorkArea = area;
+            previousScale = scale;
+            if (presenter.State != OverlappedPresenterState.Restored) return;
+            if (!initialize && !areaChanged && AppWindow.Size.Width <= area.Width && AppWindow.Size.Height <= area.Height) return;
+            var bounds = WindowLayout.Fit(new System.Drawing.Rectangle(AppWindow.Position.X, AppWindow.Position.Y,
+                initialize ? (int)(1160 * scale) : AppWindow.Size.Width,
+                initialize ? (int)(780 * scale) : AppWindow.Size.Height),
+                new System.Drawing.Rectangle(area.X, area.Y, area.Width, area.Height));
+            if (AppWindow.Position.X != bounds.X || AppWindow.Position.Y != bounds.Y
+                || AppWindow.Size.Width != bounds.Width || AppWindow.Size.Height != bounds.Height)
+                AppWindow.MoveAndResize(new Windows.Graphics.RectInt32(bounds.X, bounds.Y, bounds.Width, bounds.Height));
+        }
+        finally { fittingWindow = false; }
     }
 
     internal void ApplyTheme() => root.RequestedTheme = AppSettings.Appearance.Theme();
@@ -312,9 +333,8 @@ internal sealed class MainWindow : Window
     {
         toolsSelector.SelectedItem = flashTool;
         openPane = pane;
-        inspectorColumn.Width = new GridLength(InspectorWidth);
         Ui.SetVisible(inspector, true);
-        Ui.SetVisible(inspectorDivider, true);
+        workspace.IsPaneOpen = true;
         Ui.SetVisible(logs, pane == InspectorPane.Logs);
         Ui.SetVisible(memory, pane == InspectorPane.Memory);
         selector.SelectedItem = pane == InspectorPane.Logs ? logsTab : memoryTab;
@@ -325,9 +345,8 @@ internal sealed class MainWindow : Window
     private void ClosePane()
     {
         openPane = null;
-        inspectorColumn.Width = new GridLength(0);
+        workspace.IsPaneOpen = false;
         Ui.SetVisible(inspector, false);
-        Ui.SetVisible(inspectorDivider, false);
         Store.LogsVisible = false;
         Update();
     }
@@ -444,11 +463,25 @@ internal sealed class MainWindow : Window
         foreach (var profile in Store.Profiles) menu.Items.Add(Ui.MenuItem(profile.name, Glyphs.Bookmark, () => Store.ApplyProfile(profile)));
         menu.Items.Add(new MenuFlyoutSeparator());
         var delete = new MenuFlyoutSubItem { Text = "删除配置", Icon = new FontIcon { Glyph = Glyphs.Delete } };
-        foreach (var profile in Store.Profiles) delete.Items.Add(Ui.MenuItem(profile.name, null, () => _ = Store.DeleteProfile(profile)));
+        foreach (var profile in Store.Profiles) delete.Items.Add(Ui.MenuItem(profile.name + "…", null, () => _ = ConfirmDeleteProfile(profile)));
         menu.Items.Add(delete);
     }
 
     // Dialogs and pickers
+
+    private async Task ConfirmDeleteProfile(ProfileRecord profile)
+    {
+        if (Store.IsBusy) return;
+        var dialog = new ContentDialog
+        {
+            Title = $"删除配置“{profile.name}”？",
+            Content = Ui.Text("此配置将被永久删除，无法撤销。当前连接和烧录参数不受影响。", wrap: true),
+            PrimaryButtonText = "删除配置",
+            CloseButtonText = "取消",
+            DefaultButton = ContentDialogButton.Close,
+        };
+        if (await dialog.Show(root) == ContentDialogResult.Primary) await Store.DeleteProfile(profile);
+    }
 
     internal async Task PickFirmware()
     {
@@ -600,6 +633,8 @@ internal sealed class ActivityView : UserControl
     private readonly TextBlock message = Ui.Secondary(size: 13);
     private readonly ProgressBar bar = new() { Width = 90, Maximum = 1, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock percent = Ui.Mono(size: 13, style: "SecondaryTextStyle");
+    private WorkbenchOperation? previousOperation;
+    private string? previousStage;
 
     internal ActivityView(WorkbenchStore store)
     {
@@ -627,7 +662,11 @@ internal sealed class ActivityView : UserControl
     {
         var progress = store.IsBusy && store.LatestEvent is { } latest && !latest.stage.IsTerminal() ? latest : null;
         var fraction = progress?.progress;
-        message.Text = ActivityText.Message(progress?.message ?? store.Status, fraction is not null);
+        var stage = progress?.stage.ToString();
+        Ui.SetLiveText(message, ActivityText.Message(progress?.message ?? store.Status, fraction is not null),
+            announce: !store.IsBusy || fraction is null || previousOperation != store.Operation || previousStage != stage);
+        previousOperation = store.Operation;
+        previousStage = stage;
         ToolTipService.SetToolTip(message, message.Text);
         Ui.SetVisible(ring, store.IsBusy && fraction is null);
         Ui.SetVisible(bar, fraction is not null);

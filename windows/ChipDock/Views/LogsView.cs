@@ -14,6 +14,9 @@ internal sealed class LogsView : UserControl
     private readonly ListView list = new() { SelectionMode = ListViewSelectionMode.None, Padding = new Thickness(0, 4, 0, 8) };
     private readonly TextBlock empty = Ui.Secondary();
     private readonly Button copy, export, clear;
+    private ScrollViewer? scroller;
+
+    private bool AtEnd => scroller is null || scroller.ScrollableHeight - scroller.VerticalOffset <= 2;
 
     internal LogsView(WorkbenchStore store, MainWindow window)
     {
@@ -22,8 +25,8 @@ internal sealed class LogsView : UserControl
         Ui.CompactItems(list, new Thickness(16, 0, 16, 0));
         ToolTipService.SetToolTip(errorsOnly, "仅显示错误");
         Ui.Name(errorsOnly, "仅显示错误");
-        errorsOnly.Click += (_, _) => Rebuild();
-        filter.TextChanged += (_, _) => Rebuild();
+        errorsOnly.Click += (_, _) => Rebuild(reset: true);
+        filter.TextChanged += (_, _) => Rebuild(reset: true);
         Ui.Name(filter, "筛选日志");
         copy = Ui.IconButton(Glyphs.Copy, "复制全部日志", () =>
         {
@@ -65,7 +68,7 @@ internal sealed class LogsView : UserControl
 
         store.LogAppended += Append;
         store.LogsCleared += Rebuild;
-        Loaded += (_, _) => { Rebuild(); ScrollToEnd(); };
+        Loaded += (_, _) => { scroller = Ui.Descendant<ScrollViewer>(list); Rebuild(); };
     }
 
     private bool Matches(ActivityEntry entry) =>
@@ -74,16 +77,26 @@ internal sealed class LogsView : UserControl
 
     private void Append(ActivityEntry entry)
     {
-        if (Matches(entry)) list.Items.Add(Line(entry));
+        var follow = AtEnd;
+        if (Matches(entry))
+        {
+            list.Items.Add(Line(entry));
+            if (follow) ScrollToEnd();
+        }
         UpdateState();
-        ScrollToEnd();
     }
 
-    private void Rebuild()
+    private void Rebuild() => Rebuild(reset: false);
+
+    private void Rebuild(bool reset)
     {
+        var follow = !reset && AtEnd;
+        var offset = reset ? 0 : scroller?.VerticalOffset ?? 0;
         list.Items.Clear();
         foreach (var entry in store.Logs.Where(Matches)) list.Items.Add(Line(entry));
         UpdateState();
+        if (follow) ScrollToEnd();
+        else DispatcherQueue.TryEnqueue(() => scroller?.ChangeView(null, offset, null, disableAnimation: true));
     }
 
     private void ScrollToEnd()

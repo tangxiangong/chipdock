@@ -9,18 +9,17 @@
       <RowDefinition Height="Auto" />
     </Grid.RowDefinitions>
 
-    <Grid Grid.Row="0" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="0,1,0,1">
-      <Grid.ColumnDefinitions>
-        <ColumnDefinition x:Name="ConnectionColumn" Width="216" />
-        <ColumnDefinition Width="*" />
-      </Grid.ColumnDefinitions>
-
+    <ScrollViewer x:Name="SerialViewport" Grid.Row="0" HorizontalScrollBarVisibility="Disabled"
+                  HorizontalScrollMode="Disabled" VerticalScrollBarVisibility="Auto" SizeChanged="OnRootSizeChanged">
+      <SplitView x:Name="SerialSurface" OpenPaneLength="216" IsPaneOpen="True" DisplayMode="Inline"
+                 PaneClosed="OnConnectionPaneClosed" SizeChanged="OnRootSizeChanged">
+      <SplitView.Pane>
       <Grid x:Name="ConnectionPanel" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="0,0,1,0">
         <Grid.RowDefinitions>
-          <RowDefinition Height="56" />
+          <RowDefinition Height="Auto" />
           <RowDefinition Height="*" />
         </Grid.RowDefinitions>
-        <Border BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="0,0,0,1" Padding="18,0">
+        <Border BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="0,0,0,1" Padding="18,16">
           <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
             <FontIcon Glyph="&#xE88E;" FontSize="16" />
             <TextBlock Text="串口设置" FontSize="14" FontWeight="SemiBold" AutomationProperties.HeadingLevel="Level2" />
@@ -72,8 +71,9 @@
           </StackPanel>
         </ScrollViewer>
       </Grid>
-
-      <Grid x:Name="Workspace" Grid.Column="1" Background="{ThemeResource LayerFillColorDefaultBrush}">
+      </SplitView.Pane>
+      <SplitView.Content>
+      <Grid x:Name="Workspace" Background="{ThemeResource LayerFillColorDefaultBrush}" SizeChanged="OnRootSizeChanged">
         <Grid.RowDefinitions>
           <RowDefinition Height="Auto" />
           <RowDefinition Height="*" MinHeight="180" />
@@ -84,18 +84,23 @@
 
         <Grid Grid.Row="1">
           <Grid.RowDefinitions>
-            <RowDefinition Height="56" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
-            <RowDefinition Height="44" />
+            <RowDefinition Height="Auto" />
           </Grid.RowDefinitions>
-          <Grid Padding="18,0" ColumnSpacing="12" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="0,0,0,1">
+          <Grid x:Name="ReceiveToolbar" Padding="18,8" ColumnSpacing="12" RowSpacing="8" MinHeight="56"
+                BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="0,0,0,1">
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="Auto" />
               <ColumnDefinition Width="Auto" />
               <ColumnDefinition Width="Auto" />
               <ColumnDefinition Width="*" />
               <ColumnDefinition Width="Auto" />
-              <ColumnDefinition Width="*" MinWidth="120" MaxWidth="220" />
+              <ColumnDefinition Width="*" MaxWidth="220" />
               <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <ToggleButton x:Name="ConnectionPaneToggle" IsChecked="True" Width="32" Height="32" Padding="0"
@@ -125,23 +130,7 @@
           </Grid>
 
           <Grid Grid.Row="1">
-            <Grid.RowDefinitions>
-              <RowDefinition Height="Auto" />
-              <RowDefinition Height="*" />
-            </Grid.RowDefinitions>
-            <Grid Padding="18,8" ColumnSpacing="12" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
-              <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="100" />
-                <ColumnDefinition Width="64" />
-                <ColumnDefinition Width="48" />
-                <ColumnDefinition Width="*" />
-              </Grid.ColumnDefinitions>
-              <TextBlock Text="时间" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-              <TextBlock Grid.Column="1" Text="方向" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-              <TextBlock Grid.Column="2" Text="字节" FontSize="12" HorizontalAlignment="Right" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-              <TextBlock Grid.Column="3" Text="数据" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-            </Grid>
-            <ListView x:Name="Terminal" Grid.Row="1" SelectionMode="Extended" AutomationProperties.Name="串口数据终端"
+            <ListView x:Name="Terminal" SelectionMode="Extended" AutomationProperties.Name="串口数据终端"
                       Background="Transparent" ScrollViewer.HorizontalScrollMode="Disabled" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
               <ListView.ItemContainerStyle>
                 <Style TargetType="ListViewItem">
@@ -152,11 +141,14 @@
               </ListView.ItemContainerStyle>
               <ListView.ItemTemplate>
                 <DataTemplate x:DataType="local:TerminalFrame">
-                  <Grid ColumnSpacing="12">
+                  <Grid ColumnSpacing="12" RowSpacing="4">
+                    <Grid.RowDefinitions>
+                      <RowDefinition Height="Auto" />
+                      <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
                     <Grid.ColumnDefinitions>
-                      <ColumnDefinition Width="100" />
-                      <ColumnDefinition Width="64" />
-                      <ColumnDefinition Width="48" />
+                      <ColumnDefinition Width="Auto" />
+                      <ColumnDefinition Width="Auto" />
                       <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <TextBlock Text="{x:Bind Time}" FontFamily="Consolas" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
@@ -166,15 +158,17 @@
                       </Viewbox>
                       <TextBlock Text="{x:Bind Direction}" FontFamily="Consolas" FontSize="12" />
                     </StackPanel>
-                    <TextBlock Grid.Column="2" Text="{x:Bind Size}" FontFamily="Consolas" FontSize="12" HorizontalAlignment="Right"
-                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                    <TextBlock Grid.Column="3" Text="{x:Bind DisplayText, Mode=OneWay}" TextWrapping="Wrap" IsTextSelectionEnabled="True"
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Right">
+                      <TextBlock Text="{x:Bind Size}" FontFamily="Consolas" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                      <TextBlock Text="B" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+                    <TextBlock Grid.Row="1" Grid.ColumnSpan="3" Text="{x:Bind DisplayText, Mode=OneWay}" TextWrapping="Wrap" IsTextSelectionEnabled="True"
                                FontFamily="Consolas" FontSize="13" />
                   </Grid>
                 </DataTemplate>
               </ListView.ItemTemplate>
             </ListView>
-            <StackPanel x:Name="EmptyState" Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center"
+            <StackPanel x:Name="EmptyState" VerticalAlignment="Center" HorizontalAlignment="Center"
                         Spacing="12" Margin="24" MaxWidth="320">
               <FontIcon x:Name="EmptyIcon" Glyph="&#xE756;" FontSize="32" HorizontalAlignment="Center"
                         Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
@@ -185,7 +179,12 @@
             </StackPanel>
           </Grid>
 
-          <Grid Grid.Row="2" Padding="18,0" ColumnSpacing="12" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="0,1,0,0">
+          <Grid x:Name="ReceiveOptions" Grid.Row="2" Padding="18,8" ColumnSpacing="12" RowSpacing="8"
+                BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="0,1,0,0">
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="Auto" />
               <ColumnDefinition Width="Auto" />
@@ -194,7 +193,7 @@
               <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <TextBlock Text="接收编码" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-            <ComboBox x:Name="DisplayPicker" Grid.Column="1" Width="96" VerticalAlignment="Center"
+            <ComboBox x:Name="DisplayPicker" Grid.Column="1" MinWidth="96" VerticalAlignment="Center"
                       AutomationProperties.Name="接收编码" SelectionChanged="OnDisplayChanged" />
             <ToggleButton x:Name="AutoScrollToggle" Grid.Column="3" IsChecked="True" Click="OnAutoScroll"
                           VerticalAlignment="Center" ToolTipService.ToolTip="跟随最新的数据">
@@ -227,11 +226,16 @@
 
         <Grid x:Name="ComposerPanel" Grid.Row="3">
           <Grid.RowDefinitions>
-            <RowDefinition Height="44" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
           </Grid.RowDefinitions>
-          <Grid x:Name="SendOptions" Padding="18,0" ColumnSpacing="12">
+          <Grid x:Name="SendOptions" Padding="18,8" ColumnSpacing="12" RowSpacing="8">
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="*" />
               <ColumnDefinition Width="Auto" />
@@ -240,24 +244,28 @@
               <ColumnDefinition Width="Auto" />
               <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+            <StackPanel x:Name="SendHeading" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
               <SymbolIcon Symbol="Edit" />
               <TextBlock Text="发送区" FontSize="13" FontWeight="SemiBold" AutomationProperties.HeadingLevel="Level2" />
             </StackPanel>
             <ComboBox x:Name="ChecksumPicker" Grid.Column="1" Width="156" VerticalAlignment="Center"
                       AutomationProperties.Name="发送校验算法" SelectionChanged="OnSelectionChanged"
                       ToolTipService.ToolTip="校验码在行尾之前追加；奇偶校验追加 0 或 1，CRC16 使用 MODBUS 格式。" />
-            <TextBlock Grid.Column="2" Text="编码" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+            <TextBlock x:Name="SendEncodingLabel" Grid.Column="2" Text="编码" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
             <ComboBox x:Name="SendFormatPicker" Grid.Column="3" Width="96" VerticalAlignment="Center"
                       AutomationProperties.Name="发送编码" SelectionChanged="OnSelectionChanged" />
-            <TextBlock Grid.Column="4" Text="行尾" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+            <TextBlock x:Name="SendEndingLabel" Grid.Column="4" Text="行尾" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
             <ComboBox x:Name="EndingPicker" Grid.Column="5" Width="80" VerticalAlignment="Center"
                       AutomationProperties.Name="发送行尾" SelectionChanged="OnSelectionChanged" />
           </Grid>
           <TextBox x:Name="InputBox" Grid.Row="1" AcceptsReturn="True" TextWrapping="Wrap" PlaceholderText="输入文本或设备指令…"
                    Padding="18,8" Background="Transparent" BorderThickness="0" CornerRadius="0" FontFamily="Consolas" FontSize="13"
                    AutomationProperties.Name="要发送的数据" TextChanged="OnInputChanged" />
-          <Grid Grid.Row="2" Padding="18,8,18,14" ColumnSpacing="12">
+          <Grid x:Name="ComposerActions" Grid.Row="2" Padding="18,8,18,14" ColumnSpacing="12" RowSpacing="8">
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="Auto" />
               <ColumnDefinition Width="Auto" />
@@ -265,7 +273,7 @@
               <ColumnDefinition Width="Auto" />
               <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+            <StackPanel x:Name="IntervalOptions" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
               <TextBlock Text="间隔" FontSize="12" VerticalAlignment="Center" />
               <NumberBox x:Name="AutoSendInterval" Width="96" Minimum="10" Maximum="3600000" Value="1000"
                          SpinButtonPlacementMode="Hidden" ValueChanged="OnAutoSendIntervalChanged"
@@ -290,7 +298,9 @@
           </Grid>
         </Grid>
       </Grid>
-    </Grid>
+      </SplitView.Content>
+      </SplitView>
+    </ScrollViewer>
 
     <Grid Grid.Row="1" Padding="16,8" ColumnSpacing="16">
       <Grid.ColumnDefinitions>

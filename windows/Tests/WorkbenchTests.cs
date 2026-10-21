@@ -12,12 +12,29 @@ internal static class WorkbenchTests
         await StartupHistoryLoadKeepsConcurrentEdits();
         await FailedSavesDoNotBlockLaterEdits();
         await HistoryDeduplicatesWindowsPathsAndKeepsTenFiles();
+        WindowBoundsStayWithinTheSelectedWorkArea();
         Check.That(ActivityText.Message("正在写入（50%）", true) == "正在写入", "full-width trailing progress is removed");
         Check.That(ActivityText.Message("正在写入 (50%) ", true) == "正在写入", "ASCII trailing progress is removed");
         Check.That(ActivityText.Message("正在写入（50%）", false) == "正在写入（50%）", "messages without a separate progress value stay intact");
         Check.That(ActivityText.Message("校验 50% 数据", true) == "校验 50% 数据", "percentages inside a message stay intact");
         Check.That(ActivityText.Percentage(0.285f) == "29%", "progress rounds halfway away from zero");
         Check.That(ActivityText.Percentage(0.9995f) == "100%", "near-complete progress rounds to 100 percent");
+    }
+
+    private static void WindowBoundsStayWithinTheSelectedWorkArea()
+    {
+        var laptop = new System.Drawing.Rectangle(0, 0, 1920, 1000);
+        var highDpi = WindowLayout.Fit(new System.Drawing.Rectangle(80, 80, 2320, 1560), laptop);
+        Check.That(highDpi == laptop, "a 200 percent startup window fits the laptop work area including its taskbar");
+        var leftMonitor = new System.Drawing.Rectangle(-1280, -120, 1280, 960);
+        var moved = WindowLayout.Fit(new System.Drawing.Rectangle(-100, 400, 1000, 780), leftMonitor);
+        Check.That(leftMonitor.Contains(moved) && moved.Size == new System.Drawing.Size(1000, 780),
+            "moving to a monitor with negative coordinates keeps the full window visible");
+        var inside = new System.Drawing.Rectangle(-1200, 0, 800, 600);
+        Check.That(WindowLayout.Fit(inside, leftMonitor) == inside, "a window already in the work area keeps its size and position");
+        var small = new System.Drawing.Rectangle(20, 40, 640, 440);
+        Check.That(WindowLayout.Fit(new System.Drawing.Rectangle(0, 0, 1160, 780), small) == small,
+            "small work areas remain usable without a fixed desktop-sized minimum");
     }
 
     private static async Task MissingFilesCanBeRefreshedAndRemoved()

@@ -3,6 +3,7 @@ using Microsoft.UI;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
+using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
@@ -133,8 +134,37 @@ internal static class Ui
     internal static KeyboardAccelerator Accelerator(VirtualKey key, VirtualKeyModifiers modifiers, Action invoke)
     {
         var accelerator = new KeyboardAccelerator { Key = key, Modifiers = modifiers };
-        accelerator.Invoked += (_, args) => { args.Handled = true; invoke(); };
+        accelerator.Invoked += (_, args) =>
+        {
+            if (DialogGate.CurrentCount == 0) return;
+            args.Handled = true;
+            invoke();
+        };
         return accelerator;
+    }
+
+    internal static void SetLiveText(TextBlock block, string text, bool announce = true)
+    {
+        if (block.Text == text) return;
+        block.Text = text;
+        AutomationProperties.SetLiveSetting(block, AutomationLiveSetting.Polite);
+        if (announce && block.IsLoaded && AutomationPeer.ListenerExists(AutomationEvents.LiveRegionChanged))
+        {
+            var peer = FrameworkElementAutomationPeer.FromElement(block)
+                ?? FrameworkElementAutomationPeer.CreatePeerForElement(block);
+            peer?.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
+        }
+    }
+
+    internal static T? Descendant<T>(DependencyObject parent) where T : DependencyObject
+    {
+        for (var index = 0; index < VisualTreeHelper.GetChildrenCount(parent); index++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, index);
+            if (child is T match) return match;
+            if (Descendant<T>(child) is { } nested) return nested;
+        }
+        return null;
     }
 
     internal static void SetVisible(UIElement element, bool visible) =>

@@ -6,6 +6,9 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using ChipDock.Core;
+using Windows.ApplicationModel.DataTransfer;
+using VirtualKey = Windows.System.VirtualKey;
+using VirtualKeyModifiers = Windows.System.VirtualKeyModifiers;
 
 namespace ChipDock;
 
@@ -22,11 +25,32 @@ public sealed partial class SerialView : UserControl
     private static readonly string[] Formats = ["hex", "ascii", "gbk", "utf-8"];
     private static readonly string[] Endings = ["none", "lf", "cr", "crlf"];
     private readonly SerialPreferences preferences = SerialPreferences.Current;
+    private readonly Windows.UI.ViewManagement.UISettings uiSettings = new();
+    private bool resizingLayout;
+    private bool? compactLayout, connectionOverlay;
 
     public SerialView()
     {
         InitializeComponent();
         Terminal.ItemsSource = visibleFrames;
+        var terminalMenu = new MenuFlyout();
+        var copySelected = Ui.MenuItem("复制所选记录", Glyphs.Copy, () => CopyFrames(selectedOnly: true), "Ctrl+C");
+        var copyAll = Ui.MenuItem("复制全部显示记录", Glyphs.Copy, () => CopyFrames(selectedOnly: false));
+        terminalMenu.Items.Add(copySelected);
+        terminalMenu.Items.Add(copyAll);
+        terminalMenu.Opening += (_, _) =>
+        {
+            copySelected.IsEnabled = Terminal.SelectedItems.Count > 0;
+            copyAll.IsEnabled = visibleFrames.Count > 0;
+        };
+        Terminal.ContextFlyout = terminalMenu;
+        Terminal.KeyboardAccelerators.Add(Ui.Accelerator(VirtualKey.C, VirtualKeyModifiers.Control, () =>
+        {
+            // Preserve the TextBlock's native copy when the user selected characters.
+            var focused = FocusManager.GetFocusedElement(XamlRoot) as TextBlock;
+            if (!string.IsNullOrEmpty(focused?.SelectedText)) focused.CopySelectionToClipboard();
+            else CopyFrames(selectedOnly: true);
+        }));
         BaudPicker.ItemsSource = new[] { "1200", "2400", "4800", "9600", "19200", "38400", "57600", "115200", "230400", "460800", "921600" };
         DataBitsPicker.ItemsSource = new byte[] { 5, 6, 7, 8 }; StopBitsPicker.ItemsSource = new byte[] { 1, 2 };
         ParityPicker.ItemsSource = new[] { "无", "奇校验", "偶校验" }; FlowPicker.ItemsSource = new[] { "无", "XON / XOFF", "RTS / CTS" };
@@ -43,6 +67,7 @@ public sealed partial class SerialView : UserControl
         ChecksumPicker.SelectedIndex = Math.Clamp(preferences.Checksum, 0, 5);
         AutoSendInterval.Value = Math.Clamp(preferences.AutoSendIntervalMilliseconds, 10, 3_600_000);
         AutoScrollToggle.IsChecked = preferences.AutoScroll;
+        uiSettings.TextScaleFactorChanged += OnTextScaleChanged;
         timer = DispatcherQueue.CreateTimer(); timer.Interval = TimeSpan.FromMilliseconds(100); timer.Tick += OnTick;
         autoSender.Changed += RefreshState;
         autoSender.Failed += error => { if (!closed) ShowError(error.Message); };
@@ -225,8 +250,8 @@ public sealed partial class SerialView : UserControl
             ? $"{frames.Count} 条" : $"{visibleFrames.Count}/{frames.Count} 条";
         ClearButton.IsEnabled = frames.Count > 0;
         var parity = preferences.Parity switch { 1 => "O", 2 => "E", _ => "N" };
-        ConnectionStatus.Text = busy ? "正在处理…" : status.connected
-            ? $"已连接 · {status.path} · {preferences.BaudRate} · {preferences.DataBits}{parity}{preferences.StopBits}" : "未连接";
+        Ui.SetLiveText(ConnectionStatus, busy ? "正在处理…" : status.connected
+            ? $"已连接 · {status.path} · {preferences.BaudRate} · {preferences.DataBits}{parity}{preferences.StopBits}" : "未连接");
         ByteStatus.Text = $"RX {status.rx_bytes:N0} B    TX {status.tx_bytes:N0} B";
         RefreshButton.IsEnabled = CanRefresh;
         var blocked = UpdateBlocked;
@@ -313,9 +338,13 @@ public sealed partial class SerialView : UserControl
     private void OnToggleConnectionPane(object sender, RoutedEventArgs args)
     {
         var expanded = ConnectionPaneToggle.IsChecked == true;
-        ConnectionPanel.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
-        ConnectionColumn.Width = new GridLength(expanded ? 216 : 0);
+        SerialSurface.IsPaneOpen = expanded;
         ToolTipService.SetToolTip(ConnectionPaneToggle, expanded ? "收起连接区" : "展开连接区");
+    }
+    private void OnConnectionPaneClosed(SplitView sender, object args)
+    {
+        ConnectionPaneToggle.IsChecked = false;
+        ToolTipService.SetToolTip(ConnectionPaneToggle, "展开连接区");
     }
     private void OnToggleComposerPane(object sender, RoutedEventArgs args)
     {
@@ -326,6 +355,7 @@ public sealed partial class SerialView : UserControl
         if (expanded) SetComposerHeight(composerHeight);
         else ComposerRow.Height = new GridLength(0);
         ToolTipService.SetToolTip(ComposerPaneToggle, expanded ? "收起发送区" : "展开发送区");
+        UpdateResponsiveLayout();
     }
     private void OnComposerResize(object sender, DragDeltaEventArgs args)
         => SetComposerHeight(ComposerRow.ActualHeight - args.VerticalChange);
@@ -337,15 +367,88 @@ public sealed partial class SerialView : UserControl
     }
     private void SetComposerHeight(double height)
     {
-        var maximum = Math.Min(320, Math.Max(164, Workspace.ActualHeight - ErrorBar.ActualHeight - 185));
-        composerHeight = Math.Clamp(height, 164, maximum);
+        var minimum = Math.Max(164, SendOptions.ActualHeight + ComposerActions.ActualHeight + 64 * uiSettings.TextScaleFactor);
+        var maximum = Math.Max(minimum, Math.Min(320 * uiSettings.TextScaleFactor,
+            Workspace.ActualHeight - ErrorBar.ActualHeight - ReceiveToolbar.ActualHeight - ReceiveOptions.ActualHeight - 120));
+        ComposerRow.MinHeight = minimum;
+        composerHeight = Math.Clamp(height, minimum, maximum);
         ComposerRow.Height = new GridLength(composerHeight);
     }
-    private void OnRootSizeChanged(object sender, SizeChangedEventArgs args)
+    private void OnRootSizeChanged(object sender, SizeChangedEventArgs args) => UpdateResponsiveLayout();
+    private void OnTextScaleChanged(Windows.UI.ViewManagement.UISettings sender, object args)
+        => DispatcherQueue.TryEnqueue(UpdateResponsiveLayout);
+
+    private void UpdateResponsiveLayout()
     {
-        if (Workspace is not null && ComposerRow is not null && ErrorBar is not null
-            && ComposerPaneToggle?.IsChecked == true && Workspace.ActualHeight > 0)
-            SetComposerHeight(composerHeight);
+        if (resizingLayout || SerialViewport is null || SerialSurface is null || ComposerActions is null || Workspace.ActualWidth <= 0) return;
+        resizingLayout = true;
+        try
+        {
+            var textScale = uiSettings.TextScaleFactor;
+            var overlay = Root.ActualWidth < 1000 * textScale;
+            SerialSurface.OpenPaneLength = Math.Min(Root.ActualWidth, Math.Max(216, 216 * textScale));
+            if (connectionOverlay != overlay)
+            {
+                connectionOverlay = overlay;
+                SerialSurface.DisplayMode = overlay ? SplitViewDisplayMode.Overlay : SplitViewDisplayMode.Inline;
+                SerialSurface.IsPaneOpen = !overlay;
+                ConnectionPaneToggle.IsChecked = !overlay;
+                ToolTipService.SetToolTip(ConnectionPaneToggle, overlay ? "展开连接区" : "收起连接区");
+            }
+            var compact = Workspace.ActualWidth < 850 * textScale;
+            if (compactLayout != compact)
+            {
+                compactLayout = compact;
+                Grid.SetRow(DirectionPicker, compact ? 1 : 0);
+                Grid.SetColumn(DirectionPicker, compact ? 0 : 4);
+                Grid.SetColumnSpan(DirectionPicker, compact ? 3 : 1);
+                Grid.SetRow(TerminalSearch, compact ? 1 : 0);
+                Grid.SetColumn(TerminalSearch, compact ? 3 : 5);
+                Grid.SetColumnSpan(TerminalSearch, compact ? 4 : 1);
+                DirectionPicker.Width = compact ? double.NaN : 112;
+                DirectionPicker.HorizontalAlignment = HorizontalAlignment.Stretch;
+
+                Grid.SetRow(AutoScrollToggle, compact ? 1 : 0);
+                Grid.SetColumn(AutoScrollToggle, compact ? 0 : 3);
+                Grid.SetColumnSpan(AutoScrollToggle, compact ? 2 : 1);
+                Grid.SetRow(ClearButton, compact ? 1 : 0);
+
+                Grid.SetColumnSpan(SendHeading, compact ? 6 : 1);
+                Ui.SetVisible(SendEncodingLabel, !compact);
+                Ui.SetVisible(SendEndingLabel, !compact);
+                for (var index = 0; index < SendOptions.ColumnDefinitions.Count; index++)
+                    SendOptions.ColumnDefinitions[index].Width = compact || index == 0 ? new GridLength(1, GridUnitType.Star) : GridLength.Auto;
+                SetPickerLayout(ChecksumPicker, compact ? 1 : 0, compact ? 0 : 1, compact ? 6 : 1, compact ? "校验算法" : null, compact ? double.NaN : 156);
+                SetPickerLayout(SendFormatPicker, compact ? 2 : 0, compact ? 0 : 3, compact ? 3 : 1, compact ? "编码" : null, compact ? double.NaN : 96);
+                SetPickerLayout(EndingPicker, compact ? 2 : 0, compact ? 3 : 5, compact ? 3 : 1, compact ? "行尾" : null, compact ? double.NaN : 80);
+
+                Grid.SetColumnSpan(IntervalOptions, compact ? 3 : 1);
+                Grid.SetRow(AutoSendButton, compact ? 1 : 0);
+                Grid.SetColumn(AutoSendButton, compact ? 0 : 1);
+                Grid.SetColumnSpan(AutoSendButton, compact ? 3 : 1);
+                AutoSendButton.HorizontalAlignment = HorizontalAlignment.Left;
+                Grid.SetColumnSpan(InputCount, compact ? 2 : 1);
+                InputCount.HorizontalAlignment = HorizontalAlignment.Right;
+                Grid.SetRow(SendButton, compact ? 1 : 0);
+                Grid.SetColumn(SendButton, compact ? 3 : 4);
+                Grid.SetColumnSpan(SendButton, compact ? 2 : 1);
+                SendButton.HorizontalAlignment = HorizontalAlignment.Right;
+            }
+            var expanded = ComposerPaneToggle.IsChecked == true;
+            SerialSurface.Height = Math.Max(SerialViewport.ActualHeight, (expanded ? 520 : 300) * textScale + ErrorBar.ActualHeight);
+            if (expanded) SetComposerHeight(composerHeight);
+        }
+        finally { resizingLayout = false; }
+    }
+
+    private static void SetPickerLayout(ComboBox picker, int row, int column, int span, string? header, double width)
+    {
+        Grid.SetRow(picker, row);
+        Grid.SetColumn(picker, column);
+        Grid.SetColumnSpan(picker, span);
+        picker.Header = header;
+        picker.Width = width;
+        picker.HorizontalAlignment = HorizontalAlignment.Stretch;
     }
     private void ShowError(string message) { ErrorBar.Message = message; ErrorBar.IsOpen = true; }
     private async void OnConnectShortcut(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args) { args.Handled = true; await ToggleConnection(); }
@@ -367,11 +470,22 @@ public sealed partial class SerialView : UserControl
     internal event Action? ActivityChanged;
     internal void ClearTerminal() => OnClear(this, new());
     internal void Find() { TerminalSearch.Focus(FocusState.Programmatic); TerminalSearch.SelectAll(); }
+    private void CopyFrames(bool selectedOnly)
+    {
+        var selected = Terminal.SelectedItems.OfType<TerminalFrame>().ToHashSet();
+        var records = visibleFrames.Where(frame => !selectedOnly || selected.Contains(frame));
+        var text = string.Join(Environment.NewLine, records.Select(frame => $"{frame.Time}\t{frame.Direction}\t{frame.Size} B\t{frame.DisplayText}"));
+        if (text.Length == 0) return;
+        var package = new DataPackage();
+        package.SetText(text);
+        Clipboard.SetContent(package);
+    }
     internal void Shutdown()
     {
         closed = true;
         autoSender.Stop();
         timer.Stop();
+        uiSettings.TextScaleFactorChanged -= OnTextScaleChanged;
         try { SerialBackend.Shutdown(); }
         catch (Exception error) { System.Diagnostics.Trace.TraceError("{0}", error); }
     }

@@ -5,7 +5,7 @@ using static ChipDock.Formatting;
 
 namespace ChipDock;
 
-/// Probe, chip and link settings. Edits apply to the window immediately, as on macOS.
+/// Probe, chip and link settings. Edits stay local until the user connects.
 internal sealed class TargetSetupDialog : ContentDialog
 {
     private static readonly uint[] SpeedPresets = [100, 1000, 4000, 10000, 24000];
@@ -29,11 +29,17 @@ internal sealed class TargetSetupDialog : ContentDialog
     private readonly ContentControl formControls;
     private List<ProbeSummary>? shownProbes;
     private CancellationTokenSource? chipSearch;
-    private bool updating;
+    private string selectedProbe, selectedChip;
+    private bool updating = true;
+
+    private bool ValidSpeed => uint.TryParse(speed.Text.Trim(), out var value) && value > 0;
+    private bool CanConnect => !store.IsBusy && ValidSpeed && (!store.HasScanned || store.Probes.Count > 0);
 
     internal TargetSetupDialog(WorkbenchStore store)
     {
         this.store = store;
+        selectedProbe = store.SelectedProbe;
+        selectedChip = store.Chip;
         progress = Ui.Row(8, new ProgressRing { Width = 16, Height = 16, IsActive = true }, progressMessage);
         progressMessage.MaxWidth = 340;
         Title = "目标配置";
@@ -43,10 +49,10 @@ internal sealed class TargetSetupDialog : ContentDialog
         probe.SelectionChanged += (_, _) =>
         {
             if (updating || probe.SelectedItem is not ComboBoxItem { Tag: string identifier }) return;
-            store.SelectedProbe = identifier;
+            selectedProbe = identifier;
         };
         Ui.Name(probe, "调试探针");
-        scan = Ui.IconButton(Glyphs.Refresh, "扫描调试探针（Ctrl+R）", () => _ = store.ScanProbes());
+        scan = Ui.IconButton(Glyphs.Refresh, "扫描调试探针", () => _ = store.ScanProbes(updateSelection: false));
         var probeRow = new Grid { ColumnSpacing = 4 };
         probeRow.ColumnDefinitions.Add(new());
         probeRow.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
@@ -62,21 +68,18 @@ internal sealed class TargetSetupDialog : ContentDialog
 
         protocol.Items.Add("SWD");
         protocol.Items.Add("JTAG");
-        protocol.SelectionChanged += (_, _) =>
-        {
-            if (updating || protocol.SelectedIndex < 0) return;
-            store.WireProtocol = protocol.SelectedIndex == 1 ? WireProtocol.Jtag : WireProtocol.Swd;
-        };
-
-        speed.TextChanged += (_, _) => { if (!updating) store.Speed = speed.Text.Trim(); };
+        speed.TextChanged += (_, _) => { if (!updating) Update(); };
         Ui.Name(speed, "速度");
         var presets = new MenuFlyout();
-        foreach (var value in SpeedPresets) presets.Items.Add(Ui.MenuItem($"{value} kHz", null, () => store.Speed = value.ToString()));
+        foreach (var value in SpeedPresets) presets.Items.Add(Ui.MenuItem($"{value} kHz", null, () => speed.Text = value.ToString()));
         var presetButton = new DropDownButton { Content = "预设", Flyout = presets };
         var speedRow = Ui.Row(8, speed, Ui.Secondary("kHz"), presetButton);
         foreach (var child in speedRow.Children) ((FrameworkElement)child).VerticalAlignment = VerticalAlignment.Center;
 
-        connectUnderReset.Click += (_, _) => store.ConnectUnderReset = connectUnderReset.IsChecked == true;
+        chip.Text = selectedChip;
+        protocol.SelectedIndex = store.WireProtocol.IsJtag ? 1 : 0;
+        speed.Text = store.Speed;
+        connectUnderReset.IsChecked = store.ConnectUnderReset;
 
         identified.Children.Add(Ui.Text("已识别", 14, semibold: true));
         identified.Children.Add(identifiedFacts);
@@ -100,15 +103,25 @@ internal sealed class TargetSetupDialog : ContentDialog
 
         PrimaryButtonClick += async (_, args) =>
         {
+            CommitChip(null, pickFirst: false);
+            if (!CanConnect) { args.Cancel = true; return; }
             var deferral = args.GetDeferral();
-            failure.IsOpen = false;
-            await store.Connect();
-            // Stay open on failure so the error shows next to the settings that caused it;
-            // close when identification left candidates, so the chip picker can follow.
-            args.Cancel = store.Connection is null && store.TargetCandidates.Count == 0;
-            deferral.Complete();
+            try
+            {
+                failure.IsOpen = false;
+                // An explicit connection attempt commits the draft and can change device state.
+                CloseButtonText = "关闭";
+                store.SelectedProbe = selectedProbe;
+                store.Chip = selectedChip;
+                store.WireProtocol = protocol.SelectedIndex == 1 ? WireProtocol.Jtag : WireProtocol.Swd;
+                store.Speed = speed.Text.Trim();
+                store.ConnectUnderReset = connectUnderReset.IsChecked == true;
+                await store.Connect();
+                args.Cancel = store.Connection is null && store.TargetCandidates.Count == 0;
+            }
+            finally { deferral.Complete(); }
         };
-        SecondaryButtonClick += (_, args) => { args.Cancel = true; store.Disconnect(); };
+        SecondaryButtonClick += (_, args) => { args.Cancel = true; CloseButtonText = "关闭"; store.Disconnect(); };
         Closing += (_, args) => { if (store.IsBusy) args.Cancel = true; };
         Opened += (_, _) => { store.Changed += Update; Update(); };
         Closed += (_, _) => { store.Changed -= Update; chipSearch?.Cancel(); };
@@ -146,8 +159,8 @@ internal sealed class TargetSetupDialog : ContentDialog
             ?? (text.Length == 0 ? "" : null)
             ?? suggestions.FirstOrDefault(candidate => candidate.Equals(text, StringComparison.OrdinalIgnoreCase))
             ?? (pickFirst ? suggestions.FirstOrDefault() : null);
-        if (name is not null) store.Chip = name;
-        if (chip.Text != store.Chip) chip.Text = store.Chip;
+        if (name is not null) selectedChip = name;
+        if (chip.Text != selectedChip) chip.Text = selectedChip;
     }
 
     private void Update()
@@ -158,7 +171,7 @@ internal sealed class TargetSetupDialog : ContentDialog
         state.Style = Ui.Style(connected ? "SuccessTextStyle" : "SecondaryTextStyle");
         PrimaryButtonText = connected ? "重新连接" : "连接";
         SecondaryButtonText = connected ? "断开" : "";
-        IsPrimaryButtonEnabled = store.CanConnect;
+        IsPrimaryButtonEnabled = CanConnect;
         IsSecondaryButtonEnabled = store.CanDisconnect;
 
         if (!ReferenceEquals(shownProbes, store.Probes) || probe.Items.Count == 0)
@@ -168,11 +181,11 @@ internal sealed class TargetSetupDialog : ContentDialog
             probe.Items.Add(new ComboBoxItem { Content = "自动选择", Tag = "" });
             foreach (var summary in store.Probes) probe.Items.Add(new ComboBoxItem { Content = summary.DisplayName(), Tag = summary.identifier });
         }
-        var selected = probe.Items.Cast<ComboBoxItem>().FirstOrDefault(item => (string)item.Tag == store.SelectedProbe);
-        if (selected is null && store.SelectedProbe.Length > 0)
+        var selected = probe.Items.Cast<ComboBoxItem>().FirstOrDefault(item => (string)item.Tag == selectedProbe);
+        if (selected is null && selectedProbe.Length > 0)
         {
             // A profile may name a probe that has not been scanned yet.
-            selected = new ComboBoxItem { Content = store.SelectedProbe, Tag = store.SelectedProbe };
+            selected = new ComboBoxItem { Content = selectedProbe, Tag = selectedProbe };
             probe.Items.Add(selected);
         }
         probe.SelectedItem = selected ?? probe.Items[0];
@@ -182,11 +195,7 @@ internal sealed class TargetSetupDialog : ContentDialog
             : $"已发现 {store.Probes.Count} 个调试探针；连接时会检查并修复支持的 USB 调试接口驱动。";
         probeFooter.Style = Ui.Style(store.Probes.Count == 0 ? "CriticalTextStyle" : "SecondaryTextStyle");
 
-        if (chip.FocusState == FocusState.Unfocused) chip.Text = store.Chip;
-        protocol.SelectedIndex = store.WireProtocol.IsJtag ? 1 : 0;
-        Ui.SetText(speed, store.Speed);
-        Ui.SetVisible(speedError, store.ValidSpeed is null);
-        connectUnderReset.IsChecked = store.ConnectUnderReset;
+        Ui.SetVisible(speedError, !ValidSpeed);
 
         Ui.SetVisible(identified, store.TargetInformation is not null);
         identifiedFacts.Children.Clear();
@@ -201,7 +210,7 @@ internal sealed class TargetSetupDialog : ContentDialog
         formControls.IsEnabled = !store.IsBusy;
         form.Opacity = store.IsBusy ? 0.6 : 1;
         Ui.SetVisible(progress, store.Operation == WorkbenchOperation.Connect);
-        progressMessage.Text = store.Status;
+        Ui.SetLiveText(progressMessage, store.Status);
         updating = false;
     }
 
