@@ -19,7 +19,6 @@
         <Grid.RowDefinitions>
           <RowDefinition Height="56" />
           <RowDefinition Height="*" />
-          <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
         <Border BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="0,0,0,1" Padding="18,0">
           <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
@@ -68,15 +67,8 @@
                 <TextBlock x:Name="ConnectLabel" Text="连接串口" />
               </StackPanel>
             </Button>
-            <TextBlock x:Name="ConfigHint" Text="接入设备后自动检测串口。" FontSize="12" TextWrapping="Wrap"
-                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-            <Expander x:Name="DeviceInfo" Header="设备信息" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
-              <TextBlock x:Name="PortDetails" TextWrapping="Wrap" IsTextSelectionEnabled="True" FontSize="12"
-                         Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-            </Expander>
           </StackPanel>
         </ScrollViewer>
-
       </Grid>
 
       <Grid x:Name="Workspace" Grid.Column="1" Background="{ThemeResource LayerFillColorDefaultBrush}">

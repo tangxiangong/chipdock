@@ -78,50 +78,12 @@ struct SerialConnectionView: View {
                         .padding(.vertical, 4)
                     }
                     .buttonStyle(.borderedProminent)
-                    .tint(serial.status.connected ? Color.secondary : Color.accentColor)
                     .disabled(serial.busy || (!serial.status.connected && serial.preferences.selectedPath.isEmpty))
                     .help("连接或断开串口（⌘K）")
-                    Text(serial.status.connected ? "断开连接后可修改参数。" : serial.ports.isEmpty ? "接入设备后自动检测串口。" : "选择串口，连接后开始收发。")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if let port = serial.selectedPort {
-                        Divider()
-                        DisclosureGroup {
-                            VStack(alignment: .leading, spacing: 10) {
-                                detail("路径", value: port.path)
-                                if let manufacturer = port.manufacturer, !manufacturer.isEmpty {
-                                    detail("厂商", value: manufacturer)
-                                }
-                                if let vid = port.vid, let pid = port.pid {
-                                    detail("VID / PID", value: "\(vid) / \(pid)")
-                                }
-                                if let number = port.serialNumber, !number.isEmpty {
-                                    detail("序列号", value: number)
-                                }
-                            }
-                            .padding(.top, 10)
-                        } label: {
-                            Label("设备信息", systemImage: "info.circle").font(.caption)
-                        }
-                    }
                 }
                 .controlSize(.regular)
                 .padding(18)
             }
-            Spacer(minLength: 0)
-            HStack {
-                SettingsLink {
-                    Label("设置", systemImage: "gearshape").labelStyle(.iconOnly)
-                }
-                .buttonStyle(.borderless)
-                .help("设置（⌘,）")
-                Spacer()
-                Text("ChipDock")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(18)
         }
         .frame(maxHeight: .infinity)
         .background(.bar)
@@ -143,14 +105,6 @@ struct SerialConnectionView: View {
             ),
             choices: values.map { ParameterChoice(value: String($0), title: String($0)) }
         )
-    }
-
-    private func detail(_ title: String, value: String) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(title).foregroundStyle(.secondary)
-            Text(value).textSelection(.enabled)
-        }
-        .font(.caption)
     }
 }
 

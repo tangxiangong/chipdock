@@ -93,7 +93,6 @@ public sealed partial class SerialView : UserControl
             PortPicker.ItemsSource = choices;
             PortPicker.SelectedItem = choices.FirstOrDefault(p => p.Path == selected) ?? choices.FirstOrDefault();
             if (!status.connected) preferences.SelectedPath = (PortPicker.SelectedItem as PortChoice)?.Path ?? "";
-            ShowPortDetails();
         }
         catch (Exception error) { if (!silent && !closed) ShowError(error.Message); }
         finally { updating = false; refreshing = false; if (!closed) RefreshState(); }
@@ -157,30 +156,13 @@ public sealed partial class SerialView : UserControl
         ConnectionStatus.Text = busy ? "正在处理…" : status.connected
             ? $"已连接 · {status.path} · {preferences.BaudRate} · {preferences.DataBits}{parity}{preferences.StopBits}" : "未连接";
         ByteStatus.Text = $"RX {status.rx_bytes:N0} B    TX {status.tx_bytes:N0} B";
-        DeviceInfo.Visibility = PortPicker.SelectedItem is PortChoice { Info: not null } ? Visibility.Visible : Visibility.Collapsed;
         RefreshButton.IsEnabled = CanRefresh;
-        ConfigHint.Text = busy ? "正在更改连接状态…" : status.connected ? "断开连接后可修改参数。"
-            : PortPicker.Items.Count == 0 ? "接入设备后自动检测串口。" : "选择串口，连接后开始收发。";
         var blocked = UpdateBlocked;
         if (blocked != lastUpdateBlocked || CanSend != lastCanSend || CanToggleConnection != lastCanToggle || refreshing != lastRefreshing)
         {
             lastUpdateBlocked = blocked; lastCanSend = CanSend; lastCanToggle = CanToggleConnection; lastRefreshing = refreshing;
             ActivityChanged?.Invoke();
         }
-    }
-    private void ShowPortDetails()
-    {
-        var port = (PortPicker.SelectedItem as PortChoice)?.Info;
-        if (port is null)
-        {
-            PortDetails.Text = status.connected ? "设备已移除，请断开后重新连接。" : "选择串口后显示设备信息。";
-            return;
-        }
-        var details = new List<string> { port.display_name, port.path };
-        if (!string.IsNullOrWhiteSpace(port.manufacturer)) details.Add($"厂商  {port.manufacturer}");
-        if (!string.IsNullOrWhiteSpace(port.vid) && !string.IsNullOrWhiteSpace(port.pid)) details.Add($"VID / PID  {port.vid} / {port.pid}");
-        if (!string.IsNullOrWhiteSpace(port.serial_number)) details.Add($"序列号  {port.serial_number}");
-        PortDetails.Text = string.Join("\n\n", details);
     }
     private void SaveSerialPreferences()
     {
@@ -196,7 +178,7 @@ public sealed partial class SerialView : UserControl
     private void OnSelectionChanged(object sender, SelectionChangedEventArgs args)
     {
         if (updating) return;
-        try { SaveSerialPreferences(); ShowPortDetails(); RefreshState(); } catch (Exception error) { ShowError(error.Message); }
+        try { SaveSerialPreferences(); RefreshState(); } catch (Exception error) { ShowError(error.Message); }
     }
     private void OnDisplayChanged(object sender, SelectionChangedEventArgs args)
     {
