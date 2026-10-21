@@ -362,6 +362,11 @@ RustBuffer uniffi_chipdock_core_fn_func_serial_ports(RustCallStatus *_Nonnull ou
 void uniffi_chipdock_core_fn_func_serial_send(RustBuffer input, RustBuffer format, RustBuffer line_ending, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CHIPDOCK_CORE_FN_FUNC_SERIAL_SEND_WITH_CHECKSUM
+#define UNIFFI_FFIDEF_UNIFFI_CHIPDOCK_CORE_FN_FUNC_SERIAL_SEND_WITH_CHECKSUM
+void uniffi_chipdock_core_fn_func_serial_send_with_checksum(RustBuffer input, RustBuffer format, RustBuffer line_ending, RustBuffer checksum, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_FFI_CHIPDOCK_CORE_RUSTBUFFER_ALLOC
 #define UNIFFI_FFIDEF_FFI_CHIPDOCK_CORE_RUSTBUFFER_ALLOC
 RustBuffer ffi_chipdock_core_rustbuffer_alloc(uint64_t size, RustCallStatus *_Nonnull out_status
@@ -649,6 +654,12 @@ uint16_t uniffi_chipdock_core_checksum_func_serial_ports(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_CHIPDOCK_CORE_CHECKSUM_FUNC_SERIAL_SEND
 #define UNIFFI_FFIDEF_UNIFFI_CHIPDOCK_CORE_CHECKSUM_FUNC_SERIAL_SEND
 uint16_t uniffi_chipdock_core_checksum_func_serial_send(void
+
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CHIPDOCK_CORE_CHECKSUM_FUNC_SERIAL_SEND_WITH_CHECKSUM
+#define UNIFFI_FFIDEF_UNIFFI_CHIPDOCK_CORE_CHECKSUM_FUNC_SERIAL_SEND_WITH_CHECKSUM
+uint16_t uniffi_chipdock_core_checksum_func_serial_send_with_checksum(void
 
 );
 #endif

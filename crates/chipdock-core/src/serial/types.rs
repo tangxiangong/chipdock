@@ -102,6 +102,17 @@ pub enum SendFormat {
 }
 
 #[cfg_attr(feature = "csharp", interoptopus::ffi)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Enum)]
+pub enum ChecksumAlgorithm {
+    None,
+    Sum8,
+    OddParity,
+    EvenParity,
+    Xor8,
+    Crc16Modbus,
+}
+
+#[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Clone, Copy, Debug, Deserialize)]
 #[serde(rename_all = "lowercase")]
 #[derive(uniffi::Enum)]

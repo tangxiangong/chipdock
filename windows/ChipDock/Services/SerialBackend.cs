@@ -32,9 +32,10 @@ internal static class SerialBackend
         var status = response.payload ?? throw new InvalidOperationException("核心未返回连接状态");
         return status;
     });
-    internal static Task Send(string text, SendFormat format, LineEnding lineEnding) => NativeWorker.Serial.Run(() =>
+    internal static Task Send(string text, SendFormat format, LineEnding lineEnding) => Send(text, format, lineEnding, ChecksumAlgorithm.None);
+    internal static Task Send(string text, SendFormat format, LineEnding lineEnding, ChecksumAlgorithm checksum) => NativeWorker.Serial.Run(() =>
     {
-        using var request = new SerialSendRequest { text = text, format = format, line_ending = lineEnding }.Wire();
+        using var request = new SerialSendRequest { text = text, format = format, line_ending = lineEnding, checksum = checksum }.Wire();
         using var wire = Interop.chipdock_serial_send(request).AsOk(); Check(wire.Unwire().error);
     });
 }

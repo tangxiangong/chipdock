@@ -36,6 +36,32 @@ enum SerialDataFormat: String, Codable, CaseIterable, Identifiable, Sendable {
     var title: String { rawValue.uppercased() }
 }
 
+enum SerialChecksum: String, Codable, CaseIterable, Identifiable, Sendable {
+    case none, sum8, oddParity, evenParity, xor8, crc16Modbus
+    var id: Self { self }
+    var title: String {
+        switch self {
+        case .none: "无校验"
+        case .sum8: "校验和"
+        case .oddParity: "奇校验"
+        case .evenParity: "偶校验"
+        case .xor8: "异或校验"
+        case .crc16Modbus: "CRC16/MODBUS"
+        }
+    }
+}
+
+enum SerialBaudRate {
+    static let presets = [1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600]
+
+    static func parse(_ text: String) -> Int? {
+        let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty, value.utf8.allSatisfy({ (48...57).contains($0) }),
+              let rate = UInt32(value), rate > 0 else { return nil }
+        return Int(rate)
+    }
+}
+
 enum SerialDirectionFilter: String, CaseIterable, Identifiable, Sendable {
     case all = "全部"
     case receive = "接收"
@@ -91,6 +117,26 @@ struct SerialPreferences: Codable, Sendable {
     var sendFormat: SerialDataFormat = .utf8
     var lineEnding = "none"
     var autoScroll = true
+    var checksum: SerialChecksum = .none
+    var autoSendIntervalMilliseconds = 1000
+
+    private enum CodingKeys: String, CodingKey {
+        case config, selectedPath, displayFormat, sendFormat, lineEnding, autoScroll, checksum, autoSendIntervalMilliseconds
+    }
+
+    init() {}
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        config = try values.decodeIfPresent(SerialConnectionConfig.self, forKey: .config) ?? SerialConnectionConfig()
+        selectedPath = try values.decodeIfPresent(String.self, forKey: .selectedPath) ?? ""
+        displayFormat = try values.decodeIfPresent(SerialDataFormat.self, forKey: .displayFormat) ?? .utf8
+        sendFormat = try values.decodeIfPresent(SerialDataFormat.self, forKey: .sendFormat) ?? .utf8
+        lineEnding = try values.decodeIfPresent(String.self, forKey: .lineEnding) ?? "none"
+        autoScroll = try values.decodeIfPresent(Bool.self, forKey: .autoScroll) ?? true
+        checksum = try values.decodeIfPresent(SerialChecksum.self, forKey: .checksum) ?? .none
+        autoSendIntervalMilliseconds = try values.decodeIfPresent(Int.self, forKey: .autoSendIntervalMilliseconds) ?? 1000
+    }
 
     static func load() -> Self {
         guard let data = UserDefaults.standard.data(forKey: "serial.preferences"),

@@ -12,6 +12,7 @@ use tokio_serial::{
     DataBits, FlowControl, Parity, SerialPortBuilderExt, SerialPortType, SerialStream, StopBits,
 };
 
+mod checksum;
 pub mod encoding;
 pub mod service;
 pub mod types;
@@ -20,8 +21,8 @@ mod usb_ids;
 use encoding::{DecodedText, ReceiveDecoder, encode_text};
 
 use types::{
-    FlowControl as ConfigFlowControl, LineEnding, Parity as ConfigParity, PortInfo, SendFormat,
-    SerialConfig, SerialStatus,
+    ChecksumAlgorithm, FlowControl as ConfigFlowControl, LineEnding, Parity as ConfigParity,
+    PortInfo, SendFormat, SerialConfig, SerialStatus,
 };
 
 const READ_BUFFER_SIZE: usize = 4096;
@@ -279,7 +280,22 @@ impl SerialManager {
         format: SendFormat,
         line_ending: LineEnding,
     ) -> Result<()> {
+        self.send_with_checksum(input, format, line_ending, ChecksumAlgorithm::None)
+            .await
+    }
+
+    pub async fn send_with_checksum(
+        &self,
+        input: String,
+        format: SendFormat,
+        line_ending: LineEnding,
+        checksum: ChecksumAlgorithm,
+    ) -> Result<()> {
         let mut bytes = encode_input(&input, format)?;
+        if bytes.is_empty() && checksum != ChecksumAlgorithm::None {
+            bail!("发送内容不能为空");
+        }
+        checksum::append_checksum(&mut bytes, checksum);
         if !matches!(format, SendFormat::Hex) {
             bytes.extend_from_slice(line_ending.bytes());
         }
@@ -508,6 +524,62 @@ mod tests {
     #[test]
     fn line_endings_are_only_bytes() {
         assert_eq!(LineEnding::Crlf.bytes(), b"\r\n");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn checksummed_sends_encode_the_payload_before_checksum_and_line_ending() {
+        let (mut master, slave) = SerialStream::pair().unwrap();
+        let manager = SerialManager::new();
+        manager
+            .attach_stream(slave, "pty".into(), SerialConfig::default())
+            .await;
+        for (input, format, expected) in [
+            ("41 42", SendFormat::Hex, vec![0x41, 0x42, 0x83]),
+            ("AB", SendFormat::Ascii, vec![0x41, 0x42, 0x83, 0x0d, 0x0a]),
+            ("中", SendFormat::Gbk, vec![0xd6, 0xd0, 0xa6, 0x0d, 0x0a]),
+            (
+                "中",
+                SendFormat::Utf8,
+                vec![0xe4, 0xb8, 0xad, 0x49, 0x0d, 0x0a],
+            ),
+        ] {
+            for _ in 0..2 {
+                manager
+                    .send_with_checksum(
+                        input.into(),
+                        format,
+                        LineEnding::Crlf,
+                        ChecksumAlgorithm::Sum8,
+                    )
+                    .await
+                    .unwrap();
+                let mut written = vec![0; expected.len()];
+                tokio::time::timeout(Duration::from_secs(1), master.read_exact(&mut written))
+                    .await
+                    .unwrap()
+                    .unwrap();
+                assert_eq!(written, expected, "{format:?}");
+                let batch = manager.poll().await;
+                assert_eq!(batch.frames.last().unwrap().bytes, expected);
+            }
+        }
+        assert_eq!(manager.disconnect().await.tx_bytes, 38);
+    }
+
+    #[tokio::test]
+    async fn empty_payload_cannot_send_a_checksum_only_frame() {
+        let manager = SerialManager::new();
+        let error = manager
+            .send_with_checksum(
+                " ".into(),
+                SendFormat::Hex,
+                LineEnding::None,
+                ChecksumAlgorithm::Crc16Modbus,
+            )
+            .await
+            .unwrap_err();
+        assert_eq!(error.to_string(), "发送内容不能为空");
     }
 
     #[test]

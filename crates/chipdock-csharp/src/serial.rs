@@ -19,6 +19,7 @@ pub struct SerialSendRequest {
     pub text: String,
     pub format: SendFormat,
     pub line_ending: LineEnding,
+    pub checksum: ChecksumAlgorithm,
 }
 #[ffi]
 pub struct SerialStatusResponse {
@@ -115,9 +116,14 @@ pub fn chipdock_serial_send(
             Err(error) => return ffi::Result::Err(error),
         };
         invoke(|| SerialStatusResponse {
-            error: service::serial_send(input.text, input.format, input.line_ending)
-                .err()
-                .map(|error| error.to_string()),
+            error: service::serial_send_with_checksum(
+                input.text,
+                input.format,
+                input.line_ending,
+                input.checksum,
+            )
+            .err()
+            .map(|error| error.to_string()),
         })
     })
 }
@@ -138,8 +144,29 @@ mod tests {
             text: "中文".into(),
             format: SendFormat::Ascii,
             line_ending: LineEnding::Crlf,
+            checksum: ChecksumAlgorithm::None,
         });
         let response = chipdock_serial_send(request).unwrap().unwire();
         assert!(response.error.unwrap().contains("ASCII"));
+    }
+
+    #[test]
+    fn wire_preserves_every_checksum_selection() {
+        for checksum in [
+            ChecksumAlgorithm::None,
+            ChecksumAlgorithm::Sum8,
+            ChecksumAlgorithm::OddParity,
+            ChecksumAlgorithm::EvenParity,
+            ChecksumAlgorithm::Xor8,
+            ChecksumAlgorithm::Crc16Modbus,
+        ] {
+            let mut request = Wire::from(SerialSendRequest {
+                text: "01 03".into(),
+                format: SendFormat::Hex,
+                line_ending: LineEnding::None,
+                checksum,
+            });
+            assert_eq!(request.unwire().checksum, checksum);
+        }
     }
 }

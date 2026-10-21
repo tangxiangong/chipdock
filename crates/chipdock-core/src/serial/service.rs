@@ -74,3 +74,18 @@ pub fn serial_send(
             .block_on(s.serial.send(input, format, line_ending))
     })
 }
+
+#[uniffi::export]
+pub fn serial_send_with_checksum(
+    input: String,
+    format: SendFormat,
+    line_ending: LineEnding,
+    checksum: ChecksumAlgorithm,
+) -> Result<(), SerialError> {
+    perform(|s| {
+        s.runtime.block_on(
+            s.serial
+                .send_with_checksum(input, format, line_ending, checksum),
+        )
+    })
+}

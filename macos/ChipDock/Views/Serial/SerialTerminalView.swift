@@ -3,6 +3,8 @@ import SwiftUI
 
 struct SerialTerminalView: View {
     @Bindable var serial: SerialStore
+    @Binding var connectionExpanded: Bool
+    @Binding var composerExpanded: Bool
     @State private var searchRequested = false
 
     private var visibleFrames: [SerialFrame] {
@@ -16,6 +18,12 @@ struct SerialTerminalView: View {
         let frames = visibleFrames
         VStack(spacing: 0) {
             HStack(spacing: 12) {
+                Toggle(isOn: $connectionExpanded) {
+                    Label("连接区", systemImage: "sidebar.left")
+                }
+                .toggleStyle(.button)
+                .labelStyle(.iconOnly)
+                .help(connectionExpanded ? "收起连接区" : "展开连接区")
                 Label("接收区", systemImage: "text.alignleft")
                     .font(.system(size: 13, weight: .semibold))
                     .fixedSize()
@@ -34,6 +42,12 @@ struct SerialTerminalView: View {
                 TerminalSearchField(text: $serial.searchText, focusRequested: $searchRequested)
                     .frame(minWidth: 120, idealWidth: 180, maxWidth: 220)
                     .help("搜索数据（⌘F）")
+                Toggle(isOn: $composerExpanded) {
+                    Label("发送区", systemImage: "rectangle.bottomthird.inset.filled")
+                }
+                .toggleStyle(.button)
+                .labelStyle(.iconOnly)
+                .help(composerExpanded ? "收起发送区" : "展开发送区")
             }
             .controlSize(.small)
             .padding(.horizontal, 18)

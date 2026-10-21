@@ -3185,6 +3185,100 @@ public func FfiConverterTypeTargetSelection_lower(_ value: TargetSelection) -> R
 }
 
 
+
+public enum ChecksumAlgorithm: Equatable, Hashable, Codable {
+
+    case none
+    case sum8
+    case oddParity
+    case evenParity
+    case xor8
+    case crc16Modbus
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension ChecksumAlgorithm: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeChecksumAlgorithm: FfiConverterRustBuffer {
+    typealias SwiftType = ChecksumAlgorithm
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ChecksumAlgorithm {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .none
+
+        case 2: return .sum8
+
+        case 3: return .oddParity
+
+        case 4: return .evenParity
+
+        case 5: return .xor8
+
+        case 6: return .crc16Modbus
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: ChecksumAlgorithm, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .none:
+            writeInt(&buf, Int32(1))
+
+
+        case .sum8:
+            writeInt(&buf, Int32(2))
+
+
+        case .oddParity:
+            writeInt(&buf, Int32(3))
+
+
+        case .evenParity:
+            writeInt(&buf, Int32(4))
+
+
+        case .xor8:
+            writeInt(&buf, Int32(5))
+
+
+        case .crc16Modbus:
+            writeInt(&buf, Int32(6))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeChecksumAlgorithm_lift(_ buf: RustBuffer) throws -> ChecksumAlgorithm {
+    return try FfiConverterTypeChecksumAlgorithm.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeChecksumAlgorithm_lower(_ value: ChecksumAlgorithm) -> RustBuffer {
+    return FfiConverterTypeChecksumAlgorithm.lower(value)
+}
+
+
+
 /**
  * A structured, recoverable error shared with Swift.
  */
@@ -4908,6 +5002,16 @@ public func serialSend(input: String, format: SendFormat, lineEnding: LineEnding
     )
 }
 }
+public func serialSendWithChecksum(input: String, format: SendFormat, lineEnding: LineEnding, checksum: ChecksumAlgorithm)throws   {try rustCallWithError(FfiConverterTypeSerialError_lift) {
+        uniffiCallStatus in
+    uniffi_chipdock_core_fn_func_serial_send_with_checksum(
+        FfiConverterString.lower(input),
+        FfiConverterTypeSendFormat_lower(format),
+        FfiConverterTypeLineEnding_lower(lineEnding),
+        FfiConverterTypeChecksumAlgorithm_lower(checksum),uniffiCallStatus
+    )
+}
+}
 
 private enum InitializationResult {
     case ok
@@ -4937,6 +5041,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_chipdock_core_checksum_func_serial_send() != 9728) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_chipdock_core_checksum_func_serial_send_with_checksum() != 766) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_chipdock_core_checksum_method_chipdockcore_connect_target() != 19409) {

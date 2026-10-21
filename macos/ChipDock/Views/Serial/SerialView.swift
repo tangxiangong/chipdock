@@ -3,14 +3,18 @@ import SwiftUI
 struct SerialView: View {
     @Bindable var serial: SerialStore
     @SceneStorage("composerHeight") private var composerHeight = 190.0
+    @SceneStorage("serial.connectionExpanded") private var connectionExpanded = true
+    @SceneStorage("serial.composerExpanded") private var composerExpanded = true
     @State private var dragOrigin: Double?
 
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 0) {
-                SerialConnectionView(serial: serial)
-                    .frame(width: 216)
-                Divider()
+                if connectionExpanded {
+                    SerialConnectionView(serial: serial)
+                        .frame(width: 216)
+                    Divider()
+                }
                 VStack(spacing: 0) {
                     if let error = serial.error {
                         errorBanner(error)
@@ -20,11 +24,15 @@ struct SerialView: View {
                         let maximum = min(320.0, max(164.0, geometry.size.height - 188))
                         let height = min(max(164.0, composerHeight), maximum)
                         VStack(spacing: 0) {
-                            SerialTerminalView(serial: serial)
+                            SerialTerminalView(serial: serial,
+                                               connectionExpanded: $connectionExpanded,
+                                               composerExpanded: $composerExpanded)
                                 .frame(minHeight: 180, maxHeight: .infinity)
-                            resizeHandle(height: height, maximum: maximum)
-                            SerialComposerView(serial: serial)
-                                .frame(height: height)
+                            if composerExpanded {
+                                resizeHandle(height: height, maximum: maximum)
+                                SerialComposerView(serial: serial)
+                                    .frame(height: height)
+                            }
                         }
                     }
                 }

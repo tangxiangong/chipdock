@@ -33,6 +33,7 @@
 		AA65BCFAE355FAF63E0E459D /* Formatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B73FB3E8332C9397DD28EA8 /* Formatting.swift */; };
 		AB9CC247E714CEDF4E72DAEC /* LogsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17D7CDC7BD1D20734BF6D71C /* LogsView.swift */; };
 		B0104A1DB0373443A97C5A5D /* MemoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000491E55ECB8E7442F209 /* MemoryView.swift */; };
+		B7FA950AC427E87EC9FDF612 /* SerialAutoSender.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAA18EF3F8196C9F3C037CAF /* SerialAutoSender.swift */; };
 		BD63A5D07234B550A4F9D4CA /* ChipDockApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D88E375C755A5928122815F9 /* ChipDockApp.swift */; };
 		C65A916BB581FB9351C20374 /* ExportDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 326EAB73B96BBCF6CD831CC0 /* ExportDocument.swift */; };
 		C6848DAD9660C66656B773B3 /* WorkbenchStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2030C8D28EBF79E7E029B727 /* WorkbenchStore.swift */; };
@@ -83,6 +84,7 @@
 		8EC9EF1E2BCDDAD0F2C7D658 /* WorkspaceModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceModels.swift; sourceTree = "<group>"; };
 		912CA876CAB236D34E3E2351 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		A0000491E55ECB8E7442F209 /* MemoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryView.swift; sourceTree = "<group>"; };
+		BAA18EF3F8196C9F3C037CAF /* SerialAutoSender.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SerialAutoSender.swift; sourceTree = "<group>"; };
 		BAFB9AB1DD670FA7A2457665 /* FlashView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlashView.swift; sourceTree = "<group>"; };
 		BB2A7428D56EC90E56AD81A0 /* CoreIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreIntegrationTests.swift; sourceTree = "<group>"; };
 		BFD61FCCA0ECC683B074494D /* TargetSetupSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TargetSetupSheet.swift; sourceTree = "<group>"; };
@@ -239,6 +241,7 @@
 		DAFC62B32934FFDA27ED1E0E /* Stores */ = {
 			isa = PBXGroup;
 			children = (
+				BAA18EF3F8196C9F3C037CAF /* SerialAutoSender.swift */,
 				4F852BAFB538C3B78C2E38D6 /* SerialStore.swift */,
 				51A3A56738941F0E42BAE7C6 /* WorkbenchOperations.swift */,
 				2030C8D28EBF79E7E029B727 /* WorkbenchStore.swift */,
@@ -404,6 +407,7 @@
 				B0104A1DB0373443A97C5A5D /* MemoryView.swift in Sources */,
 				301B00981788B8AFF00F6D83 /* RustService.swift in Sources */,
 				140B7392531778BB352D33DB /* SaveProfileSheet.swift in Sources */,
+				B7FA950AC427E87EC9FDF612 /* SerialAutoSender.swift in Sources */,
 				06540A9C226ADDE4882D9B37 /* SerialBackend.swift in Sources */,
 				8D1D499A19ADD56DF394A820 /* SerialComposerView.swift in Sources */,
 				A899255E6E3B3A1B62EC8ADC /* SerialConnectionView.swift in Sources */,

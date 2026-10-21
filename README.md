@@ -8,6 +8,7 @@ ChipDock（原 FlashDesk）是原生嵌入式开发工具集：macOS 版使用 *
 
 - **固件烧录**：支持 ELF、AXF、Intel HEX 和 BIN，分析写入地址与区段，配置擦除、校验和完成后复位。
 - **串口终端**：配置与连接串口，支持 HEX / ASCII / GBK / UTF-8 收发、行尾设置、搜索、方向筛选、自动滚动及 RX / TX 统计；内置 `usb-device.json` 识别常见 USB 串口适配器。
+- **发送控制**：macOS 与 Windows 均支持自定义波特率、可配置毫秒间隔的自动发送，以及校验和、奇／偶校验、异或校验和 CRC16/MODBUS；默认无校验，选中后每次发送自动追加。自动发送在断开连接或发送失败时停止。
 - **并行使用**：烧录与串口各用独立工作线程，可边烧录边查看终端，两者互不阻塞。两者位于同级导航；使用 macOS ⌘1 / ⌘2 或 Windows Ctrl+1 / Ctrl+2 切换，运行中的任务和串口收发会继续。
 - **擦除芯片**：在主界面整片擦除 Flash，不烧录，执行前需确认。
 - **目标连接**：基于 probe-rs，支持 SWD / JTAG、芯片搜索、通信速度和复位下连接。
@@ -16,6 +17,8 @@ ChipDock（原 FlashDesk）是原生嵌入式开发工具集：macOS 版使用 *
 - **自动更新**：macOS 使用 [Sparkle 2](https://sparkle-project.org/)，Windows 使用 [Velopack](https://velopack.io/)，检查、下载、验证签名并安装更新。
 
 macOS 界面使用系统字体、SF Symbols 和原生控件；应用图标使用 Xcode Icon Composer 制作。Windows 版的界面、构建、桥接、自动更新与发布说明见 [windows/README.md](windows/README.md)。
+
+发送校验按当前编码转换后的数据计算，追加在行尾之前；HEX 模式仍不追加行尾。奇／偶校验对整段数据追加一个 `0` 或 `1` 字节，串口通讯参数中的奇偶校验仍单独设置。CRC16/MODBUS 按[串行线路规范](https://www.modbus.org/docs/Modbus_over_serial_line_V1_02.pdf)以低字节在前的顺序追加。
 
 ## 烧录器与驱动
 
@@ -89,6 +92,7 @@ cargo fmt --all -- --check
 cargo clippy --locked -p chipdock-core -p chipdock-bindgen --all-targets -- -D warnings
 ./script/test_backend.sh
 ./script/test_updates.sh
+bash script/test_serial.sh
 cargo test --locked -p chipdock-release-notes
 xcodebuild -project macos/ChipDock.xcodeproj -scheme ChipDock \
   -configuration Debug -destination 'platform=macOS' \
@@ -97,6 +101,7 @@ xcodebuild -project macos/ChipDock.xcodeproj -scheme ChipDock \
 
 - `test_backend.sh` 运行 Rust Core 单元测试和独立的 Swift/UniFFI 集成测试，不启动应用或连接硬件。
 - `test_updates.sh` 验证更新包签名、文件长度、版本、下载地址，以及发布回退保护。
+- `test_serial.sh` 运行不启动界面的 Swift 逻辑检查，覆盖自动发送的停止与重启、设置兼容以及自定义波特率输入。
 - `chipdock-release-notes` 的逻辑测试覆盖通用公告、平台筛选、Markdown 保留和错误标记拦截。
 - Xcode 测试覆盖应用集成、同级工具布局、烧录工作线程阻塞时的串口轮询、Sparkle 配置和硬件操作期间的重启保护。
 

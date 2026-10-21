@@ -14,9 +14,11 @@ public sealed partial class SerialView : UserControl
     private readonly ObservableCollection<TerminalFrame> frames = [];
     private readonly ObservableCollection<TerminalFrame> visibleFrames = [];
     private readonly DispatcherQueueTimer timer;
+    private readonly SerialAutoSender autoSender = new();
     private SerialStatus status = new() { connected = false, path = null, config = null, rx_bytes = 0, tx_bytes = 0, opened_at = null, last_error = null };
     private bool busy, sending, polling, refreshing, updating = true, started, closed;
     private int ticks, retainedBytes, connectionRevision;
+    private double composerHeight = 190;
     private static readonly string[] Formats = ["hex", "ascii", "gbk", "utf-8"];
     private static readonly string[] Endings = ["none", "lf", "cr", "crlf"];
     private readonly SerialPreferences preferences = SerialPreferences.Current;
@@ -25,10 +27,11 @@ public sealed partial class SerialView : UserControl
     {
         InitializeComponent();
         Terminal.ItemsSource = visibleFrames;
-        BaudPicker.ItemsSource = new uint[] { 1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600 };
+        BaudPicker.ItemsSource = new[] { "1200", "2400", "4800", "9600", "19200", "38400", "57600", "115200", "230400", "460800", "921600" };
         DataBitsPicker.ItemsSource = new byte[] { 5, 6, 7, 8 }; StopBitsPicker.ItemsSource = new byte[] { 1, 2 };
         ParityPicker.ItemsSource = new[] { "无", "奇校验", "偶校验" }; FlowPicker.ItemsSource = new[] { "无", "XON / XOFF", "RTS / CTS" };
-        BaudPicker.SelectedItem = preferences.BaudRate; if (BaudPicker.SelectedIndex < 0) BaudPicker.SelectedItem = (uint)115200;
+        BaudPicker.SelectedItem = preferences.BaudRate.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        BaudPicker.Text = preferences.BaudRate.ToString(System.Globalization.CultureInfo.InvariantCulture);
         DataBitsPicker.SelectedItem = preferences.DataBits; if (DataBitsPicker.SelectedIndex < 0) DataBitsPicker.SelectedItem = (byte)8;
         StopBitsPicker.SelectedItem = preferences.StopBits; if (StopBitsPicker.SelectedIndex < 0) StopBitsPicker.SelectedItem = (byte)1;
         ParityPicker.SelectedIndex = Math.Clamp(preferences.Parity, 0, 2); FlowPicker.SelectedIndex = Math.Clamp(preferences.FlowControl, 0, 2);
@@ -36,8 +39,14 @@ public sealed partial class SerialView : UserControl
         DisplayPicker.SelectedIndex = IndexOrDefault(Formats, preferences.DisplayFormat, 3);
         SendFormatPicker.SelectedIndex = IndexOrDefault(Formats, preferences.SendFormat, 3);
         EndingPicker.ItemsSource = new[] { "无", "LF", "CR", "CRLF" }; EndingPicker.SelectedIndex = IndexOrDefault(Endings, preferences.LineEnding, 0);
+        ChecksumPicker.ItemsSource = new[] { "无校验（默认）", "校验和（SUM8）", "奇校验", "偶校验", "异或校验（XOR8）", "CRC16/MODBUS" };
+        ChecksumPicker.SelectedIndex = Math.Clamp(preferences.Checksum, 0, 5);
+        AutoSendInterval.Value = Math.Clamp(preferences.AutoSendIntervalMilliseconds, 10, 3_600_000);
         AutoScrollToggle.IsChecked = preferences.AutoScroll;
         timer = DispatcherQueue.CreateTimer(); timer.Interval = TimeSpan.FromMilliseconds(100); timer.Tick += OnTick;
+        autoSender.Changed += RefreshState;
+        autoSender.Failed += error => { if (!closed) ShowError(error.Message); };
+        BaudPicker.RegisterPropertyChangedCallback(ComboBox.TextProperty, (_, _) => { if (!updating) RefreshState(); });
         updating = false; RefreshState();
     }
 
@@ -60,6 +69,7 @@ public sealed partial class SerialView : UserControl
             {
                 if (batch.status.last_error is { } error && error != status.last_error) ShowError(error);
                 status = batch.status;
+                if (!status.connected) autoSender.Stop();
             }
             foreach (var frame in batch.frames)
             {
@@ -71,7 +81,7 @@ public sealed partial class SerialView : UserControl
             RefreshState();
             if (++ticks % 10 == 0) await RefreshPorts(silent: true);
         }
-        catch (Exception error) { if (!closed) ShowError(error.Message); }
+        catch (Exception error) { autoSender.Stop(); if (!closed) ShowError(error.Message); }
         finally { polling = false; }
     }
     internal async Task RefreshPorts(bool silent = false)
@@ -100,7 +110,8 @@ public sealed partial class SerialView : UserControl
     private async void OnConnect(object sender, RoutedEventArgs args) => await ToggleConnection();
     internal async Task ToggleConnection()
     {
-        if (busy || closed || (!status.connected && PortPicker.SelectedItem is not PortChoice)) return;
+        if (!CanToggleConnection) return;
+        autoSender.Stop();
         busy = true; connectionRevision++; RefreshState();
         try
         {
@@ -119,13 +130,67 @@ public sealed partial class SerialView : UserControl
     private async void OnSend(object sender, RoutedEventArgs args) => await Send();
     internal async Task Send()
     {
-        if (!status.connected || sending || busy || InputBox.Text.Length == 0) return;
+        if (!CanSend) return;
+        await Transmit();
+    }
+    private async Task<bool> Transmit()
+    {
+        if (!CanTransmit) return false;
+        var revision = connectionRevision;
         sending = true; RefreshState();
         var format = SendFormatPicker.SelectedIndex switch { 0 => Core.SendFormat.Hex, 1 => Core.SendFormat.Ascii, 2 => Core.SendFormat.Gbk, _ => Core.SendFormat.Utf8 };
         var ending = EndingPicker.SelectedIndex switch { 1 => Core.LineEnding.Lf, 2 => Core.LineEnding.Cr, 3 => Core.LineEnding.Crlf, _ => Core.LineEnding.None };
-        try { await SerialBackend.Send(InputBox.Text, format, ending); }
-        catch (Exception error) { if (!closed) ShowError(error.Message); }
+        var checksum = ChecksumPicker.SelectedIndex switch
+        {
+            1 => ChecksumAlgorithm.Sum8, 2 => ChecksumAlgorithm.OddParity, 3 => ChecksumAlgorithm.EvenParity,
+            4 => ChecksumAlgorithm.Xor8, 5 => ChecksumAlgorithm.Crc16Modbus, _ => ChecksumAlgorithm.None
+        };
+        try
+        {
+            await SerialBackend.Send(InputBox.Text, format, ending, checksum);
+            return !closed && status.connected && !busy && revision == connectionRevision;
+        }
+        catch (Exception error) { if (!closed && revision == connectionRevision) ShowError(error.Message); return false; }
         finally { sending = false; if (!closed) RefreshState(); }
+    }
+    private void OnAutoSend(object sender, RoutedEventArgs args)
+    {
+        if (autoSender.IsRunning) { autoSender.Stop(); return; }
+        if (CanSend && TryGetAutoSendInterval(out var interval)) autoSender.Start(interval, Transmit);
+    }
+    private bool TryGetAutoSendInterval(out int interval)
+    {
+        var value = AutoSendInterval.Value;
+        interval = 0;
+        if (!double.IsFinite(value) || value != Math.Truncate(value) || value is < 10 or > 3_600_000) return false;
+        interval = (int)value;
+        return true;
+    }
+    private void OnAutoSendIntervalChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
+    {
+        if (updating) return;
+        try
+        {
+            if (TryGetAutoSendInterval(out var interval)) { preferences.AutoSendIntervalMilliseconds = interval; preferences.Save(); }
+            RefreshState();
+        }
+        catch (Exception error) { ShowError(error.Message); }
+    }
+    private bool TryGetBaudRate(out uint baud) => uint.TryParse(BaudPicker.Text.Trim(), System.Globalization.NumberStyles.None,
+        System.Globalization.CultureInfo.InvariantCulture, out baud) && baud > 0;
+    private void OnBaudTextSubmitted(ComboBox sender, ComboBoxTextSubmittedEventArgs args)
+    {
+        if (updating) return;
+        sender.Text = args.Text.Trim();
+        if (!TryGetBaudRate(out _))
+        {
+            args.Handled = true;
+            ShowError("波特率必须是 1–4294967295 的整数。"); RefreshState(); return;
+        }
+        // WinUI must commit valid custom text to SelectedItem to retain it after focus changes.
+        args.Handled = false;
+        try { SaveSerialPreferences(); RefreshState(); }
+        catch (Exception error) { ShowError(error.Message); }
     }
     private void RefreshState()
     {
@@ -133,15 +198,22 @@ public sealed partial class SerialView : UserControl
         PortPicker.IsEnabled = !busy && !status.connected && PortPicker.Items.Count > 0;
         foreach (var picker in new[] { BaudPicker, DataBitsPicker, StopBitsPicker, ParityPicker, FlowPicker })
             picker.IsEnabled = !busy && !status.connected;
-        ConnectButton.IsEnabled = !busy && (status.connected || PortPicker.SelectedItem is PortChoice);
+        ConnectButton.IsEnabled = CanToggleConnection;
         ConnectLabel.Text = busy ? "正在处理…" : status.connected ? "断开连接" : "连接串口";
         ConnectIcon.Symbol = status.connected ? Symbol.Stop : Symbol.Link;
-        SendButton.IsEnabled = status.connected && !sending && !busy && InputBox.Text.Length > 0;
+        SendButton.IsEnabled = CanSend;
         SendLabel.Text = sending ? "发送中…" : "发送";
+        var automatic = autoSender.IsRunning;
+        SendOptions.IsEnabled = !automatic;
+        InputBox.IsReadOnly = automatic;
+        AutoSendInterval.IsEnabled = !automatic;
+        AutoSendButton.IsEnabled = automatic || (CanSend && TryGetAutoSendInterval(out _));
+        AutoSendLabel.Text = automatic ? "停止自动发送" : "自动发送";
+        AutoSendIcon.Glyph = automatic ? "\uE71A" : "\uE8EE";
         InputCount.Text = InputBox.Text.Length == 0 ? "" : $"{new System.Globalization.StringInfo(InputBox.Text).LengthInTextElements:N0} 字符";
         EndingPicker.IsEnabled = SendFormatPicker.SelectedIndex != 0;
         InputBox.PlaceholderText = SendFormatPicker.SelectedIndex == 0 ? "十六进制数据，例如 AA 01 FF" : "输入文本或设备指令…";
-        SendHint.Text = SendFormatPicker.SelectedIndex == 0 ? "HEX 按原始字节发送，不追加行尾。" : "Ctrl+Enter 发送 · Enter 换行";
+        ToolTipService.SetToolTip(InputBox, SendFormatPicker.SelectedIndex == 0 ? "HEX 按原始字节发送，不追加行尾。" : "Ctrl+Enter 发送 · Enter 换行");
         EmptyState.Visibility = visibleFrames.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         var filteredEmpty = frames.Count > 0 && visibleFrames.Count == 0;
         EmptyIcon.Glyph = filteredEmpty ? "\uE721" : "\uE756";
@@ -166,19 +238,25 @@ public sealed partial class SerialView : UserControl
     }
     private void SaveSerialPreferences()
     {
-        preferences.BaudRate = BaudPicker.SelectedItem is uint baud ? baud : 115200;
+        if (TryGetBaudRate(out var baud)) preferences.BaudRate = baud;
         preferences.DataBits = DataBitsPicker.SelectedItem is byte bits ? bits : (byte)8;
         preferences.StopBits = StopBitsPicker.SelectedItem is byte stops ? stops : (byte)1;
         preferences.Parity = Math.Max(0, ParityPicker.SelectedIndex); preferences.FlowControl = Math.Max(0, FlowPicker.SelectedIndex);
         preferences.SelectedPath = (PortPicker.SelectedItem as PortChoice)?.Path ?? "";
         preferences.DisplayFormat = Formats[Math.Clamp(DisplayPicker.SelectedIndex, 0, 3)]; preferences.SendFormat = Formats[Math.Clamp(SendFormatPicker.SelectedIndex, 0, 3)];
         preferences.LineEnding = Endings[Math.Clamp(EndingPicker.SelectedIndex, 0, 3)]; preferences.AutoScroll = AutoScrollToggle.IsChecked == true;
+        preferences.Checksum = Math.Clamp(ChecksumPicker.SelectedIndex, 0, 5);
         preferences.Save();
     }
     private void OnSelectionChanged(object sender, SelectionChangedEventArgs args)
     {
         if (updating) return;
-        try { SaveSerialPreferences(); RefreshState(); } catch (Exception error) { ShowError(error.Message); }
+        try
+        {
+            if (ReferenceEquals(sender, BaudPicker) && BaudPicker.SelectedItem is string rate) BaudPicker.Text = rate;
+            SaveSerialPreferences(); RefreshState();
+        }
+        catch (Exception error) { ShowError(error.Message); }
     }
     private void OnDisplayChanged(object sender, SelectionChangedEventArgs args)
     {
@@ -232,6 +310,23 @@ public sealed partial class SerialView : UserControl
         updating = false;
         RefreshTerminal(); RefreshState();
     }
+    private void OnToggleConnectionPane(object sender, RoutedEventArgs args)
+    {
+        var expanded = ConnectionPaneToggle.IsChecked == true;
+        ConnectionPanel.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
+        ConnectionColumn.Width = new GridLength(expanded ? 216 : 0);
+        ToolTipService.SetToolTip(ConnectionPaneToggle, expanded ? "收起连接区" : "展开连接区");
+    }
+    private void OnToggleComposerPane(object sender, RoutedEventArgs args)
+    {
+        var expanded = ComposerPaneToggle.IsChecked == true;
+        ComposerPanel.Visibility = ComposerSplitter.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
+        ComposerRow.MinHeight = expanded ? 164 : 0;
+        ComposerSplitterRow.Height = new GridLength(expanded ? 5 : 0);
+        if (expanded) SetComposerHeight(composerHeight);
+        else ComposerRow.Height = new GridLength(0);
+        ToolTipService.SetToolTip(ComposerPaneToggle, expanded ? "收起发送区" : "展开发送区");
+    }
     private void OnComposerResize(object sender, DragDeltaEventArgs args)
         => SetComposerHeight(ComposerRow.ActualHeight - args.VerticalChange);
     private void OnSplitterKeyDown(object sender, KeyRoutedEventArgs args)
@@ -243,12 +338,14 @@ public sealed partial class SerialView : UserControl
     private void SetComposerHeight(double height)
     {
         var maximum = Math.Min(320, Math.Max(164, Workspace.ActualHeight - ErrorBar.ActualHeight - 185));
-        ComposerRow.Height = new GridLength(Math.Clamp(height, 164, maximum));
+        composerHeight = Math.Clamp(height, 164, maximum);
+        ComposerRow.Height = new GridLength(composerHeight);
     }
     private void OnRootSizeChanged(object sender, SizeChangedEventArgs args)
     {
-        if (Workspace is not null && ComposerRow is not null && ErrorBar is not null && Workspace.ActualHeight > 0)
-            SetComposerHeight(ComposerRow.Height.Value);
+        if (Workspace is not null && ComposerRow is not null && ErrorBar is not null
+            && ComposerPaneToggle?.IsChecked == true && Workspace.ActualHeight > 0)
+            SetComposerHeight(composerHeight);
     }
     private void ShowError(string message) { ErrorBar.Message = message; ErrorBar.IsOpen = true; }
     private async void OnConnectShortcut(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args) { args.Handled = true; await ToggleConnection(); }
@@ -262,9 +359,10 @@ public sealed partial class SerialView : UserControl
     internal bool CanDisconnect => status.connected && !busy;
     internal Task Disconnect() => CanDisconnect ? ToggleConnection() : Task.CompletedTask;
     internal bool CanRefresh => !refreshing && !busy && !closed;
-    internal bool CanToggleConnection => !busy && (status.connected || PortPicker.SelectedItem is PortChoice);
-    internal bool CanSend => status.connected && !sending && !busy && InputBox.Text.Length > 0;
-    internal bool UpdateBlocked => status.connected || busy || sending;
+    internal bool CanToggleConnection => !closed && !busy && (status.connected || (PortPicker.SelectedItem is PortChoice && TryGetBaudRate(out _)));
+    private bool CanTransmit => !closed && status.connected && !sending && !busy && InputBox.Text.Length > 0;
+    internal bool CanSend => CanTransmit && !autoSender.IsRunning;
+    internal bool UpdateBlocked => status.connected || busy || sending || autoSender.IsRunning;
     private bool lastUpdateBlocked, lastCanSend, lastCanToggle, lastRefreshing;
     internal event Action? ActivityChanged;
     internal void ClearTerminal() => OnClear(this, new());
@@ -272,6 +370,7 @@ public sealed partial class SerialView : UserControl
     internal void Shutdown()
     {
         closed = true;
+        autoSender.Stop();
         timer.Stop();
         try { SerialBackend.Shutdown(); }
         catch (Exception error) { System.Diagnostics.Trace.TraceError("{0}", error); }

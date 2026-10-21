@@ -16,6 +16,8 @@ internal sealed class SerialPreferences
     public string SendFormat { get; set; } = "utf-8";
     public string LineEnding { get; set; } = "none";
     public bool AutoScroll { get; set; } = true;
+    public int Checksum { get; set; }
+    public int AutoSendIntervalMilliseconds { get; set; } = 1000;
     private static SerialPreferences Load()
     {
         try { return JsonSerializer.Deserialize<SerialPreferences>(File.ReadAllText(FilePath)) ?? new(); }

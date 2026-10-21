@@ -15,15 +15,40 @@ final class SerialStore {
     var input = ""
     var searchText = ""
     var direction = SerialDirectionFilter.all
+    var baudRateInput = "" {
+        didSet {
+            if let baudRate = SerialBaudRate.parse(baudRateInput) { preferences.config.baudRate = baudRate }
+        }
+    }
+    var autoSendIntervalInput = "" {
+        didSet {
+            if let interval = autoSendInterval { preferences.autoSendIntervalMilliseconds = interval }
+        }
+    }
     @ObservationIgnored private let core = SerialBackend()
+    private let autoSender = SerialAutoSender()
     @ObservationIgnored private var pollingTask: Task<Void, Never>?
     private var connectionRevision = 0
     private var retainedBytes = 0
 
-    var updateBlocked: Bool { status.connected || busy || sending }
+    init() {
+        baudRateInput = String(preferences.config.baudRate)
+        autoSendIntervalInput = String(preferences.autoSendIntervalMilliseconds)
+    }
+
+    var updateBlocked: Bool { status.connected || busy || sending || autoSending }
 
     var locked: Bool { status.connected || busy }
-    var canSend: Bool { status.connected && !sending && !input.isEmpty && !busy }
+    var canSend: Bool { canTransmit && !autoSending }
+    private var canTransmit: Bool { status.connected && !sending && !input.isEmpty && !busy }
+    var autoSending: Bool { autoSender.isRunning }
+    var validBaudRate: Bool { SerialBaudRate.parse(baudRateInput) != nil }
+    var canConnect: Bool { !busy && !preferences.selectedPath.isEmpty && validBaudRate }
+    var autoSendInterval: Int? {
+        guard let value = Int(autoSendIntervalInput), SerialAutoSender.intervalRange.contains(value) else { return nil }
+        return value
+    }
+    var canStartAutoSend: Bool { canSend && autoSendInterval != nil }
     var selectedPort: SerialPort? { ports.first { $0.path == preferences.selectedPath } }
 
     func start() async {
@@ -42,6 +67,7 @@ final class SerialStore {
                 if !changingConnection && !busy && revision == connectionRevision && status != batch.status {
                     if let failure = batch.status.lastError, failure != status.lastError { error = failure }
                     status = batch.status
+                    if !status.connected { autoSender.stop() }
                 }
                 if !batch.frames.isEmpty { append(batch.frames) }
                 if batch.droppedFrames > 0 { error = "接收速度超过显示缓冲，已丢弃 \(batch.droppedFrames) 条旧记录；字节统计保持完整。" }
@@ -50,8 +76,9 @@ final class SerialStore {
                 try await Task.sleep(for: .milliseconds(100))
             }
         } catch is CancellationError {
+            autoSender.stop()
             _ = try? await core.disconnect()
-        } catch { self.error = error.localizedDescription }
+        } catch { autoSender.stop(); self.error = error.localizedDescription }
     }
 
     func refreshPorts(silent: Bool = false) async {
@@ -70,6 +97,11 @@ final class SerialStore {
 
     func toggleConnection() async {
         guard !busy else { return }
+        if !status.connected && !validBaudRate {
+            error = "波特率必须是 1–4294967295 的整数。"
+            return
+        }
+        autoSender.stop()
         busy = true
         connectionRevision += 1
         let revision = connectionRevision
@@ -85,10 +117,34 @@ final class SerialStore {
 
     func send() async {
         guard canSend else { return }
+        _ = await transmit()
+    }
+
+    func toggleAutoSend() {
+        if autoSending { autoSender.stop(); return }
+        guard canSend else { return }
+        guard let interval = autoSendInterval else {
+            error = "自动发送间隔必须是 10–3600000 毫秒。"
+            return
+        }
+        autoSender.start(intervalMilliseconds: interval) { [weak self] in
+            guard let self else { return false }
+            return await self.transmit()
+        }
+    }
+
+    private func transmit() async -> Bool {
+        guard canTransmit else { return false }
+        let revision = connectionRevision
         sending = true
         defer { sending = false }
-        do { try await core.send(input: input, format: preferences.sendFormat, lineEnding: preferences.lineEnding) }
-        catch { self.error = error.localizedDescription }
+        do {
+            try await core.send(input: input, format: preferences.sendFormat, lineEnding: preferences.lineEnding, checksum: preferences.checksum)
+            return status.connected && !busy && revision == connectionRevision
+        } catch {
+            if revision == connectionRevision { self.error = error.localizedDescription }
+            return false
+        }
     }
 
     func clear() { frames.removeAll(keepingCapacity: true); retainedBytes = 0 }
@@ -105,6 +161,7 @@ final class SerialStore {
     }
 
     func shutdown() async {
+        autoSender.stop()
         pollingTask?.cancel()
         busy = true
         connectionRevision += 1

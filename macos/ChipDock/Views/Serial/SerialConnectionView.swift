@@ -4,7 +4,6 @@ import SwiftUI
 /// Communication settings stay in the rail; devices are selected from a menu.
 struct SerialConnectionView: View {
     @Bindable var serial: SerialStore
-    private let baudRates = [1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600]
 
     private var devices: [ParameterChoice] {
         var choices = serial.ports.map { ParameterChoice(value: $0.path, title: $0.displayName) }
@@ -37,8 +36,28 @@ struct SerialConnectionView: View {
                         }
                     }
                     field("波特率") {
-                        numberPicker("波特率", selection: $serial.preferences.config.baudRate, values: baudRates)
-                            .disabled(serial.locked)
+                        HStack(spacing: 6) {
+                            TextField("自定义波特率", text: $serial.baudRateInput)
+                                .textFieldStyle(.roundedBorder)
+                                .accessibilityLabel("波特率")
+                                .help("输入 1–4294967295 的整数，或从右侧菜单选择常用值。")
+                            Menu {
+                                ForEach(SerialBaudRate.presets, id: \.self) { rate in
+                                    Button(String(rate)) { serial.baudRateInput = String(rate) }
+                                }
+                            } label: {
+                                Image(systemName: "chevron.down")
+                            }
+                            .menuStyle(.borderlessButton)
+                            .menuIndicator(.hidden)
+                            .frame(width: 18)
+                            .accessibilityLabel("常用波特率")
+                            .help("选择常用波特率")
+                        }
+                        .disabled(serial.locked)
+                        if !serial.validBaudRate {
+                            Text("请输入有效的正整数").font(.caption).foregroundStyle(.red)
+                        }
                     }
                     HStack(spacing: 12) {
                         field("数据位") {
@@ -78,7 +97,7 @@ struct SerialConnectionView: View {
                         .padding(.vertical, 4)
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(serial.busy || (!serial.status.connected && serial.preferences.selectedPath.isEmpty))
+                    .disabled(serial.busy || (!serial.status.connected && !serial.canConnect))
                     .help("连接或断开串口（⌘K）")
                 }
                 .controlSize(.regular)
@@ -156,6 +175,7 @@ private struct SerialParameterPicker: NSViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
+    @MainActor
     final class Coordinator: NSObject {
         var parent: SerialParameterPicker
         var choices: [ParameterChoice] = []

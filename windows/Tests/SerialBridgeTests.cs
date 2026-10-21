@@ -29,6 +29,35 @@ internal static class SerialBridgeTests
         catch (InvalidOperationException error) { Check.That(error.Message.Contains("ASCII"), "serial encoding validation crosses the bridge"); }
         Check.That(!(await SerialBackend.Disconnect()).connected, "serial disconnect is safe without a device");
         await ShutdownFollowsQueuedCalls();
+        await AutoSendStopsAndKeepsReplacementRunning();
+    }
+    internal static async Task AutoSendStopsAndKeepsReplacementRunning()
+    {
+        var sender = new SerialAutoSender();
+        try
+        {
+            foreach (var interval in new[] { -1, 0, 9, 3_600_001 })
+                Check.That(!sender.Start(interval, () => Task.FromResult(true)) && !sender.IsRunning, "invalid auto-send intervals never start");
+            var firstEntered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var releaseFirst = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var secondEntered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var releaseSecond = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var stopped = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var calls = 0;
+            sender.Changed += () => { if (!sender.IsRunning && calls >= 2) stopped.TrySetResult(true); };
+            sender.Start(10, async () => { Interlocked.Increment(ref calls); firstEntered.TrySetResult(true); return await releaseFirst.Task; });
+            await firstEntered.Task.WaitAsync(TimeSpan.FromSeconds(3));
+            sender.Stop();
+            sender.Start(10, async () => { Interlocked.Increment(ref calls); secondEntered.TrySetResult(true); return await releaseSecond.Task; });
+            await secondEntered.Task.WaitAsync(TimeSpan.FromSeconds(3));
+            releaseFirst.TrySetResult(false);
+            await Task.Delay(30);
+            Check.That(sender.IsRunning, "an old auto-send task cannot clear its replacement");
+            releaseSecond.TrySetResult(false);
+            await stopped.Task.WaitAsync(TimeSpan.FromSeconds(3));
+            Check.That(calls == 2 && !sender.IsRunning, "automatic sending stops after a failure without another send");
+        }
+        finally { sender.Stop(); }
     }
     private static async Task ShutdownFollowsQueuedCalls()
     {

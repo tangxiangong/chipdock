@@ -11,11 +11,11 @@
 
     <Grid Grid.Row="0" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="0,1,0,1">
       <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="216" />
+        <ColumnDefinition x:Name="ConnectionColumn" Width="216" />
         <ColumnDefinition Width="*" />
       </Grid.ColumnDefinitions>
 
-      <Grid BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="0,0,1,0">
+      <Grid x:Name="ConnectionPanel" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="0,0,1,0">
         <Grid.RowDefinitions>
           <RowDefinition Height="56" />
           <RowDefinition Height="*" />
@@ -48,7 +48,9 @@
                 <SymbolIcon Symbol="Refresh" />
               </Button>
             </Grid>
-            <ComboBox x:Name="BaudPicker" Header="波特率" HorizontalAlignment="Stretch" SelectionChanged="OnSelectionChanged" />
+            <ComboBox x:Name="BaudPicker" Header="波特率" HorizontalAlignment="Stretch" IsEditable="True"
+                      SelectionChanged="OnSelectionChanged" TextSubmitted="OnBaudTextSubmitted"
+                      ToolTipService.ToolTip="输入自定义波特率，或选择常用值；范围 1–4294967295。" />
             <Grid ColumnSpacing="12">
               <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
@@ -75,7 +77,7 @@
         <Grid.RowDefinitions>
           <RowDefinition Height="Auto" />
           <RowDefinition Height="*" MinHeight="180" />
-          <RowDefinition Height="5" />
+          <RowDefinition x:Name="ComposerSplitterRow" Height="5" />
           <RowDefinition x:Name="ComposerRow" Height="190" MinHeight="164" />
         </Grid.RowDefinitions>
         <InfoBar x:Name="ErrorBar" IsOpen="False" Severity="Error" IsClosable="True" SizeChanged="OnRootSizeChanged" />
@@ -90,24 +92,36 @@
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="Auto" />
               <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="Auto" />
               <ColumnDefinition Width="*" />
               <ColumnDefinition Width="Auto" />
-              <ColumnDefinition Width="180" />
+              <ColumnDefinition Width="*" MinWidth="120" MaxWidth="220" />
+              <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+            <ToggleButton x:Name="ConnectionPaneToggle" IsChecked="True" Width="32" Height="32" Padding="0"
+                          VerticalAlignment="Center" Click="OnToggleConnectionPane"
+                          AutomationProperties.Name="连接区" ToolTipService.ToolTip="收起连接区">
+              <FontIcon Glyph="&#xE90C;" FontSize="16" />
+            </ToggleButton>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
               <SymbolIcon Symbol="AlignLeft" />
               <TextBlock Text="接收区" FontSize="13" FontWeight="SemiBold" AutomationProperties.HeadingLevel="Level2" />
             </StackPanel>
-            <TextBlock x:Name="FrameCount" Grid.Column="1" Text="0 条" FontSize="12" VerticalAlignment="Center"
+            <TextBlock x:Name="FrameCount" Grid.Column="2" Text="0 条" FontSize="12" VerticalAlignment="Center"
                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-            <ComboBox x:Name="DirectionPicker" Grid.Column="3" SelectedIndex="0" Width="112" VerticalAlignment="Center"
+            <ComboBox x:Name="DirectionPicker" Grid.Column="4" SelectedIndex="0" Width="112" VerticalAlignment="Center"
                       AutomationProperties.Name="数据方向" SelectionChanged="OnFilterChanged">
               <ComboBoxItem Content="全部" />
               <ComboBoxItem Content="接收 RX" />
               <ComboBoxItem Content="发送 TX" />
             </ComboBox>
-            <TextBox x:Name="TerminalSearch" Grid.Column="4" PlaceholderText="搜索数据" VerticalAlignment="Center"
+            <TextBox x:Name="TerminalSearch" Grid.Column="5" PlaceholderText="搜索数据" VerticalAlignment="Center"
                      AutomationProperties.Name="搜索终端数据" ToolTipService.ToolTip="搜索数据 (Ctrl+F)" TextChanged="OnSearchChanged" />
+            <ToggleButton x:Name="ComposerPaneToggle" Grid.Column="6" IsChecked="True" Width="32" Height="32" Padding="0"
+                          VerticalAlignment="Center" Click="OnToggleComposerPane"
+                          AutomationProperties.Name="发送区" ToolTipService.ToolTip="收起发送区">
+              <FontIcon Glyph="&#xE90E;" FontSize="16" />
+            </ToggleButton>
           </Grid>
 
           <Grid Grid.Row="1">
@@ -198,7 +212,7 @@
           </Grid>
         </Grid>
 
-        <Thumb Grid.Row="2" HorizontalAlignment="Stretch" DragDelta="OnComposerResize" KeyDown="OnSplitterKeyDown"
+        <Thumb x:Name="ComposerSplitter" Grid.Row="2" HorizontalAlignment="Stretch" DragDelta="OnComposerResize" KeyDown="OnSplitterKeyDown"
                IsTabStop="True" AutomationProperties.Name="调整收发区域高度" ToolTipService.ToolTip="拖动调整收发区域；方向键微调">
           <Thumb.Template>
             <ControlTemplate TargetType="Thumb">
@@ -211,15 +225,16 @@
           </Thumb.Template>
         </Thumb>
 
-        <Grid Grid.Row="3">
+        <Grid x:Name="ComposerPanel" Grid.Row="3">
           <Grid.RowDefinitions>
             <RowDefinition Height="44" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
           </Grid.RowDefinitions>
-          <Grid Padding="18,0" ColumnSpacing="12">
+          <Grid x:Name="SendOptions" Padding="18,0" ColumnSpacing="12">
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
               <ColumnDefinition Width="Auto" />
               <ColumnDefinition Width="Auto" />
               <ColumnDefinition Width="Auto" />
@@ -229,11 +244,14 @@
               <SymbolIcon Symbol="Edit" />
               <TextBlock Text="发送区" FontSize="13" FontWeight="SemiBold" AutomationProperties.HeadingLevel="Level2" />
             </StackPanel>
-            <TextBlock Grid.Column="1" Text="编码" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-            <ComboBox x:Name="SendFormatPicker" Grid.Column="2" Width="96" VerticalAlignment="Center"
+            <ComboBox x:Name="ChecksumPicker" Grid.Column="1" Width="156" VerticalAlignment="Center"
+                      AutomationProperties.Name="发送校验算法" SelectionChanged="OnSelectionChanged"
+                      ToolTipService.ToolTip="校验码在行尾之前追加；奇偶校验追加 0 或 1，CRC16 使用 MODBUS 格式。" />
+            <TextBlock Grid.Column="2" Text="编码" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+            <ComboBox x:Name="SendFormatPicker" Grid.Column="3" Width="96" VerticalAlignment="Center"
                       AutomationProperties.Name="发送编码" SelectionChanged="OnSelectionChanged" />
-            <TextBlock Grid.Column="3" Text="行尾" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-            <ComboBox x:Name="EndingPicker" Grid.Column="4" Width="80" VerticalAlignment="Center"
+            <TextBlock Grid.Column="4" Text="行尾" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+            <ComboBox x:Name="EndingPicker" Grid.Column="5" Width="80" VerticalAlignment="Center"
                       AutomationProperties.Name="发送行尾" SelectionChanged="OnSelectionChanged" />
           </Grid>
           <TextBox x:Name="InputBox" Grid.Row="1" AcceptsReturn="True" TextWrapping="Wrap" PlaceholderText="输入文本或设备指令…"
@@ -241,15 +259,28 @@
                    AutomationProperties.Name="要发送的数据" TextChanged="OnInputChanged" />
           <Grid Grid.Row="2" Padding="18,8,18,14" ColumnSpacing="12">
             <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="Auto" />
               <ColumnDefinition Width="*" />
               <ColumnDefinition Width="Auto" />
               <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <TextBlock x:Name="SendHint" Text="Ctrl+Enter 发送 · Enter 换行" FontSize="12" VerticalAlignment="Center"
-                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis" />
-            <TextBlock x:Name="InputCount" Grid.Column="1" FontSize="12" VerticalAlignment="Center"
+            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+              <TextBlock Text="间隔" FontSize="12" VerticalAlignment="Center" />
+              <NumberBox x:Name="AutoSendInterval" Width="96" Minimum="10" Maximum="3600000" Value="1000"
+                         SpinButtonPlacementMode="Hidden" ValueChanged="OnAutoSendIntervalChanged"
+                         AutomationProperties.Name="自动发送间隔，毫秒" ToolTipService.ToolTip="每次发送完成后等待 10–3600000 毫秒。" />
+              <TextBlock Text="ms" FontSize="12" VerticalAlignment="Center" />
+            </StackPanel>
+            <Button x:Name="AutoSendButton" Grid.Column="1" Click="OnAutoSend" ToolTipService.ToolTip="立即发送一次，之后按间隔重复发送；断开连接或发送失败时停止。">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <FontIcon x:Name="AutoSendIcon" Glyph="&#xE8EE;" FontSize="14" />
+                <TextBlock x:Name="AutoSendLabel" Text="自动发送" />
+              </StackPanel>
+            </Button>
+            <TextBlock x:Name="InputCount" Grid.Column="3" FontSize="12" VerticalAlignment="Center"
                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-            <Button x:Name="SendButton" Grid.Column="2" MinWidth="88" Style="{ThemeResource AccentButtonStyle}"
+            <Button x:Name="SendButton" Grid.Column="4" MinWidth="88" Style="{ThemeResource AccentButtonStyle}"
                     Click="OnSend" ToolTipService.ToolTip="发送数据 (Ctrl+Enter)">
               <StackPanel Orientation="Horizontal" Spacing="8">
                 <SymbolIcon Symbol="Send" />

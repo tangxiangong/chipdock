@@ -48,11 +48,19 @@ final class SerialBackend: Sendable {
             status(try translated { try serialDisconnect() })
         }
     }
-    func send(input: String, format: SerialDataFormat, lineEnding: String) async throws {
+    func send(input: String, format: SerialDataFormat, lineEnding: String, checksum: SerialChecksum) async throws {
         try await run { [self] in
             let encoding: SendFormat = switch format { case .hex: .hex; case .ascii: .ascii; case .gbk: .gbk; case .utf8: .utf8 }
             let ending: LineEnding = switch lineEnding { case "lf": .lf; case "cr": .cr; case "crlf": .crlf; default: .none }
-            try translated { try serialSend(input: input, format: encoding, lineEnding: ending) }
+            let algorithm: ChecksumAlgorithm = switch checksum {
+            case .none: .none
+            case .sum8: .sum8
+            case .oddParity: .oddParity
+            case .evenParity: .evenParity
+            case .xor8: .xor8
+            case .crc16Modbus: .crc16Modbus
+            }
+            try translated { try serialSendWithChecksum(input: input, format: encoding, lineEnding: ending, checksum: algorithm) }
         }
     }
     private func translated<T>(_ operation: () throws -> T) throws -> T {
