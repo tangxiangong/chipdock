@@ -24,10 +24,9 @@ python3 - "$APP_BUNDLE/Contents/Info.plist" "$GITHUB_REPOSITORY" <<'PYCODE'
 import plistlib, sys
 with open(sys.argv[1], 'rb') as source:
     info = plistlib.load(source)
-feeds = [info.get('SUFeedURL')] + info.get('SUFallbackFeedURLs', [])
 expected = f'https://github.com/{sys.argv[2]}/releases/download/update-feed/appcast.xml'
-if expected not in feeds:
-    sys.exit('error: Update feeds do not include the release repository')
+if info.get('SUFeedURL') != expected:
+    sys.exit('error: Update feed does not match the release repository')
 PYCODE
 if [[ "${CI:-false}" == true && -z "${SPARKLE_PRIVATE_ED_KEY:-}" ]]; then
     echo 'error: Configure the SPARKLE_PRIVATE_ED_KEY release secret before publishing' >&2; exit 1

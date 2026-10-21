@@ -18,8 +18,6 @@ internal static class UpdateFeed
     // Keep the deployed Velopack identity so existing installations can upgrade.
     internal const string AppId = "FlashDesk";
     internal const string Repository = "tangxiangong/chipdock";
-    internal const string LegacyRepository = "tangxiangong/flashdesk";
-    internal static readonly string[] Repositories = [Repository, LegacyRepository];
     internal const string FeedUrl = $"https://github.com/{Repository}/releases/download/update-feed";
     internal const string PrivateKeyVariable = "WINDOWS_UPDATE_PRIVATE_KEY";
     internal static readonly string[] Architectures = ["x64", "arm64"];
@@ -36,11 +34,11 @@ internal static class UpdateFeed
     /// The signed envelope that clients read from `update-feed`.
     internal static string SignedFeedFile(string channel) => $"releases.{channel}.signed.json";
 
-    internal static string SignedFeedUrl(string channel, string repository = Repository) =>
-        $"https://github.com/{repository}/releases/download/update-feed/{SignedFeedFile(channel)}";
+    internal static string SignedFeedUrl(string channel) =>
+        $"{FeedUrl}/{SignedFeedFile(channel)}";
 
-    internal static string PackageUrl(VelopackAsset asset, string repository = Repository) =>
-        $"https://github.com/{repository}/releases/download/v{asset.Version}/{asset.FileName}";
+    internal static string PackageUrl(VelopackAsset asset) =>
+        $"https://github.com/{Repository}/releases/download/v{asset.Version}/{asset.FileName}";
 
     /// Creates a key pair: the public key goes into the project file, the private key into the release secret.
     internal static (string PublicKey, string PrivateKey) CreateKeyPair()

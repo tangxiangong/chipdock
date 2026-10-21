@@ -99,7 +99,7 @@ Windows 构建没有代码签名证书，因此更新信息单独签名：
 - `ChipDock-<版本号>-windows-<arch>.exe` 与 `ChipDock-<版本号>-windows-<arch>.msi`：安装程序，缺少时会安装 .NET 10 运行时和 VC++ 运行库；Windows App Runtime 仍由应用首次启动时准备。
 - `FlashDesk-<版本号>-win-<arch>-full.nupkg`：应用内更新下载的完整包，用户安装使用 exe 或 msi。
 
-随后 `publish` 作业（`release` 环境）运行 `windows/scripts/publish-release.ps1`：用私钥签名两个架构的更新信息并立即用工程公钥验证，确认版本、包名、大小和 SHA-256，并与已发布的更新信息比较，拒绝版本回退或替换同版本中内容不同的安装包。版本 Release 中已存在的同名文件必须字节一致；全部安装包上传后才更新 `update-feed`。该作业与 macOS 发布共用 `flashdesk-update-feed` 并发组，两个平台不会同时修改更新源。
+随后 `publish` 作业（`release` 环境）运行 `windows/scripts/publish-release.ps1`：用私钥签名两个架构的更新信息并立即用工程公钥验证，确认版本、包名、大小和 SHA-256，并与已发布的更新信息比较，拒绝版本回退或替换同版本中内容不同的安装包。版本 Release 中已存在的同名文件必须字节一致；全部安装包上传后才更新 `update-feed`。该作业与 macOS 发布共用 `flashdesk-update-feed` 并发组。该名称保持稳定，让两个平台及历史版本重跑始终串行更新 `update-feed`。
 
 本机打包（输出未签名，不会发布）：
 
@@ -122,6 +122,8 @@ dotnet run --project windows/Tests -- --workbench-only
 
 `.github/workflows/windows.yml` 在 x64 与 ARM64 上运行 Rust Core 与 Interoptopus 桥接的 Clippy 和测试、WinUI 编译、绑定一致性检查、`windows/Tests` 和发布资源检查；macOS 不测试 Windows 桥接。界面通过人工验收。
 
-### v0.1.2 改名过渡
+## 改名与升级兼容
 
-应用与安装程序显示为 ChipDock；源码工程与可执行文件名统一为 `ChipDock` / `ChipDock.exe`，Velopack 包 ID `FlashDesk`、原配置目录与更新验证公钥保持不变。更新检查优先 `tangxiangong/chipdock`，网络不可用时回退 `tangxiangong/flashdesk`；包下载使用相同迁移策略，签名或哈希失败直接拒绝更新。发布脚本使用 `GITHUB_REPOSITORY`，支持在仓库改名前后继续发布。
+GitHub 仓库已改名为小写 [tangxiangong/chipdock](https://github.com/tangxiangong/chipdock)。更新检查与安装包下载均使用新仓库；旧版中的旧地址由 GitHub 重定向到新仓库。发布脚本使用 `GITHUB_REPOSITORY`，本地发布默认使用 `tangxiangong/chipdock`。
+
+应用与安装程序显示为 ChipDock，源码工程与可执行文件名为 `ChipDock` / `ChipDock.exe`。Velopack 包 ID `FlashDesk`、原配置目录与更新验证公钥继续沿用，以便现有安装原位升级并保留设置。签名或哈希失败会拒绝更新。

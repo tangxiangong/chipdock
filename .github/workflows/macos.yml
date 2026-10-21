@@ -68,6 +68,7 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 45
     environment: release
+    # Keep the lock name stable so historical release reruns share it with both platforms.
     concurrency:
       group: flashdesk-update-feed
       cancel-in-progress: false

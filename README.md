@@ -2,7 +2,7 @@
 
 ChipDock（原 FlashDesk）是原生嵌入式开发工具集：macOS 版使用 **SwiftUI + UniFFI**，Windows 版使用 **WinUI 3 + Interoptopus**，两者共享同一个 **Rust Core**。
 
-当前版本：**v0.1.2**（改名过渡版）。目标仓库：[tangxiangong/chipdock](https://github.com/tangxiangong/chipdock)。仓库改名前仍从原 FlashDesk 仓库发布。
+当前发布版本：**v0.1.2**。项目仓库：[tangxiangong/chipdock](https://github.com/tangxiangong/chipdock)。
 
 ## 功能
 
@@ -115,9 +115,9 @@ xcodebuild -project macos/ChipDock.xcodeproj -scheme ChipDock \
 
 Sparkle 验证 Ed25519 签名后安装更新并重新启动应用。探针操作未完成、串口仍连接或正在收发时，应用会延后更新重启。
 
-macOS 启动时优先选择 `tangxiangong/chipdock` 的 `update-feed/appcast.xml`，新源尚不可用时使用 `tangxiangong/flashdesk`。Windows 每次检查均优先新仓库，网络失败时回退旧仓库；更新包下载也支持两个地址，签名或哈希错误不会触发回退。两端继续使用原签名密钥、安装标识与配置目录，Windows 的 Velopack 包 ID 保留 `FlashDesk`，源码中的可执行文件名已统一为 `ChipDock.exe`。
+macOS 与 Windows 均从 `tangxiangong/chipdock` 的 `update-feed` Release 获取更新信息，更新包从对应版本 Release 下载；新版只使用改名后的仓库地址。签名或哈希错误会拒绝更新。两端继续使用原签名密钥、安装标识与配置目录，以便现有安装原位升级；Windows 的 Velopack 包 ID 保留 `FlashDesk`，可执行文件名为 `ChipDock.exe`。
 
-先发布 v0.1.2，再将 GitHub 仓库改名为 `chipdock`；发布脚本会随 `GITHUB_REPOSITORY` 自动使用当前仓库。请保留 GitHub 的旧地址重定向，不要重新占用 `flashdesk` 名称。
+GitHub 仓库已改名为小写 `chipdock`，发布脚本随 `GITHUB_REPOSITORY` 使用当前仓库。旧版中的 `flashdesk` 地址由 GitHub 重定向到新仓库；不要重新占用该名称，以保留旧版更新能力。
 
 ## 发布
 

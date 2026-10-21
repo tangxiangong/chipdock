@@ -18,36 +18,26 @@ internal static class UpdateSourceTests
         await Check.ThrowsAsync<InvalidDataException>(() => source.GetReleaseFeed(null!, UpdateFeed.AppId, "win-x64/../../evil"), "channel cannot escape the feed URL");
         await Check.ThrowsAsync<InvalidDataException>(() => source.GetReleaseFeed(null!, "Other", "win-x64"), "feed belongs to ChipDock");
         downloader.Files[UpdateFeed.SignedFeedUrl("win-arm64")] = UpdateFeedTests.Feed();
+        downloader.Requests.Clear();
         await Check.ThrowsAsync<InvalidDataException>(() => source.GetReleaseFeed(null!, UpdateFeed.AppId, "win-arm64"), "unsigned feed is refused");
-        await Check.ThrowsAsync<HttpRequestException>(() => new UpdateSource(key, new FakeDownloader()).GetReleaseFeed(null!, UpdateFeed.AppId, "win-x64"),
+        Check.That(downloader.Requests.Count == 1, "signature validation failure does not retry another feed");
+        var unavailable = new FakeDownloader();
+        await Check.ThrowsAsync<HttpRequestException>(() => new UpdateSource(key, unavailable).GetReleaseFeed(null!, UpdateFeed.AppId, "win-x64"),
             "missing feed surfaces as an HTTP error");
-
-        var migrating = new FakeDownloader();
-        var legacyFeed = UpdateFeed.SignedFeedUrl("win-x64", UpdateFeed.LegacyRepository);
-        migrating.Files[legacyFeed] = UpdateFeed.Seal(UpdateFeedTests.Feed(package: package), UpdateFeedTests.Keys.Private);
-        var migrationSource = new UpdateSource(key, migrating);
-        var migrated = (await migrationSource.GetReleaseFeed(null!, UpdateFeed.AppId, "win-x64")).Assets.Single();
-        Check.That(migrating.Requests.SequenceEqual(new[] { UpdateFeed.SignedFeedUrl("win-x64"), legacyFeed }),
-            "new repository is preferred and the old feed works before rename");
-        migrating.Files[UpdateFeed.SignedFeedUrl("win-x64")] = migrating.Files[legacyFeed];
-        migrating.Requests.Clear();
-        await migrationSource.GetReleaseFeed(null!, UpdateFeed.AppId, "win-x64");
-        Check.That(migrating.Requests.Count == 1 && migrating.Requests[0] == UpdateFeed.SignedFeedUrl("win-x64"),
-            "each check returns to the new repository after rename");
-        migrating.Files[UpdateFeed.SignedFeedUrl("win-x64")] = UpdateFeedTests.Feed();
-        migrating.Requests.Clear();
-        await Check.ThrowsAsync<InvalidDataException>(() => migrationSource.GetReleaseFeed(null!, UpdateFeed.AppId, "win-x64"),
-            "an invalid new feed cannot fall back to an older feed");
-        Check.That(migrating.Requests.Count == 1, "signature validation failure never retries the legacy feed");
+        Check.That(unavailable.Requests.SequenceEqual(new[]
+            { "https://github.com/tangxiangong/chipdock/releases/download/update-feed/releases.win-x64.signed.json" }),
+            "unavailable feed only requests the renamed repository");
 
         var path = Path.Combine(Path.GetTempPath(), $"ChipDock-test-{Guid.NewGuid():N}.nupkg");
         try
         {
-            var legacyPackage = UpdateFeed.PackageUrl(migrated, UpdateFeed.LegacyRepository);
-            migrating.Files[legacyPackage] = package;
-            await migrationSource.DownloadReleaseEntry(null!, migrated, path, _ => { });
-            Check.That(migrating.Requests[^1] == legacyPackage && File.ReadAllBytes(path).SequenceEqual(package),
-                "package download also survives repository migration");
+            downloader.Requests.Clear();
+            await Check.ThrowsAsync<HttpRequestException>(() => source.DownloadReleaseEntry(null!, asset, path, _ => { }),
+                "missing package surfaces as an HTTP error");
+            Check.That(downloader.Requests.SequenceEqual(new[]
+                { "https://github.com/tangxiangong/chipdock/releases/download/v0.2.0/FlashDesk-0.2.0-win-x64-full.nupkg" }),
+                "unavailable package only requests the renamed repository");
+            Check.That(!File.Exists(path), "failed download leaves no package");
             downloader.Files[UpdateFeed.PackageUrl(asset)] = package;
             await source.DownloadReleaseEntry(null!, asset, path, _ => { });
             Check.That(File.ReadAllBytes(path).SequenceEqual(package) && downloader.Requests[^1] == UpdateFeed.PackageUrl(asset),

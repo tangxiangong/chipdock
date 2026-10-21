@@ -126,7 +126,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: release
-    # Shared with the macOS release job: both advance assets on the update-feed release.
+    # Keep the lock name stable so historical release reruns share it with both platforms.
     concurrency:
       group: flashdesk-update-feed
       cancel-in-progress: false
