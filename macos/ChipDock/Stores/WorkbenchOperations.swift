@@ -1,13 +1,15 @@
 import Foundation
 
 extension WorkbenchStore {
-    func scanProbes() async {
+    func scanProbes(updateSelection: Bool = true) async {
         let result = await perform(.scan) { [rust] in try await rust.run { try $0.listProbes() } }
         guard let result else { return }
         hasScanned = true
         probes = result
-        if result.count == 1 { selectedProbe = result[0].identifier }
-        else if !result.contains(where: { $0.identifier == selectedProbe }) { selectedProbe = ""; invalidateConnection() }
+        if updateSelection && !showTargetSetup {
+            if result.count == 1 { selectedProbe = result[0].identifier }
+            else if !result.contains(where: { $0.identifier == selectedProbe }) { selectedProbe = ""; invalidateConnection() }
+        }
         status = result.isEmpty ? "未发现调试探针" : "发现 \(result.count) 个调试探针"
         appendLog("探针", status)
     }

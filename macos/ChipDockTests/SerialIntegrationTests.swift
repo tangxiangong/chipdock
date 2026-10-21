@@ -65,7 +65,7 @@ final class SerialIntegrationTests: XCTestCase {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         window.orderFront(nil)
         var snapshots: [Data] = []
-        for (title, filename) in [("串口终端", "serial.png"), ("固件烧录", "flash.png")] {
+        for (title, filename) in [("串口连接", "serial.png"), ("固件烧录", "flash.png")] {
             let (menu, index) = try XCTUnwrap(find(mainMenu, title: title))
             menu.performActionForItem(at: index)
             try await Task.sleep(for: .milliseconds(200))

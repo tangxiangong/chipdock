@@ -92,6 +92,18 @@ final class WorkbenchStore {
         TargetSelection(chip: effectiveChip.isEmpty ? nil : effectiveChip, protocol: wireProtocol,
                         speedKhz: validSpeed, connectUnderReset: connectUnderReset)
     }
+    var targetConfiguration: TargetConfiguration {
+        TargetConfiguration(selectedProbe: selectedProbe, chip: chip, wireProtocol: wireProtocol,
+                            speed: speed, connectUnderReset: connectUnderReset)
+    }
+
+    func applyTargetConfiguration(_ configuration: TargetConfiguration) {
+        selectedProbe = configuration.selectedProbe
+        chip = configuration.chip
+        wireProtocol = configuration.wireProtocol
+        speed = configuration.speed
+        connectUnderReset = configuration.connectUnderReset
+    }
     var firmwareInput: FirmwareInput? {
         guard let firmwareURL else { return nil }
         return FirmwareInput(path: firmwareURL.path, format: nil, baseAddress: isBin ? parseAddress(binBaseAddress) : nil)
@@ -176,9 +188,7 @@ final class WorkbenchStore {
 
     /// Closes the popovers first so the save panel is not dismissed with them.
     func requestExport(_ export: PendingExport) {
-        showLogs = false
-        showMemory = false
-        Task { pendingExport = export }
+        pendingExport = export
     }
 
     func appendLog(_ operation: String, _ message: String, level: ActivityEntry.Level = .info, detail: String = "") {

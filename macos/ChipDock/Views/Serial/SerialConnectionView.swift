@@ -50,7 +50,7 @@ struct SerialConnectionView: View {
                             }
                             .menuStyle(.borderlessButton)
                             .menuIndicator(.hidden)
-                            .frame(width: 18)
+                            .fixedSize()
                             .accessibilityLabel("常用波特率")
                             .help("选择常用波特率")
                         }
@@ -105,7 +105,6 @@ struct SerialConnectionView: View {
             }
         }
         .frame(maxHeight: .infinity)
-        .background(.bar)
     }
 
     private func field<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
@@ -141,8 +140,6 @@ private struct SerialParameterPicker: NSViewRepresentable {
 
     func makeNSView(context: Context) -> NSPopUpButton {
         let button = NSPopUpButton(frame: .zero, pullsDown: false)
-        button.font = .systemFont(ofSize: 13)
-        button.bezelStyle = .rounded
         button.cell?.lineBreakMode = .byTruncatingMiddle
         button.setContentHuggingPriority(.defaultLow, for: .horizontal)
         button.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
@@ -170,7 +167,7 @@ private struct SerialParameterPicker: NSViewRepresentable {
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSPopUpButton, context: Context) -> CGSize? {
-        CGSize(width: proposal.width ?? 180, height: 30)
+        CGSize(width: proposal.width ?? 180, height: nsView.intrinsicContentSize.height)
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }

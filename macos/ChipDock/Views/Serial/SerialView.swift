@@ -5,34 +5,34 @@ struct SerialView: View {
     @SceneStorage("composerHeight") private var composerHeight = 190.0
     @SceneStorage("serial.connectionExpanded") private var connectionExpanded = true
     @SceneStorage("serial.composerExpanded") private var composerExpanded = true
-    @State private var dragOrigin: Double?
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 0) {
+            HSplitView {
                 if connectionExpanded {
                     SerialConnectionView(serial: serial)
-                        .frame(width: 216)
-                    Divider()
+                        .frame(minWidth: 180, idealWidth: 216, maxWidth: 320)
                 }
                 VStack(spacing: 0) {
                     if let error = serial.error {
                         errorBanner(error)
                         Divider()
                     }
-                    GeometryReader { geometry in
-                        let maximum = min(320.0, max(164.0, geometry.size.height - 188))
-                        let height = min(max(164.0, composerHeight), maximum)
-                        VStack(spacing: 0) {
-                            SerialTerminalView(serial: serial,
-                                               connectionExpanded: $connectionExpanded,
-                                               composerExpanded: $composerExpanded)
-                                .frame(minHeight: 180, maxHeight: .infinity)
-                            if composerExpanded {
-                                resizeHandle(height: height, maximum: maximum)
-                                SerialComposerView(serial: serial)
-                                    .frame(height: height)
-                            }
+                    VSplitView {
+                        SerialTerminalView(serial: serial,
+                                           connectionExpanded: $connectionExpanded,
+                                           composerExpanded: $composerExpanded)
+                            .frame(minHeight: 180, maxHeight: .infinity)
+                        if composerExpanded {
+                            SerialComposerView(serial: serial)
+                                .frame(minHeight: 164, idealHeight: composerHeight, maxHeight: 320)
+                                .background {
+                                    GeometryReader { geometry in
+                                        Color.clear.onDisappear {
+                                            if geometry.size.height >= 164 { composerHeight = min(320, geometry.size.height) }
+                                        }
+                                    }
+                                }
                         }
                     }
                 }
@@ -42,41 +42,8 @@ struct SerialView: View {
             statusBar
         }
         .frame(minWidth: 860, minHeight: 600)
-    }
-
-    private func resizeHandle(height: Double, maximum: Double) -> some View {
-        Rectangle()
-            .fill(.quaternary.opacity(0.5))
-            .frame(height: 8)
-            .overlay { Capsule().fill(.secondary).frame(width: 28, height: 2) }
-            .contentShape(Rectangle())
-            .gesture(DragGesture(minimumDistance: 0)
-                .onChanged { value in
-                    let origin = dragOrigin ?? height
-                    if dragOrigin == nil { dragOrigin = origin }
-                    composerHeight = min(max(164, origin - value.translation.height), maximum)
-                }
-                .onEnded { _ in dragOrigin = nil })
-            .focusable()
-            .onKeyPress(.upArrow) {
-                composerHeight = min(height + 16, maximum)
-                return .handled
-            }
-            .onKeyPress(.downArrow) {
-                composerHeight = max(164, height - 16)
-                return .handled
-            }
-            .accessibilityElement()
-            .accessibilityLabel("调整发送区高度")
-            .accessibilityValue("\(Int(height)) 点")
-            .accessibilityAdjustableAction { direction in
-                switch direction {
-                case .increment: composerHeight = min(height + 16, maximum)
-                case .decrement: composerHeight = max(164, height - 16)
-                @unknown default: break
-                }
-            }
-            .help("拖动调整收发区域；方向键微调")
+        .focusedSceneValue(\.serialConnectionExpanded, $connectionExpanded)
+        .focusedSceneValue(\.serialComposerExpanded, $composerExpanded)
     }
 
     private var statusBar: some View {
@@ -96,7 +63,6 @@ struct SerialView: View {
         .foregroundStyle(.secondary)
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
-        .background(.bar)
         .accessibilityElement(children: .combine)
     }
 
@@ -121,8 +87,18 @@ struct SerialView: View {
 private struct SerialSearchRequestKey: FocusedValueKey {
     typealias Value = Binding<Bool>
 }
+private struct SerialConnectionExpandedKey: FocusedValueKey { typealias Value = Binding<Bool> }
+private struct SerialComposerExpandedKey: FocusedValueKey { typealias Value = Binding<Bool> }
 
 extension FocusedValues {
+    var serialConnectionExpanded: Binding<Bool>? {
+        get { self[SerialConnectionExpandedKey.self] }
+        set { self[SerialConnectionExpandedKey.self] = newValue }
+    }
+    var serialComposerExpanded: Binding<Bool>? {
+        get { self[SerialComposerExpandedKey.self] }
+        set { self[SerialComposerExpandedKey.self] = newValue }
+    }
     var serialSearchRequested: Binding<Bool>? {
         get { self[SerialSearchRequestKey.self] }
         set { self[SerialSearchRequestKey.self] = newValue }

@@ -2,6 +2,9 @@ import SwiftUI
 
 struct MemoryView: View {
     @Bindable var store: WorkbenchStore
+    @Environment(\.openWindow) private var openWindow
+    @State private var confirmErase = false
+    @State private var pendingExport: PendingExport?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -14,8 +17,7 @@ struct MemoryView: View {
                     .help("导出为二进制")
                 Menu {
                     Button("擦除整个芯片…", systemImage: "trash", role: .destructive) {
-                        store.showMemory = false
-                        store.confirmErase = true
+                        confirmErase = true
                     }
                     .disabled(!store.canErase)
                 } label: { Image(systemName: "ellipsis.circle") }
@@ -66,16 +68,36 @@ struct MemoryView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .confirmationDialog("擦除 \(store.targetName) 的全部 Flash？", isPresented: $confirmErase, titleVisibility: .visible) {
+            Button("擦除全部 Flash", role: .destructive) { Task { await store.erase() } }
+            Button("取消", role: .cancel) {}
+        } message: { Text("芯片中的固件与数据将被永久删除，此操作无法撤销。") }
+        .onChange(of: store.failure?.id) { _, failure in
+            if failure != nil { openWindow(id: "toolkit") }
+        }
+        .focusedSceneValue(\.memoryExport, export)
+        .focusedSceneValue(\.memoryViewActions, MemoryViewActions(requestErase: { confirmErase = true }))
+        .exportPresentation($pendingExport)
     }
 
     private func export() {
         guard let result = store.memoryResult else { return }
-        store.requestExport(PendingExport(data: result.data, contentType: .data,
-                                          filename: "memory-\(addressLabel(result.address)).bin", operation: "导出内存"))
+        pendingExport = PendingExport(data: result.data, contentType: .data,
+                                      filename: "memory-\(addressLabel(result.address)).bin", operation: "导出内存")
     }
 }
 
-/// Eight bytes per row keeps the popover narrow.
+struct MemoryViewActions { var requestErase: () -> Void }
+private struct MemoryViewActionsKey: FocusedValueKey { typealias Value = MemoryViewActions }
+
+extension FocusedValues {
+    var memoryViewActions: MemoryViewActions? {
+        get { self[MemoryViewActionsKey.self] }
+        set { self[MemoryViewActionsKey.self] = newValue }
+    }
+}
+
+/// Eight bytes per row also fits a narrow utility window.
 private struct HexDump: View {
     var lines: [MemoryLine]
 

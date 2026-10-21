@@ -17,43 +17,8 @@ struct SerialTerminalView: View {
     var body: some View {
         let frames = visibleFrames
         VStack(spacing: 0) {
-            HStack(spacing: 12) {
-                Toggle(isOn: $connectionExpanded) {
-                    Label("连接区", systemImage: "sidebar.left")
-                }
-                .toggleStyle(.button)
-                .labelStyle(.iconOnly)
-                .help(connectionExpanded ? "收起连接区" : "展开连接区")
-                Label("接收区", systemImage: "text.alignleft")
-                    .font(.system(size: 13, weight: .semibold))
-                    .fixedSize()
-                Text(serial.searchText.isEmpty && serial.direction == .all
-                     ? "\(serial.frames.count) 条" : "\(frames.count)/\(serial.frames.count) 条")
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                Spacer(minLength: 0)
-                Picker("数据方向", selection: $serial.direction) {
-                    ForEach(SerialDirectionFilter.allCases) { Text($0.rawValue).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .frame(width: 152)
-                TerminalSearchField(text: $serial.searchText, focusRequested: $searchRequested)
-                    .frame(minWidth: 120, idealWidth: 180, maxWidth: 220)
-                    .help("搜索数据（⌘F）")
-                Toggle(isOn: $composerExpanded) {
-                    Label("发送区", systemImage: "rectangle.bottomthird.inset.filled")
-                }
-                .toggleStyle(.button)
-                .labelStyle(.iconOnly)
-                .help(composerExpanded ? "收起发送区" : "展开发送区")
-            }
-            .controlSize(.small)
-            .padding(.horizontal, 18)
-            .frame(height: 56)
-            Divider()
-            TerminalTable(frames: frames, format: serial.preferences.displayFormat, autoScroll: serial.preferences.autoScroll)
+            TerminalTable(frames: frames, format: serial.preferences.displayFormat,
+                          autoScroll: serial.preferences.autoScroll, state: serial.terminalTableState)
                 .overlay {
                     if frames.isEmpty { emptyState(filtered: !serial.frames.isEmpty) }
                 }
@@ -63,6 +28,7 @@ struct SerialTerminalView: View {
                     ForEach(SerialDataFormat.allCases) { Text($0.title).tag($0) }
                 }
                 .frame(width: 160)
+                Text("\(frames.count)/\(serial.frames.count) 条").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                 Spacer(minLength: 12)
                 Toggle(isOn: $serial.preferences.autoScroll) {
                     Label("自动滚动", systemImage: "arrow.down.to.line")
@@ -78,10 +44,25 @@ struct SerialTerminalView: View {
             .controlSize(.small)
             .padding(.horizontal, 18)
             .frame(height: 44)
-            .background(.bar)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(.background)
+        .toolbar {
+            ToolbarItemGroup(placement: .navigation) {
+                Toggle(isOn: $connectionExpanded) { Label("连接区", systemImage: "sidebar.left") }
+                    .toggleStyle(.button).help(connectionExpanded ? "收起连接区" : "展开连接区")
+                Toggle(isOn: $composerExpanded) { Label("发送区", systemImage: "rectangle.bottomthird.inset.filled") }
+                    .toggleStyle(.button).help(composerExpanded ? "收起发送区" : "展开发送区")
+            }
+            ToolbarItemGroup(placement: .primaryAction) {
+                Picker("数据方向", selection: $serial.direction) {
+                    ForEach(SerialDirectionFilter.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented).labelsHidden().fixedSize()
+                SearchField(prompt: "搜索数据", text: $serial.searchText, focusRequested: $searchRequested)
+                    .frame(minWidth: 120, idealWidth: 180, maxWidth: 240)
+                    .help("搜索数据（⌘F）")
+            }
+        }
         .focusedSceneValue(\.serialSearchRequested, $searchRequested)
     }
 
@@ -111,9 +92,11 @@ private struct TerminalTable: NSViewRepresentable {
     let frames: [SerialFrame]
     let format: SerialDataFormat
     let autoScroll: Bool
+    let state: TerminalTableState
 
     func makeNSView(context: Context) -> NSScrollView {
         let table = TerminalNSTableView()
+        context.coordinator.state = state
         table.delegate = context.coordinator
         table.dataSource = context.coordinator
         table.style = .fullWidth
@@ -133,7 +116,7 @@ private struct TerminalTable: NSViewRepresentable {
         ] {
             let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier(name))
             column.title = title
-            column.width = width
+            column.width = max(minimum, state.columnWidths[name] ?? width)
             column.minWidth = minimum
             table.addTableColumn(column)
         }
@@ -152,30 +135,35 @@ private struct TerminalTable: NSViewRepresentable {
         scroll.hasHorizontalScroller = true
         scroll.autohidesScrollers = true
         scroll.documentView = table
+        context.coordinator.scroll = scroll
+        scroll.contentView.postsBoundsChangedNotifications = true
+        NotificationCenter.default.addObserver(context.coordinator, selector: #selector(Coordinator.didScroll(_:)),
+                                               name: NSView.boundsDidChangeNotification, object: scroll.contentView)
         return scroll
     }
 
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         guard let table = scroll.documentView as? NSTableView else { return }
         let coordinator = context.coordinator
-        let changed = coordinator.frames.map(\.id) != frames.map(\.id) || coordinator.format != format
-        let follow = autoScroll && (changed || !coordinator.autoScroll)
+        coordinator.state = state
+        let ids = frames.map(\.id)
+        let changed = coordinator.frames.map(\.id) != ids || coordinator.format != format
+        let initial = !coordinator.didLoad
+        let follow = autoScroll && (initial ? state.topFrameID == nil : changed || !coordinator.autoScroll)
+        if !initial { coordinator.captureViewport() }
+        coordinator.updating = true
+        defer { coordinator.updating = false; coordinator.didLoad = true }
         if changed {
-            let selection = Set(table.selectedRowIndexes.compactMap { index in
-                coordinator.frames.indices.contains(index) ? coordinator.frames[index].id : nil
-            })
-            let topRow = table.row(at: NSPoint(x: 0, y: scroll.contentView.bounds.minY))
-            let anchor = coordinator.frames.indices.contains(topRow) ? coordinator.frames[topRow].id : nil
-            let offset = topRow >= 0 ? scroll.contentView.bounds.minY - table.rect(ofRow: topRow).minY : 0
             coordinator.frames = frames
             coordinator.format = format
             table.reloadData()
-            table.selectRowIndexes(IndexSet(frames.indices.filter { selection.contains(frames[$0].id) }), byExtendingSelection: false)
-            if !autoScroll, let anchor, let index = frames.firstIndex(where: { $0.id == anchor }) {
-                table.layoutSubtreeIfNeeded()
-                scroll.contentView.scroll(to: NSPoint(x: scroll.contentView.bounds.minX, y: max(0, table.rect(ofRow: index).minY + offset)))
-                scroll.reflectScrolledClipView(scroll.contentView)
-            }
+            table.selectRowIndexes(state.selection(in: ids), byExtendingSelection: false)
+        }
+        if !follow, (changed || initial), let index = state.anchor(in: ids) {
+            table.layoutSubtreeIfNeeded()
+            let offset = ids.contains(where: { $0 == state.topFrameID }) ? state.topOffset : 0
+            scroll.contentView.scroll(to: NSPoint(x: state.horizontalOffset, y: max(0, table.rect(ofRow: index).minY + offset)))
+            scroll.reflectScrolledClipView(scroll.contentView)
         }
         coordinator.autoScroll = autoScroll
         if follow, !frames.isEmpty { table.scrollRowToVisible(frames.count - 1) }
@@ -183,10 +171,41 @@ private struct TerminalTable: NSViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
+    static func dismantleNSView(_ scroll: NSScrollView, coordinator: Coordinator) {
+        coordinator.captureViewport()
+    }
+
+    @MainActor
     final class Coordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate {
         var frames: [SerialFrame] = []
         var format = SerialDataFormat.utf8
         var autoScroll = false
+        var state: TerminalTableState?
+        weak var scroll: NSScrollView?
+        var updating = false
+        var didLoad = false
+
+        deinit { NotificationCenter.default.removeObserver(self) }
+
+        func captureViewport() {
+            guard didLoad, let state, let scroll, let table = scroll.documentView as? NSTableView else { return }
+            state.selectedIDs = Set(table.selectedRowIndexes.compactMap { frames.indices.contains($0) ? frames[$0].id : nil })
+            let row = table.row(at: NSPoint(x: 0, y: scroll.contentView.bounds.minY))
+            if frames.indices.contains(row) {
+                state.topFrameID = frames[row].id
+                state.topOffset = scroll.contentView.bounds.minY - table.rect(ofRow: row).minY
+            }
+            state.horizontalOffset = scroll.contentView.bounds.minX
+            for column in table.tableColumns { state.columnWidths[column.identifier.rawValue] = column.width }
+        }
+
+        @objc func didScroll(_ notification: Notification) {
+            if !updating { captureViewport() }
+        }
+
+        func tableViewSelectionDidChange(_ notification: Notification) {
+            if !updating { captureViewport() }
+        }
 
         func numberOfRows(in tableView: NSTableView) -> Int { frames.count }
 
@@ -255,6 +274,7 @@ private struct TerminalTable: NSViewRepresentable {
         func tableViewColumnDidResize(_ notification: Notification) {
             guard let table = notification.object as? NSTableView else { return }
             table.noteHeightOfRows(withIndexesChanged: IndexSet(integersIn: 0..<frames.count))
+            if !updating { captureViewport() }
         }
     }
 }
@@ -275,46 +295,5 @@ private final class TerminalNSTableView: NSTableView {
         copy.target = self
         copy.isEnabled = !selectedRowIndexes.isEmpty
         return menu
-    }
-}
-
-private struct TerminalSearchField: NSViewRepresentable {
-    @Binding var text: String
-    @Binding var focusRequested: Bool
-
-    func makeNSView(context: Context) -> NSSearchField {
-        let field = NSSearchField()
-        field.placeholderString = "搜索数据"
-        field.sendsSearchStringImmediately = true
-        field.sendsWholeSearchString = false
-        field.delegate = context.coordinator
-        field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        field.setAccessibilityLabel("搜索数据")
-        return field
-    }
-
-    func updateNSView(_ field: NSSearchField, context: Context) {
-        context.coordinator.parent = self
-        if field.stringValue != text { field.stringValue = text }
-        if focusRequested, let window = field.window {
-            window.makeFirstResponder(field)
-            field.currentEditor()?.selectAll(nil)
-            let request = $focusRequested
-            DispatchQueue.main.async { request.wrappedValue = false }
-        }
-    }
-
-    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSSearchField, context: Context) -> CGSize? {
-        CGSize(width: proposal.width ?? 180, height: nsView.intrinsicContentSize.height)
-    }
-
-    func makeCoordinator() -> Coordinator { Coordinator(self) }
-
-    final class Coordinator: NSObject, NSSearchFieldDelegate {
-        var parent: TerminalSearchField
-        init(_ parent: TerminalSearchField) { self.parent = parent }
-        func controlTextDidChange(_ notification: Notification) {
-            if let field = notification.object as? NSSearchField { parent.text = field.stringValue }
-        }
     }
 }

@@ -30,6 +30,24 @@ struct ChipDockApp: App {
         .defaultSize(width: 1160, height: 780)
         .commands { WorkbenchCommands(toolkit: toolkit, store: store, serial: serial, updater: updater) }
 
+        Window("活动日志", id: WorkbenchPanel.logs.rawValue) {
+            LogsView(store: store)
+                .frame(minWidth: 500, minHeight: 240)
+                .preferredColorScheme(appearance.colorScheme)
+                .onAppear { store.showLogs = true }
+                .onDisappear { store.showLogs = false }
+        }
+        .defaultSize(width: 720, height: 440)
+
+        Window("目标内存", id: WorkbenchPanel.memory.rawValue) {
+            MemoryView(store: store)
+                .frame(minWidth: 420, minHeight: 360)
+                .preferredColorScheme(appearance.colorScheme)
+                .onAppear { store.showMemory = true }
+                .onDisappear { store.showMemory = false }
+        }
+        .defaultSize(width: 560, height: 600)
+
         Settings {
             SettingsView(coreVersion: store.rust.version, updater: updater)
                 .preferredColorScheme(appearance.colorScheme)

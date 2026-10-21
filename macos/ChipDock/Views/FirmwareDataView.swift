@@ -65,7 +65,6 @@ struct FirmwareDataView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .textSelection(.enabled)
                     }
-                    .scrollIndicators(.never)
                     .scrollBounceBehavior(.basedOnSize)
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 6))

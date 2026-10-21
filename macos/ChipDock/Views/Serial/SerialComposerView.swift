@@ -99,6 +99,5 @@ struct SerialComposerView: View {
             .padding(.horizontal, 18)
             .padding(.bottom, 14)
         }
-        .background(.background)
     }
 }

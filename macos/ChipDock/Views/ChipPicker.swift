@@ -3,14 +3,37 @@ import SwiftUI
 struct ChipPicker: View {
     @Bindable var store: WorkbenchStore
     @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        ChipSelectionView(rust: store.rust, candidates: store.targetCandidates.map(\.name),
+                          initialChip: store.chip,
+                          confirmTitle: store.targetCandidates.isEmpty ? "选择" : "选择并连接",
+                          onCancel: { dismiss() }) { chip in
+            let reconnect = !store.targetCandidates.isEmpty
+            store.chip = chip
+            dismiss()
+            if reconnect { Task { await store.connect() } }
+        }
+    }
+}
+
+struct ChipSelectionView: View {
+    let rust: RustService
+    let candidates: [String]
+    let initialChip: String
+    var cancelTitle = "取消"
+    var confirmTitle = "选择"
+    var onCancel: () -> Void
+    var onSelect: (String) -> Void
     @State private var query = ""
     @State private var results: [String] = []
     @State private var selection: String?
     @State private var searching = false
     @State private var searchError: String?
 
-    private var candidates: [String] { store.targetCandidates.map(\.name) }
-    private var displayed: [String] { query.isEmpty ? candidates : results }
+    private var displayed: [String] {
+        query.isEmpty ? (candidates.isEmpty && !initialChip.isEmpty ? [initialChip] : candidates) : results
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -43,13 +66,10 @@ struct ChipPicker: View {
             HStack {
                 if !displayed.isEmpty { Text("\(displayed.count) 个目标").font(.caption).foregroundStyle(.secondary) }
                 Spacer()
-                Button("取消", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction)
-                Button(candidates.isEmpty ? "选择" : "选择并连接") {
+                Button(cancelTitle, role: .cancel, action: onCancel).keyboardShortcut(.cancelAction)
+                Button(confirmTitle) {
                     guard let selection else { return }
-                    let reconnect = !candidates.isEmpty
-                    store.chip = selection
-                    dismiss()
-                    if reconnect { Task { await store.connect() } }
+                    onSelect(selection)
                 }
                 .keyboardShortcut(.defaultAction)
                 .disabled(selection == nil || searching)
@@ -57,7 +77,7 @@ struct ChipPicker: View {
         }
         .padding(24)
         .frame(width: 500, height: 480)
-        .onAppear { selection = candidates.first ?? store.chip }
+        .onAppear { selection = candidates.first ?? initialChip }
         .task(id: query) { await search() }
     }
 
@@ -69,7 +89,7 @@ struct ChipPicker: View {
         searching = true
         do {
             try await Task.sleep(for: .milliseconds(200))
-            let found = try await store.rust.run { try $0.searchChips(query: requestedQuery, limit: 150) }
+            let found = try await rust.run { try $0.searchChips(query: requestedQuery, limit: 150) }
             guard !Task.isCancelled, query == requestedQuery else { return }
             results = found
             selection = found.first

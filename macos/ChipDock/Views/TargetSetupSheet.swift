@@ -3,10 +3,44 @@ import SwiftUI
 struct TargetSetupSheet: View {
     @Bindable var store: WorkbenchStore
     @Environment(\.dismiss) private var dismiss
+    @State private var draft: TargetConfiguration
+    @State private var selectingChip = false
 
     private let speedPresets: [UInt32] = [100, 1000, 4000, 10000, 24000]
+    private var canConnect: Bool {
+        !store.isBusy && draft.validSpeed != nil && (!store.hasScanned || !store.probes.isEmpty)
+    }
+
+    init(store: WorkbenchStore) {
+        self.store = store
+        _draft = State(initialValue: store.targetConfiguration)
+    }
 
     var body: some View {
+        Group {
+            if selectingChip {
+                ChipSelectionView(rust: store.rust, candidates: store.targetCandidates.map(\.name),
+                                  initialChip: draft.chip, cancelTitle: "返回",
+                                  confirmTitle: store.targetCandidates.isEmpty ? "选择" : "选择并连接",
+                                  onCancel: { selectingChip = false }) { chip in
+                    draft.chip = chip
+                    selectingChip = false
+                    if !store.targetCandidates.isEmpty { connect() }
+                }
+            } else {
+                configurationForm
+            }
+        }
+        .interactiveDismissDisabled(store.isBusy)
+        .onChange(of: store.showChipPicker) { _, requested in
+            if requested { store.showChipPicker = false; selectingChip = true }
+        }
+        .focusedSceneValue(\.targetSetupActions, TargetSetupActions(canConnect: canConnect,
+                                                                  connect: connect, scan: scan,
+                                                                  selectChip: { selectingChip = true }))
+    }
+
+    private var configurationForm: some View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("目标配置").font(.headline)
@@ -19,11 +53,11 @@ struct TargetSetupSheet: View {
             Form {
                 Section {
                     HStack {
-                        Picker("调试探针", selection: $store.selectedProbe) {
+                        Picker("调试探针", selection: $draft.selectedProbe) {
                             Text("自动选择").tag("")
                             ForEach(store.probes) { Text($0.displayName).tag($0.identifier) }
                         }
-                        Button("扫描探针", systemImage: "arrow.clockwise") { Task { await store.scanProbes() } }
+                        Button("扫描探针", systemImage: "arrow.clockwise", action: scan)
                             .labelStyle(.iconOnly)
                             .help("扫描调试探针（⌘R）")
                     }
@@ -44,22 +78,22 @@ struct TargetSetupSheet: View {
 
                 Section("目标芯片") {
                     LabeledContent("芯片") {
-                        Button { store.showChipPicker = true } label: {
+                        Button { selectingChip = true } label: {
                             HStack(spacing: 4) {
-                                Text(store.chip.isEmpty ? "自动识别" : store.chip).font(.body.monospaced())
+                                Text(draft.chip.isEmpty ? "自动识别" : draft.chip).font(.body.monospaced())
                                 Image(systemName: "chevron.up.chevron.down").font(.caption2)
                             }
                         }
                         .buttonStyle(.borderless)
                     }
-                    Picker("协议", selection: $store.wireProtocol) {
+                    Picker("协议", selection: $draft.wireProtocol) {
                         Text("SWD").tag(WireProtocol.swd)
                         Text("JTAG").tag(WireProtocol.jtag)
                     }
                     .pickerStyle(.segmented)
                     LabeledContent("速度") {
                         HStack(spacing: 6) {
-                            TextField("速度", text: $store.speed)
+                            TextField("速度", text: $draft.speed)
                                 .multilineTextAlignment(.trailing)
                                 .monospacedDigit()
                                 .labelsHidden()
@@ -67,13 +101,18 @@ struct TargetSetupSheet: View {
                             Text("kHz").foregroundStyle(.secondary)
                             Menu {
                                 ForEach(speedPresets, id: \.self) { value in
-                                    Button("\(value) kHz") { store.speed = String(value) }
+                                    Button("\(value) kHz") { draft.speed = String(value) }
                                 }
                             } label: { Image(systemName: "chevron.down") }
                             .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+                            .accessibilityLabel("常用连接速度")
                         }
                     }
-                    Toggle("复位下连接", isOn: $store.connectUnderReset)
+                    if draft.validSpeed == nil {
+                        Label("速度须为 1–4294967295 kHz 的整数", systemImage: "exclamationmark.triangle")
+                            .font(.caption).foregroundStyle(.red)
+                    }
+                    Toggle("复位下连接", isOn: $draft.connectUnderReset)
                 }
 
                 if let information = store.targetInformation {
@@ -95,23 +134,53 @@ struct TargetSetupSheet: View {
                 }
                 Spacer()
                 if store.isBusy { ProgressView().controlSize(.small).padding(.trailing, 4) }
-                Button("取消", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction)
-                Button {
-                    Task {
-                        await store.connect()
-                        if store.connection != nil { dismiss() }
-                    }
-                } label: {
+                Button("取消", role: .cancel) { dismiss() }
+                    .keyboardShortcut(.cancelAction).disabled(store.isBusy)
+                Button(action: connect) {
                     Label(store.connection == nil ? "连接" : "重新连接", systemImage: "link")
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(!store.canConnect)
+                .disabled(!canConnect)
             }
             .padding(.horizontal, 24)
             .padding(.bottom, 20)
             .padding(.top, 4)
         }
         .frame(width: 480)
-        .sheet(isPresented: $store.showChipPicker) { ChipPicker(store: store) }
+    }
+
+    private func scan() {
+        Task {
+            await store.scanProbes(updateSelection: false)
+            if !store.probes.contains(where: { $0.identifier == draft.selectedProbe }) {
+                draft.selectedProbe = store.probes.count == 1 ? store.probes[0].identifier : ""
+            }
+        }
+    }
+
+    private func connect() {
+        guard let speed = draft.validSpeed, !store.isBusy else { return }
+        draft.speed = String(speed)
+        store.applyTargetConfiguration(draft)
+        Task {
+            await store.connect()
+            if store.connection != nil { dismiss() }
+        }
+    }
+}
+
+struct TargetSetupActions {
+    var canConnect: Bool
+    var connect: () -> Void
+    var scan: () -> Void
+    var selectChip: () -> Void
+}
+
+private struct TargetSetupActionsKey: FocusedValueKey { typealias Value = TargetSetupActions }
+
+extension FocusedValues {
+    var targetSetupActions: TargetSetupActions? {
+        get { self[TargetSetupActionsKey.self] }
+        set { self[TargetSetupActionsKey.self] = newValue }
     }
 }

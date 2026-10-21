@@ -11,27 +11,30 @@ struct FlashView: View {
         GeometryReader { geometry in
             let compact = geometry.size.height < 560
             let margin: CGFloat = compact ? 20 : 24
-            let gap: CGFloat = compact ? 16 : 20
-            ScrollView {
-                WorkbenchColumnLayout(spacing: 0,
-                                      minimumHeight: max(geometry.size.height - 2 * margin, 0)) {
+            VSplitView {
+                Group {
                     if let url = store.firmwareURL {
                         FirmwareSummary(store: store, url: url, spacing: compact ? 16 : 20)
-                            .layoutValue(key: WorkbenchExpansion.self, value: store.firmwarePreview == nil ? 0 : 1)
                     } else {
-                        DropZone(store: store, isTargeted: isDropTargeted)
-                            .layoutValue(key: WorkbenchExpansion.self, value: 1)
+                        DropZone(store: store, isTargeted: isDropTargeted, compact: compact)
                     }
-                    Divider().padding(.vertical, gap)
-                    SettingsGrid(store: store, spacing: compact ? 12 : 16)
-                    FlashAction(store: store)
-                        .padding(.top, compact ? 20 : 24)
                 }
                 .frame(width: Self.columnWidth(in: geometry.size.width))
                 .padding(.vertical, margin)
-                .frame(maxWidth: .infinity)
+                .frame(maxWidth: .infinity, minHeight: store.firmwareURL == nil ? 260 : 280, maxHeight: .infinity)
+
+                ScrollView {
+                    VStack(spacing: compact ? 20 : 24) {
+                        SettingsGrid(store: store, spacing: compact ? 12 : 16)
+                        FlashAction(store: store)
+                    }
+                    .frame(width: Self.columnWidth(in: geometry.size.width))
+                    .padding(.vertical, margin)
+                    .frame(maxWidth: .infinity)
+                }
+                .scrollBounceBehavior(.basedOnSize)
+                .frame(minHeight: 180, idealHeight: 240, maxHeight: 300)
             }
-            .scrollBounceBehavior(.basedOnSize)
         }
         .overlay {
             if isDropTargeted && store.firmwareURL != nil {
@@ -166,6 +169,7 @@ private struct FirmwareSummary: View {
 private struct DropZone: View {
     var store: WorkbenchStore
     var isTargeted: Bool
+    var compact: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
@@ -180,8 +184,8 @@ private struct DropZone: View {
                     .disabled(store.isBusy)
                     .padding(.top, 8)
             }
-            .padding(.vertical, 26)
-            .frame(maxWidth: .infinity, minHeight: 170, maxHeight: .infinity)
+            .padding(.vertical, compact ? 12 : 26)
+            .frame(maxWidth: .infinity, minHeight: compact ? 134 : 170, maxHeight: .infinity)
             .background(isTargeted ? Color.accentColor.opacity(0.06) : Color.clear,
                         in: RoundedRectangle(cornerRadius: 10))
             .overlay {
@@ -248,8 +252,8 @@ private struct RecentFilesList: View {
             .listStyle(.bordered)
             .alternatingRowBackgrounds()
             .environment(\.defaultMinListRowHeight, 30)
-            .scrollDisabled(files.count <= 5)
-            .frame(height: CGFloat(min(files.count, 5)) * 30 + 2)
+            .frame(minHeight: 30, idealHeight: max(32, CGFloat(min(files.count, 5)) * 30 + 2),
+                   maxHeight: max(32, CGFloat(min(files.count, 5)) * 30 + 2))
             .disabled(store.isBusy)
             .onAppear { store.refreshRecentFileAvailability() }
             .onDeleteCommand {
@@ -460,9 +464,8 @@ private struct EraseButton: View {
 
     var body: some View {
         Button("擦除芯片…", systemImage: "eraser", role: .destructive) { store.confirmErase = true }
-            .buttonStyle(.borderedProminent)
-            .tint(.red)
-            .controlSize(.large)
+            .buttonStyle(.bordered)
+            .controlSize(.regular)
             .disabled(!store.canErase)
             .help(store.connection == nil ? "连接后即可擦除" : "擦除整个芯片，不烧录")
     }

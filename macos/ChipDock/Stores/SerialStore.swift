@@ -4,6 +4,7 @@ import Observation
 @MainActor
 @Observable
 final class SerialStore {
+    @ObservationIgnored let terminalTableState = TerminalTableState()
     var preferences = SerialPreferences.load() { didSet { preferences.save() } }
     private(set) var ports: [SerialPort] = []
     private(set) var status = SerialConnectionStatus()

@@ -49,6 +49,32 @@ struct ActivityEntry: Identifiable, Sendable {
     var detail: String = ""
 }
 
+/// Text offsets move when older log entries are pruned. Keep selection endpoints
+/// attached to entry identities so Copy cannot silently select another message.
+enum LogTextSelection {
+    static func restore(_ selections: [NSRange], from previous: [(UUID, NSRange)],
+                        to current: [(UUID, NSRange)]) -> [NSRange] {
+        let currentRanges = Dictionary(uniqueKeysWithValues: current)
+        func anchor(at position: Int) -> (UUID, Int)? {
+            if let entry = previous.first(where: { NSLocationInRange(position, $0.1) }) {
+                return (entry.0, position - entry.1.location)
+            }
+            if let last = previous.last, position == last.1.upperBound { return (last.0, last.1.length) }
+            return nil
+        }
+        return selections.compactMap { selection in
+            guard selection.location != NSNotFound, selection.length <= Int.max - selection.location,
+                  let start = anchor(at: selection.location),
+                  let end = anchor(at: selection.upperBound - (selection.length > 0 ? 1 : 0)),
+                  let startRange = currentRanges[start.0], let endRange = currentRanges[end.0] else { return nil }
+            let startPosition = startRange.location + min(start.1, startRange.length)
+            let endPosition = endRange.location + min(end.1 + (selection.length > 0 ? 1 : 0), endRange.length)
+            guard endPosition >= startPosition else { return nil }
+            return NSRange(location: startPosition, length: endPosition - startPosition)
+        }
+    }
+}
+
 struct UserFacingError: Identifiable {
     let id = UUID()
     var message: String
@@ -65,6 +91,6 @@ struct MemoryLine: Identifiable {
 }
 
 /// The two tools occupy the same navigation level.
-enum WorkbenchTool {
+enum WorkbenchTool: Hashable {
     case flash, serial
 }

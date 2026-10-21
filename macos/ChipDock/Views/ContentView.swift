@@ -4,6 +4,12 @@ import UniformTypeIdentifiers
 struct FlashWorkbenchView: View {
     @Bindable var store: WorkbenchStore
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.openWindow) private var openWindow
+    @Environment(\.dismissWindow) private var dismissWindow
+
+    private var panels: WorkbenchPanelActions {
+        WorkbenchPanelActions(store: store, openWindow: openWindow, dismissWindow: dismissWindow)
+    }
 
     var body: some View {
         document
@@ -24,7 +30,7 @@ struct FlashWorkbenchView: View {
                         Divider()
                         Menu("删除配置", systemImage: "trash") {
                             ForEach(store.profiles, id: \.id) { profile in
-                                Button(profile.name) { Task { await store.deleteProfile(profile) } }
+                                Button(profile.name, role: .destructive) { Task { await store.deleteProfile(profile) } }
                             }
                         }
                     }
@@ -46,33 +52,12 @@ struct FlashWorkbenchView: View {
             case .failure(let error): store.report(error, operation: "打开固件")
             }
         }
-        .fileExporter(isPresented: Binding(
-            get: { store.pendingExport != nil }, set: { if !$0 { store.pendingExport = nil } }
-        ), document: ExportDocument(data: store.pendingExport?.data ?? Data()),
-           contentType: store.pendingExport?.contentType ?? .data,
-           defaultFilename: store.pendingExport?.filename) { result in
-            if case .failure(let error) = result { store.report(error, operation: store.pendingExport?.operation ?? "导出") }
-        }
         .sheet(isPresented: $store.showTargetSetup) { TargetSetupSheet(store: store) }
         .sheet(isPresented: Binding(
             get: { store.showChipPicker && !store.showTargetSetup },
             set: { store.showChipPicker = $0 }
         )) { ChipPicker(store: store) }
         .sheet(isPresented: $store.showSaveProfile) { SaveProfileSheet(store: store) }
-        .alert(store.failure?.message ?? "操作失败", isPresented: Binding(
-            get: { store.failure != nil }, set: { if !$0 { store.failure = nil } }
-        )) {
-            Button("确定", role: .cancel) { store.failure = nil }
-            Button("查看日志") { store.failure = nil; store.showLogs = true }
-        } message: {
-            Text([store.failure?.detail, store.failure?.recovery].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: "\n\n"))
-        }
-        .confirmationDialog("擦除 \(store.targetName) 的全部 Flash？", isPresented: $store.confirmErase, titleVisibility: .visible) {
-            Button("擦除全部 Flash", role: .destructive) { Task { await store.erase() } }
-            Button("取消", role: .cancel) {}
-        } message: {
-            Text("芯片中的固件与数据将被永久删除，此操作无法撤销。")
-        }
     }
 
     /// The open firmware becomes the window's document, giving the title bar
@@ -86,8 +71,7 @@ struct FlashWorkbenchView: View {
         }
     }
 
-    /// Logs and memory float as popovers anchored to their toolbar buttons,
-    /// the same pattern BibCiTeX uses for its inspector.
+    /// Auxiliary windows remain available while the main workbench is in use.
     @ToolbarContentBuilder
     private var panelToggles: some ToolbarContent {
         if #available(macOS 26.0, *) {
@@ -101,26 +85,18 @@ struct FlashWorkbenchView: View {
             }
         }
         ToolbarItem(placement: .primaryAction) {
-            Button { store.showMemory.toggle() } label: {
+            Button { panels.toggle(.memory) } label: {
                 Label("内存", systemImage: "memorychip")
             }
             .help("内存（⌥⌘M）")
-            .popover(isPresented: $store.showMemory, arrowEdge: .bottom) {
-                MemoryView(store: store)
-                    .frame(width: 380, height: 540)
-            }
         }
     }
 
     private func logsButton(icon: String) -> some View {
-        Button { store.showLogs.toggle() } label: {
+        Button { panels.toggle(.logs) } label: {
             Label("日志", systemImage: icon)
         }
         .help(store.unseenErrors > 0 ? "\(store.unseenErrors) 条新错误（⌘J）" : "日志（⌘J）")
-        .popover(isPresented: $store.showLogs, arrowEdge: .bottom) {
-            LogsView(store: store)
-                .frame(width: 620, height: 420)
-        }
     }
 
     private var firmwareTypes: [UTType] {

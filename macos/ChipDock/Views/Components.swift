@@ -53,22 +53,35 @@ struct WorkbenchColumnLayout: Layout {
 struct SearchField: NSViewRepresentable {
     var prompt: String
     @Binding var text: String
+    var focusRequested: Binding<Bool> = .constant(false)
 
     func makeNSView(context: Context) -> NSSearchField {
         let field = NSSearchField()
         field.placeholderString = prompt
         field.sendsSearchStringImmediately = true
+        field.sendsWholeSearchString = false
         field.delegate = context.coordinator
         field.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        field.setAccessibilityLabel(prompt)
         return field
     }
 
     func updateNSView(_ field: NSSearchField, context: Context) {
         context.coordinator.text = $text
         if field.stringValue != text { field.stringValue = text }
+        if focusRequested.wrappedValue, let window = field.window {
+            window.makeFirstResponder(field)
+            field.currentEditor()?.selectAll(nil)
+            let request = focusRequested
+            DispatchQueue.main.async { request.wrappedValue = false }
+        }
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(text: $text) }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSSearchField, context: Context) -> CGSize? {
+        CGSize(width: proposal.width ?? 180, height: nsView.intrinsicContentSize.height)
+    }
 
     @MainActor
     final class Coordinator: NSObject, NSSearchFieldDelegate {
