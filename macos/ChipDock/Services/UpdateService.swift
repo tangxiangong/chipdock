@@ -141,7 +141,7 @@ final class UpdateService: NSObject, SPUUpdaterDelegate {
     func updater(_ updater: SPUUpdater, mayPerform updateCheck: SPUUpdateCheck) throws {
         guard !isBusy() else {
             throw NSError(domain: "com.xiaoyu.chipdock.updates", code: 1,
-                          userInfo: [NSLocalizedDescriptionKey: "请等待当前硬件操作完成后检查更新"])
+                          userInfo: [NSLocalizedDescriptionKey: "请等待硬件操作完成并断开串口后检查更新"])
         }
     }
 

@@ -63,3 +63,8 @@ struct MemoryLine: Identifiable {
     var hex: String { bytes.map { String(format: "%02X", $0) }.joined(separator: " ") }
     var ascii: String { String(bytes.map { (32...126).contains($0) ? Character(UnicodeScalar($0)) : "·" }) }
 }
+
+/// The two tools occupy the same navigation level.
+enum WorkbenchTool {
+    case flash, serial
+}

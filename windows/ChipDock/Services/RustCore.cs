@@ -28,14 +28,14 @@ internal static class RustCore
         return wire.Unwire().text;
     }
 
-    internal static Task<List<ProbeSummary>> ListProbes() => Task.Run(() =>
+    internal static Task<List<ProbeSummary>> ListProbes() => NativeWorker.Probe.Run(() =>
     {
         using var wire = Interop.list_probes().AsOk();
         var response = wire.Unwire(); Check(response.error);
         return response.payload;
     });
 
-    internal static Task<ConnectionInfo> ConnectTarget(ConnectRequest value) => Task.Run(() =>
+    internal static Task<ConnectionInfo> ConnectTarget(ConnectRequest value) => NativeWorker.Probe.Run(() =>
     {
         using var request = value.Wire();
         using var wire = Interop.connect_target(request).AsOk();
@@ -43,7 +43,7 @@ internal static class RustCore
         return Require(response.payload, "连接");
     });
 
-    internal static Task<List<string>> SearchChips(string query, uint limit) => Task.Run(() =>
+    internal static Task<List<string>> SearchChips(string query, uint limit) => NativeWorker.Probe.Run(() =>
     {
         using var request = new ChipSearchRequest { query = query, limit = limit }.Wire();
         using var wire = Interop.search_chips(request).AsOk();
@@ -51,7 +51,7 @@ internal static class RustCore
         return response.payload;
     });
 
-    internal static Task<List<MemoryRegionLayout>> TargetMemoryMap(string chip) => Task.Run(() =>
+    internal static Task<List<MemoryRegionLayout>> TargetMemoryMap(string chip) => NativeWorker.Probe.Run(() =>
     {
         using var request = new TextValue { text = chip }.Wire();
         using var wire = Interop.target_memory_map(request).AsOk();
@@ -59,7 +59,7 @@ internal static class RustCore
         return response.payload;
     });
 
-    internal static Task<FirmwareUsage> FirmwareUsage(FirmwareInput value) => Task.Run(() =>
+    internal static Task<FirmwareUsage> FirmwareUsage(FirmwareInput value) => NativeWorker.Probe.Run(() =>
     {
         using var request = value.Wire();
         using var wire = Interop.firmware_usage(request).AsOk();
@@ -67,7 +67,7 @@ internal static class RustCore
         return Require(response.payload, "固件分析");
     });
 
-    internal static Task<FirmwarePreview> FirmwarePreview(FirmwareInput value, uint length = 4096) => Task.Run(() =>
+    internal static Task<FirmwarePreview> FirmwarePreview(FirmwareInput value, uint length = 4096) => NativeWorker.Probe.Run(() =>
     {
         using var request = new FirmwarePreviewRequest { firmware = value, length = length }.Wire();
         using var wire = Interop.firmware_preview(request).AsOk();
@@ -76,7 +76,7 @@ internal static class RustCore
     });
 
     /// Blocks until the job finishes; progress is drained separately with <see cref="TakeEvents"/>.
-    internal static Task<string> FlashFirmware(FlashRequest value) => Task.Run(() =>
+    internal static Task<string> FlashFirmware(FlashRequest value) => NativeWorker.Probe.Run(() =>
     {
         using var request = value.Wire();
         using var wire = Interop.flash_firmware(request).AsOk();
@@ -84,7 +84,7 @@ internal static class RustCore
         return Require(response.payload, "烧录");
     });
 
-    internal static Task<string> EraseTarget(EraseRequest value) => Task.Run(() =>
+    internal static Task<string> EraseTarget(EraseRequest value) => NativeWorker.Probe.Run(() =>
     {
         using var request = value.Wire();
         using var wire = Interop.erase_target(request).AsOk();
@@ -92,7 +92,7 @@ internal static class RustCore
         return Require(response.payload, "擦除");
     });
 
-    internal static Task<MemoryReadResult> ReadMemory(MemoryRequest value) => Task.Run(() =>
+    internal static Task<MemoryReadResult> ReadMemory(MemoryRequest value) => NativeWorker.Probe.Run(() =>
     {
         using var request = value.Wire();
         using var wire = Interop.read_memory(request).AsOk();
@@ -107,7 +107,7 @@ internal static class RustCore
         return wire.Unwire().payload;
     }
 
-    internal static Task<List<ProfileRecord>> LoadProfiles(string directory) => Task.Run(() =>
+    internal static Task<List<ProfileRecord>> LoadProfiles(string directory) => NativeWorker.Probe.Run(() =>
     {
         using var request = new DirectoryRequest { directory = directory }.Wire();
         using var wire = Interop.load_profiles(request).AsOk();
@@ -115,14 +115,14 @@ internal static class RustCore
         return response.payload;
     });
 
-    internal static Task SaveProfiles(string directory, List<ProfileRecord> profiles) => Task.Run(() =>
+    internal static Task SaveProfiles(string directory, List<ProfileRecord> profiles) => NativeWorker.Probe.Run(() =>
     {
         using var request = new SaveProfilesRequest { directory = directory, profiles = profiles }.Wire();
         using var wire = Interop.save_profiles(request).AsOk();
         Check(wire.Unwire().error);
     });
 
-    internal static Task<List<RecentFirmwareRecord>> LoadRecentFiles(string directory) => Task.Run(() =>
+    internal static Task<List<RecentFirmwareRecord>> LoadRecentFiles(string directory) => NativeWorker.Probe.Run(() =>
     {
         using var request = new DirectoryRequest { directory = directory }.Wire();
         using var wire = Interop.load_recent_files(request).AsOk();
@@ -130,7 +130,7 @@ internal static class RustCore
         return response.payload;
     });
 
-    internal static Task SaveRecentFiles(string directory, List<RecentFirmwareRecord> files) => Task.Run(() =>
+    internal static Task SaveRecentFiles(string directory, List<RecentFirmwareRecord> files) => NativeWorker.Probe.Run(() =>
     {
         using var request = new SaveRecentFilesRequest { directory = directory, files = files }.Wire();
         using var wire = Interop.save_recent_files(request).AsOk();

@@ -47,8 +47,8 @@ cargo run --manifest-path "$PROJECT_ROOT/Cargo.toml" --locked --package chipdock
 
 for GENERATED_FILE in "$TEMP_GENERATED_DIR"/*; do
     GENERATED_NAME="$(basename "$GENERATED_FILE")"
-    if [[ "$GENERATED_NAME" == *.h ]]; then
-        # UniFFI emits whitespace-only lines; keep checked-in headers reproducible and clean.
+    if [[ "$GENERATED_NAME" == *.h || "$GENERATED_NAME" == *.swift ]]; then
+        # UniFFI emits trailing whitespace; keep checked-in headers reproducible and clean.
         awk '{ sub(/[[:blank:]]+$/, ""); lines[NR] = $0; if (length($0)) last = NR }
              END { for (line = 1; line <= last; line++) print lines[line] }' \
             "$GENERATED_FILE" > "$TEMP_GENERATED_DIR/.${GENERATED_NAME}.clean"

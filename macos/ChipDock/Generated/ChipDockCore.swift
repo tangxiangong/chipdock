@@ -398,7 +398,7 @@ private func uniffiTraitInterfaceCallWithError<T, E>(
         callStatus.pointee.errorBuf = FfiConverterString.lower(String(describing: error))
     }
 }
-// Initial value and increment amount for handles. 
+// Initial value and increment amount for handles.
 // These ensure that SWIFT handles always have the lowest bit set
 fileprivate let UNIFFI_HANDLEMAP_INITIAL: UInt64 = 1
 fileprivate let UNIFFI_HANDLEMAP_DELTA: UInt64 = 2
@@ -628,6 +628,24 @@ fileprivate struct FfiConverterString: FfiConverter {
     }
 }
 
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterData: FfiConverterRustBuffer {
+    typealias SwiftType = Data
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Data {
+        let len: Int32 = try readInt(&buf)
+        return Data(try readBytes(&buf, count: Int(len)))
+    }
+
+    public static func write(_ value: Data, into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        writeBytes(&buf, value)
+    }
+}
+
 
 
 
@@ -635,37 +653,37 @@ fileprivate struct FfiConverterString: FfiConverter {
  * One client handle. Progress drains independently of blocking hardware work.
  */
 public protocol ChipDockCoreProtocol: AnyObject, Sendable {
-    
+
     func connectTarget(request: ConnectRequest) throws  -> ConnectionInfo
-    
+
     func eraseTarget(request: EraseRequest) throws  -> String
-    
+
     func firmwarePreview(input: FirmwareInput, length: UInt32) throws  -> FirmwarePreview
-    
+
     func firmwareUsage(input: FirmwareInput) throws  -> FirmwareUsage
-    
+
     func flashFirmware(request: FlashRequest) throws  -> String
-    
+
     func listProbes() throws  -> [ProbeSummary]
-    
+
     func loadProfiles(directory: String) throws  -> [SavedProfile]
-    
+
     func loadRecentFiles(directory: String) throws  -> [RecentFirmware]
-    
+
     func readMemory(request: MemoryRequest) throws  -> MemoryReadResult
-    
-    func saveProfiles(directory: String, profiles: [SavedProfile]) throws 
-    
-    func saveRecentFiles(directory: String, files: [RecentFirmware]) throws 
-    
+
+    func saveProfiles(directory: String, profiles: [SavedProfile]) throws
+
+    func saveRecentFiles(directory: String, files: [RecentFirmware]) throws
+
     func searchChips(query: String, limit: UInt32) throws  -> [String]
-    
+
     func takeEvents()  -> [ProgressEvent]
-    
+
     func targetMemoryMap(chip: String) throws  -> [MemoryRegionLayout]
-    
+
     func version()  -> String
-    
+
 }
 /**
  * One client handle. Progress drains independently of blocking hardware work.
@@ -728,9 +746,9 @@ public convenience init() {
         try! rustCall { uniffi_chipdock_core_fn_free_chipdockcore(handle, $0) }
     }
 
-    
 
-    
+
+
 open func connectTarget(request: ConnectRequest)throws  -> ConnectionInfo  {
     return try  FfiConverterTypeConnectionInfo_lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
         uniffiCallStatus in
@@ -740,7 +758,7 @@ open func connectTarget(request: ConnectRequest)throws  -> ConnectionInfo  {
     )
 })
 }
-    
+
 open func eraseTarget(request: EraseRequest)throws  -> String  {
     return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
         uniffiCallStatus in
@@ -750,7 +768,7 @@ open func eraseTarget(request: EraseRequest)throws  -> String  {
     )
 })
 }
-    
+
 open func firmwarePreview(input: FirmwareInput, length: UInt32)throws  -> FirmwarePreview  {
     return try  FfiConverterTypeFirmwarePreview_lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
         uniffiCallStatus in
@@ -761,7 +779,7 @@ open func firmwarePreview(input: FirmwareInput, length: UInt32)throws  -> Firmwa
     )
 })
 }
-    
+
 open func firmwareUsage(input: FirmwareInput)throws  -> FirmwareUsage  {
     return try  FfiConverterTypeFirmwareUsage_lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
         uniffiCallStatus in
@@ -771,7 +789,7 @@ open func firmwareUsage(input: FirmwareInput)throws  -> FirmwareUsage  {
     )
 })
 }
-    
+
 open func flashFirmware(request: FlashRequest)throws  -> String  {
     return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
         uniffiCallStatus in
@@ -781,7 +799,7 @@ open func flashFirmware(request: FlashRequest)throws  -> String  {
     )
 })
 }
-    
+
 open func listProbes()throws  -> [ProbeSummary]  {
     return try  FfiConverterSequenceTypeProbeSummary.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
         uniffiCallStatus in
@@ -790,7 +808,7 @@ open func listProbes()throws  -> [ProbeSummary]  {
     )
 })
 }
-    
+
 open func loadProfiles(directory: String)throws  -> [SavedProfile]  {
     return try  FfiConverterSequenceTypeSavedProfile.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
         uniffiCallStatus in
@@ -800,7 +818,7 @@ open func loadProfiles(directory: String)throws  -> [SavedProfile]  {
     )
 })
 }
-    
+
 open func loadRecentFiles(directory: String)throws  -> [RecentFirmware]  {
     return try  FfiConverterSequenceTypeRecentFirmware.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
         uniffiCallStatus in
@@ -810,7 +828,7 @@ open func loadRecentFiles(directory: String)throws  -> [RecentFirmware]  {
     )
 })
 }
-    
+
 open func readMemory(request: MemoryRequest)throws  -> MemoryReadResult  {
     return try  FfiConverterTypeMemoryReadResult_lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
         uniffiCallStatus in
@@ -820,7 +838,7 @@ open func readMemory(request: MemoryRequest)throws  -> MemoryReadResult  {
     )
 })
 }
-    
+
 open func saveProfiles(directory: String, profiles: [SavedProfile])throws   {try rustCallWithError(FfiConverterTypeCoreError_lift) {
         uniffiCallStatus in
     uniffi_chipdock_core_fn_method_chipdockcore_save_profiles(
@@ -830,7 +848,7 @@ open func saveProfiles(directory: String, profiles: [SavedProfile])throws   {try
     )
 }
 }
-    
+
 open func saveRecentFiles(directory: String, files: [RecentFirmware])throws   {try rustCallWithError(FfiConverterTypeCoreError_lift) {
         uniffiCallStatus in
     uniffi_chipdock_core_fn_method_chipdockcore_save_recent_files(
@@ -840,7 +858,7 @@ open func saveRecentFiles(directory: String, files: [RecentFirmware])throws   {t
     )
 }
 }
-    
+
 open func searchChips(query: String, limit: UInt32)throws  -> [String]  {
     return try  FfiConverterSequenceString.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
         uniffiCallStatus in
@@ -851,7 +869,7 @@ open func searchChips(query: String, limit: UInt32)throws  -> [String]  {
     )
 })
 }
-    
+
 open func takeEvents() -> [ProgressEvent]  {
     return try!  FfiConverterSequenceTypeProgressEvent.lift(try! rustCall() {
         uniffiCallStatus in
@@ -860,7 +878,7 @@ open func takeEvents() -> [ProgressEvent]  {
     )
 })
 }
-    
+
 open func targetMemoryMap(chip: String)throws  -> [MemoryRegionLayout]  {
     return try  FfiConverterSequenceTypeMemoryRegionLayout.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
         uniffiCallStatus in
@@ -870,7 +888,7 @@ open func targetMemoryMap(chip: String)throws  -> [MemoryRegionLayout]  {
     )
 })
 }
-    
+
 open func version() -> String  {
     return try!  FfiConverterString.lift(try! rustCall() {
         uniffiCallStatus in
@@ -879,9 +897,9 @@ open func version() -> String  {
     )
 })
 }
-    
 
-    
+
+
 }
 
 
@@ -946,7 +964,7 @@ public struct ConnectRequest: Equatable, Hashable, Codable {
     public init(
         /**
          * 选中的探针；为空时要求当前只连接一个探针。
-         */probe: String?, 
+         */probe: String?,
         /**
          * 目标芯片和连接参数。
          */target: TargetSelection) {
@@ -954,9 +972,9 @@ public struct ConnectRequest: Equatable, Hashable, Codable {
         self.target = target
     }
 
-    
 
-    
+
+
 }
 
 #if compiler(>=6)
@@ -970,7 +988,7 @@ public struct FfiConverterTypeConnectRequest: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ConnectRequest {
         return
             try ConnectRequest(
-                probe: FfiConverterOptionString.read(from: &buf), 
+                probe: FfiConverterOptionString.read(from: &buf),
                 target: FfiConverterTypeTargetSelection.read(from: &buf)
         )
     }
@@ -1031,19 +1049,19 @@ public struct ConnectionInfo: Equatable, Hashable, Codable {
     public init(
         /**
          * 实际使用的探针选择器字符串。
-         */probe: String, 
+         */probe: String,
         /**
          * 实际连接的芯片型号。
-         */chip: String, 
+         */chip: String,
         /**
          * 实际使用的线协议。
-         */`protocol`: WireProtocol, 
+         */`protocol`: WireProtocol,
         /**
          * 实际连接速度，单位 kHz。
-         */speedKhz: UInt32?, 
+         */speedKhz: UInt32?,
         /**
          * 是否使用 connect-under-reset。
-         */connectUnderReset: Bool, 
+         */connectUnderReset: Bool,
         /**
          * 从目标寄存器读取的硬件信息。
          */targetInformation: TargetInformation?) {
@@ -1055,9 +1073,9 @@ public struct ConnectionInfo: Equatable, Hashable, Codable {
         self.targetInformation = targetInformation
     }
 
-    
 
-    
+
+
 }
 
 #if compiler(>=6)
@@ -1071,11 +1089,11 @@ public struct FfiConverterTypeConnectionInfo: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ConnectionInfo {
         return
             try ConnectionInfo(
-                probe: FfiConverterString.read(from: &buf), 
-                chip: FfiConverterString.read(from: &buf), 
-                protocol: FfiConverterTypeWireProtocol.read(from: &buf), 
-                speedKhz: FfiConverterOptionUInt32.read(from: &buf), 
-                connectUnderReset: FfiConverterBool.read(from: &buf), 
+                probe: FfiConverterString.read(from: &buf),
+                chip: FfiConverterString.read(from: &buf),
+                protocol: FfiConverterTypeWireProtocol.read(from: &buf),
+                speedKhz: FfiConverterOptionUInt32.read(from: &buf),
+                connectUnderReset: FfiConverterBool.read(from: &buf),
                 targetInformation: FfiConverterOptionTypeTargetInformation.read(from: &buf)
         )
     }
@@ -1106,6 +1124,64 @@ public func FfiConverterTypeConnectionInfo_lower(_ value: ConnectionInfo) -> Rus
 }
 
 
+public struct DecodedText: Equatable, Hashable, Codable {
+    public var ascii: String
+    public var gbk: String
+    public var utf8: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(ascii: String, gbk: String, utf8: String) {
+        self.ascii = ascii
+        self.gbk = gbk
+        self.utf8 = utf8
+    }
+
+
+
+
+}
+
+#if compiler(>=6)
+extension DecodedText: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDecodedText: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DecodedText {
+        return
+            try DecodedText(
+                ascii: FfiConverterString.read(from: &buf),
+                gbk: FfiConverterString.read(from: &buf),
+                utf8: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: DecodedText, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.ascii, into: &buf)
+        FfiConverterString.write(value.gbk, into: &buf)
+        FfiConverterString.write(value.utf8, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDecodedText_lift(_ buf: RustBuffer) throws -> DecodedText {
+    return try FfiConverterTypeDecodedText.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDecodedText_lower(_ value: DecodedText) -> RustBuffer {
+    return FfiConverterTypeDecodedText.lower(value)
+}
+
+
 /**
  * 前端提交的一次整片擦除请求。
  */
@@ -1124,7 +1200,7 @@ public struct EraseRequest: Equatable, Hashable, Codable {
     public init(
         /**
          * 选中的探针；为空时要求当前只连接一个探针。
-         */probe: String?, 
+         */probe: String?,
         /**
          * 目标芯片和连接参数。
          */target: TargetSelection) {
@@ -1132,9 +1208,9 @@ public struct EraseRequest: Equatable, Hashable, Codable {
         self.target = target
     }
 
-    
 
-    
+
+
 }
 
 #if compiler(>=6)
@@ -1148,7 +1224,7 @@ public struct FfiConverterTypeEraseRequest: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> EraseRequest {
         return
             try EraseRequest(
-                probe: FfiConverterOptionString.read(from: &buf), 
+                probe: FfiConverterOptionString.read(from: &buf),
                 target: FfiConverterTypeTargetSelection.read(from: &buf)
         )
     }
@@ -1209,19 +1285,19 @@ public struct ErrorResponse: Equatable, Hashable, Codable {
     public init(
         /**
          * 稳定错误码，供前端分支处理。
-         */code: ErrorCode, 
+         */code: ErrorCode,
         /**
          * 用户可见的主错误信息。
-         */message: String, 
+         */message: String,
         /**
          * 供诊断日志记录的原始错误；用户提示只展示 `message`。
-         */detail: String?, 
+         */detail: String?,
         /**
          * 自动识别失败时按当前硬件信息缩小出的候选目标。
-         */targetCandidates: [TargetCandidate], 
+         */targetCandidates: [TargetCandidate],
         /**
          * 已通过调试接口读取到的目标硬件信息。
-         */targetInformation: TargetInformation?, 
+         */targetInformation: TargetInformation?,
         /**
          * 用户可见的恢复建议。
          */recovery: String) {
@@ -1233,9 +1309,9 @@ public struct ErrorResponse: Equatable, Hashable, Codable {
         self.recovery = recovery
     }
 
-    
 
-    
+
+
 }
 
 #if compiler(>=6)
@@ -1249,11 +1325,11 @@ public struct FfiConverterTypeErrorResponse: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ErrorResponse {
         return
             try ErrorResponse(
-                code: FfiConverterTypeErrorCode.read(from: &buf), 
-                message: FfiConverterString.read(from: &buf), 
-                detail: FfiConverterOptionString.read(from: &buf), 
-                targetCandidates: FfiConverterSequenceTypeTargetCandidate.read(from: &buf), 
-                targetInformation: FfiConverterOptionTypeTargetInformation.read(from: &buf), 
+                code: FfiConverterTypeErrorCode.read(from: &buf),
+                message: FfiConverterString.read(from: &buf),
+                detail: FfiConverterOptionString.read(from: &buf),
+                targetCandidates: FfiConverterSequenceTypeTargetCandidate.read(from: &buf),
+                targetInformation: FfiConverterOptionTypeTargetInformation.read(from: &buf),
                 recovery: FfiConverterString.read(from: &buf)
         )
     }
@@ -1306,10 +1382,10 @@ public struct FirmwareInput: Equatable, Hashable, Codable {
     public init(
         /**
          * 固件文件的本地路径。
-         */path: String, 
+         */path: String,
         /**
          * 用户显式选择的格式；为空时根据文件扩展名推断。
-         */format: FirmwareFormat?, 
+         */format: FirmwareFormat?,
         /**
          * BIN 固件的烧录基地址。
          */baseAddress: UInt64?) {
@@ -1318,9 +1394,9 @@ public struct FirmwareInput: Equatable, Hashable, Codable {
         self.baseAddress = baseAddress
     }
 
-    
 
-    
+
+
 }
 
 #if compiler(>=6)
@@ -1334,8 +1410,8 @@ public struct FfiConverterTypeFirmwareInput: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> FirmwareInput {
         return
             try FirmwareInput(
-                path: FfiConverterString.read(from: &buf), 
-                format: FfiConverterOptionTypeFirmwareFormat.read(from: &buf), 
+                path: FfiConverterString.read(from: &buf),
+                format: FfiConverterOptionTypeFirmwareFormat.read(from: &buf),
                 baseAddress: FfiConverterOptionUInt64.read(from: &buf)
         )
     }
@@ -1385,10 +1461,10 @@ public struct FirmwarePreview: Equatable, Hashable, Codable {
     public init(
         /**
          * 与预览对应的固件占用信息。
-         */usage: FirmwareUsage, 
+         */usage: FirmwareUsage,
         /**
          * 预览的第一个地址。
-         */startAddress: UInt64, 
+         */startAddress: UInt64,
         /**
          * 逐地址的文件数据；None 表示固件未写入的空洞。
          */bytes: [UInt8?]) {
@@ -1397,9 +1473,9 @@ public struct FirmwarePreview: Equatable, Hashable, Codable {
         self.bytes = bytes
     }
 
-    
 
-    
+
+
 }
 
 #if compiler(>=6)
@@ -1413,8 +1489,8 @@ public struct FfiConverterTypeFirmwarePreview: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> FirmwarePreview {
         return
             try FirmwarePreview(
-                usage: FfiConverterTypeFirmwareUsage.read(from: &buf), 
-                startAddress: FfiConverterUInt64.read(from: &buf), 
+                usage: FfiConverterTypeFirmwareUsage.read(from: &buf),
+                startAddress: FfiConverterUInt64.read(from: &buf),
                 bytes: FfiConverterSequenceOptionUInt8.read(from: &buf)
         )
     }
@@ -1476,19 +1552,19 @@ public struct FirmwareUsage: Equatable, Hashable, Codable {
     public init(
         /**
          * 解析采用的固件格式。
-         */format: FirmwareFormat, 
+         */format: FirmwareFormat,
         /**
          * 去重合并后的实际写入字节数。
-         */usedBytes: UInt64, 
+         */usedBytes: UInt64,
         /**
          * 从最小写入地址到最大写入地址的覆盖跨度，包含空洞。
-         */spanBytes: UInt64, 
+         */spanBytes: UInt64,
         /**
          * 最小写入地址。
-         */startAddress: UInt64?, 
+         */startAddress: UInt64?,
         /**
          * 最大写入地址，开区间。
-         */endAddress: UInt64?, 
+         */endAddress: UInt64?,
         /**
          * 合并后的连续写入地址段。
          */segments: [FirmwareUsageSegment]) {
@@ -1500,9 +1576,9 @@ public struct FirmwareUsage: Equatable, Hashable, Codable {
         self.segments = segments
     }
 
-    
 
-    
+
+
 }
 
 #if compiler(>=6)
@@ -1516,11 +1592,11 @@ public struct FfiConverterTypeFirmwareUsage: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> FirmwareUsage {
         return
             try FirmwareUsage(
-                format: FfiConverterTypeFirmwareFormat.read(from: &buf), 
-                usedBytes: FfiConverterUInt64.read(from: &buf), 
-                spanBytes: FfiConverterUInt64.read(from: &buf), 
-                startAddress: FfiConverterOptionUInt64.read(from: &buf), 
-                endAddress: FfiConverterOptionUInt64.read(from: &buf), 
+                format: FfiConverterTypeFirmwareFormat.read(from: &buf),
+                usedBytes: FfiConverterUInt64.read(from: &buf),
+                spanBytes: FfiConverterUInt64.read(from: &buf),
+                startAddress: FfiConverterOptionUInt64.read(from: &buf),
+                endAddress: FfiConverterOptionUInt64.read(from: &buf),
                 segments: FfiConverterSequenceTypeFirmwareUsageSegment.read(from: &buf)
         )
     }
@@ -1573,10 +1649,10 @@ public struct FirmwareUsageSegment: Equatable, Hashable, Codable {
     public init(
         /**
          * 起始写入地址。
-         */start: UInt64, 
+         */start: UInt64,
         /**
          * 结束地址，开区间。
-         */end: UInt64, 
+         */end: UInt64,
         /**
          * 该连续地址段的字节数。
          */size: UInt64) {
@@ -1585,9 +1661,9 @@ public struct FirmwareUsageSegment: Equatable, Hashable, Codable {
         self.size = size
     }
 
-    
 
-    
+
+
 }
 
 #if compiler(>=6)
@@ -1601,8 +1677,8 @@ public struct FfiConverterTypeFirmwareUsageSegment: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> FirmwareUsageSegment {
         return
             try FirmwareUsageSegment(
-                start: FfiConverterUInt64.read(from: &buf), 
-                end: FfiConverterUInt64.read(from: &buf), 
+                start: FfiConverterUInt64.read(from: &buf),
+                end: FfiConverterUInt64.read(from: &buf),
                 size: FfiConverterUInt64.read(from: &buf)
         )
     }
@@ -1660,16 +1736,16 @@ public struct FlashOptions: Equatable, Hashable, Codable {
     public init(
         /**
          * 写入后逐字节校验。
-         */verify: Bool, 
+         */verify: Bool,
         /**
          * 只执行预检查，不修改芯片内容。
-         */dryRun: Bool, 
+         */dryRun: Bool,
         /**
          * 跳过自动擦除。
-         */skipErase: Bool, 
+         */skipErase: Bool,
         /**
          * 允许整片擦除。
-         */allowEraseAll: Bool, 
+         */allowEraseAll: Bool,
         /**
          * 写入完成后复位目标。
          */resetAfter: Bool) {
@@ -1680,9 +1756,9 @@ public struct FlashOptions: Equatable, Hashable, Codable {
         self.resetAfter = resetAfter
     }
 
-    
 
-    
+
+
 }
 
 #if compiler(>=6)
@@ -1696,10 +1772,10 @@ public struct FfiConverterTypeFlashOptions: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> FlashOptions {
         return
             try FlashOptions(
-                verify: FfiConverterBool.read(from: &buf), 
-                dryRun: FfiConverterBool.read(from: &buf), 
-                skipErase: FfiConverterBool.read(from: &buf), 
-                allowEraseAll: FfiConverterBool.read(from: &buf), 
+                verify: FfiConverterBool.read(from: &buf),
+                dryRun: FfiConverterBool.read(from: &buf),
+                skipErase: FfiConverterBool.read(from: &buf),
+                allowEraseAll: FfiConverterBool.read(from: &buf),
                 resetAfter: FfiConverterBool.read(from: &buf)
         )
     }
@@ -1755,13 +1831,13 @@ public struct FlashRequest: Equatable, Hashable, Codable {
     public init(
         /**
          * 待烧录固件。
-         */firmware: FirmwareInput, 
+         */firmware: FirmwareInput,
         /**
          * 选中的探针；为空时要求当前只连接一个探针。
-         */probe: String?, 
+         */probe: String?,
         /**
          * 目标芯片和连接参数。
-         */target: TargetSelection, 
+         */target: TargetSelection,
         /**
          * 烧录选项。
          */options: FlashOptions) {
@@ -1771,9 +1847,9 @@ public struct FlashRequest: Equatable, Hashable, Codable {
         self.options = options
     }
 
-    
 
-    
+
+
 }
 
 #if compiler(>=6)
@@ -1787,9 +1863,9 @@ public struct FfiConverterTypeFlashRequest: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> FlashRequest {
         return
             try FlashRequest(
-                firmware: FfiConverterTypeFirmwareInput.read(from: &buf), 
-                probe: FfiConverterOptionString.read(from: &buf), 
-                target: FfiConverterTypeTargetSelection.read(from: &buf), 
+                firmware: FfiConverterTypeFirmwareInput.read(from: &buf),
+                probe: FfiConverterOptionString.read(from: &buf),
+                target: FfiConverterTypeTargetSelection.read(from: &buf),
                 options: FfiConverterTypeFlashOptions.read(from: &buf)
         )
     }
@@ -1844,13 +1920,13 @@ public struct MemoryAccessInfo: Equatable, Hashable, Codable {
     public init(
         /**
          * 是否可读。
-         */read: Bool, 
+         */read: Bool,
         /**
          * 是否可写。
-         */write: Bool, 
+         */write: Bool,
         /**
          * 是否可执行。
-         */execute: Bool, 
+         */execute: Bool,
         /**
          * 是否可作为启动区域。
          */boot: Bool) {
@@ -1860,9 +1936,9 @@ public struct MemoryAccessInfo: Equatable, Hashable, Codable {
         self.boot = boot
     }
 
-    
 
-    
+
+
 }
 
 #if compiler(>=6)
@@ -1876,9 +1952,9 @@ public struct FfiConverterTypeMemoryAccessInfo: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> MemoryAccessInfo {
         return
             try MemoryAccessInfo(
-                read: FfiConverterBool.read(from: &buf), 
-                write: FfiConverterBool.read(from: &buf), 
-                execute: FfiConverterBool.read(from: &buf), 
+                read: FfiConverterBool.read(from: &buf),
+                write: FfiConverterBool.read(from: &buf),
+                execute: FfiConverterBool.read(from: &buf),
                 boot: FfiConverterBool.read(from: &buf)
         )
     }
@@ -1929,10 +2005,10 @@ public struct MemoryReadResult: Equatable, Hashable, Codable {
     public init(
         /**
          * 实际读取起始地址。
-         */address: UInt64, 
+         */address: UInt64,
         /**
          * 实际读取长度，单位字节。
-         */length: UInt32, 
+         */length: UInt32,
         /**
          * 小写十六进制连续字节字符串。
          */dataHex: String) {
@@ -1941,9 +2017,9 @@ public struct MemoryReadResult: Equatable, Hashable, Codable {
         self.dataHex = dataHex
     }
 
-    
 
-    
+
+
 }
 
 #if compiler(>=6)
@@ -1957,8 +2033,8 @@ public struct FfiConverterTypeMemoryReadResult: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> MemoryReadResult {
         return
             try MemoryReadResult(
-                address: FfiConverterUInt64.read(from: &buf), 
-                length: FfiConverterUInt32.read(from: &buf), 
+                address: FfiConverterUInt64.read(from: &buf),
+                length: FfiConverterUInt32.read(from: &buf),
                 dataHex: FfiConverterString.read(from: &buf)
         )
     }
@@ -2028,25 +2104,25 @@ public struct MemoryRegionLayout: Equatable, Hashable, Codable {
     public init(
         /**
          * 区域名称。
-         */name: String?, 
+         */name: String?,
         /**
          * 区域类型。
-         */kind: MemoryRegionKind, 
+         */kind: MemoryRegionKind,
         /**
          * 起始地址。
-         */start: UInt64, 
+         */start: UInt64,
         /**
          * 结束地址。
-         */end: UInt64, 
+         */end: UInt64,
         /**
          * 区域大小，单位字节。
-         */size: UInt64, 
+         */size: UInt64,
         /**
          * 关联的核心名称。
-         */cores: [String], 
+         */cores: [String],
         /**
          * 是否是其他区域的别名。
-         */isAlias: Bool, 
+         */isAlias: Bool,
         /**
          * 访问权限。
          */access: MemoryAccessInfo) {
@@ -2060,9 +2136,9 @@ public struct MemoryRegionLayout: Equatable, Hashable, Codable {
         self.access = access
     }
 
-    
 
-    
+
+
 }
 
 #if compiler(>=6)
@@ -2076,13 +2152,13 @@ public struct FfiConverterTypeMemoryRegionLayout: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> MemoryRegionLayout {
         return
             try MemoryRegionLayout(
-                name: FfiConverterOptionString.read(from: &buf), 
-                kind: FfiConverterTypeMemoryRegionKind.read(from: &buf), 
-                start: FfiConverterUInt64.read(from: &buf), 
-                end: FfiConverterUInt64.read(from: &buf), 
-                size: FfiConverterUInt64.read(from: &buf), 
-                cores: FfiConverterSequenceString.read(from: &buf), 
-                isAlias: FfiConverterBool.read(from: &buf), 
+                name: FfiConverterOptionString.read(from: &buf),
+                kind: FfiConverterTypeMemoryRegionKind.read(from: &buf),
+                start: FfiConverterUInt64.read(from: &buf),
+                end: FfiConverterUInt64.read(from: &buf),
+                size: FfiConverterUInt64.read(from: &buf),
+                cores: FfiConverterSequenceString.read(from: &buf),
+                isAlias: FfiConverterBool.read(from: &buf),
                 access: FfiConverterTypeMemoryAccessInfo.read(from: &buf)
         )
     }
@@ -2141,13 +2217,13 @@ public struct MemoryRequest: Equatable, Hashable, Codable {
     public init(
         /**
          * 选中的探针；为空时要求当前只连接一个探针。
-         */probe: String?, 
+         */probe: String?,
         /**
          * 目标芯片和连接参数。
-         */target: TargetSelection, 
+         */target: TargetSelection,
         /**
          * 起始地址。
-         */address: UInt64, 
+         */address: UInt64,
         /**
          * 读取长度，单位字节。
          */length: UInt32) {
@@ -2157,9 +2233,9 @@ public struct MemoryRequest: Equatable, Hashable, Codable {
         self.length = length
     }
 
-    
 
-    
+
+
 }
 
 #if compiler(>=6)
@@ -2173,9 +2249,9 @@ public struct FfiConverterTypeMemoryRequest: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> MemoryRequest {
         return
             try MemoryRequest(
-                probe: FfiConverterOptionString.read(from: &buf), 
-                target: FfiConverterTypeTargetSelection.read(from: &buf), 
-                address: FfiConverterUInt64.read(from: &buf), 
+                probe: FfiConverterOptionString.read(from: &buf),
+                target: FfiConverterTypeTargetSelection.read(from: &buf),
+                address: FfiConverterUInt64.read(from: &buf),
                 length: FfiConverterUInt32.read(from: &buf)
         )
     }
@@ -2201,6 +2277,134 @@ public func FfiConverterTypeMemoryRequest_lift(_ buf: RustBuffer) throws -> Memo
 #endif
 public func FfiConverterTypeMemoryRequest_lower(_ value: MemoryRequest) -> RustBuffer {
     return FfiConverterTypeMemoryRequest.lower(value)
+}
+
+
+public struct PollBatch: Equatable, Hashable, Codable {
+    public var status: SerialStatus
+    public var frames: [SerialFrameEvent]
+    public var droppedFrames: UInt64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(status: SerialStatus, frames: [SerialFrameEvent], droppedFrames: UInt64) {
+        self.status = status
+        self.frames = frames
+        self.droppedFrames = droppedFrames
+    }
+
+
+
+
+}
+
+#if compiler(>=6)
+extension PollBatch: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePollBatch: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PollBatch {
+        return
+            try PollBatch(
+                status: FfiConverterTypeSerialStatus.read(from: &buf),
+                frames: FfiConverterSequenceTypeSerialFrameEvent.read(from: &buf),
+                droppedFrames: FfiConverterUInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: PollBatch, into buf: inout [UInt8]) {
+        FfiConverterTypeSerialStatus.write(value.status, into: &buf)
+        FfiConverterSequenceTypeSerialFrameEvent.write(value.frames, into: &buf)
+        FfiConverterUInt64.write(value.droppedFrames, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePollBatch_lift(_ buf: RustBuffer) throws -> PollBatch {
+    return try FfiConverterTypePollBatch.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePollBatch_lower(_ value: PollBatch) -> RustBuffer {
+    return FfiConverterTypePollBatch.lower(value)
+}
+
+
+public struct PortInfo: Equatable, Hashable, Codable {
+    public var path: String
+    public var displayName: String
+    public var manufacturer: String?
+    public var serialNumber: String?
+    public var vid: String?
+    public var pid: String?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(path: String, displayName: String, manufacturer: String?, serialNumber: String?, vid: String?, pid: String?) {
+        self.path = path
+        self.displayName = displayName
+        self.manufacturer = manufacturer
+        self.serialNumber = serialNumber
+        self.vid = vid
+        self.pid = pid
+    }
+
+
+
+
+}
+
+#if compiler(>=6)
+extension PortInfo: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePortInfo: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PortInfo {
+        return
+            try PortInfo(
+                path: FfiConverterString.read(from: &buf),
+                displayName: FfiConverterString.read(from: &buf),
+                manufacturer: FfiConverterOptionString.read(from: &buf),
+                serialNumber: FfiConverterOptionString.read(from: &buf),
+                vid: FfiConverterOptionString.read(from: &buf),
+                pid: FfiConverterOptionString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: PortInfo, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.path, into: &buf)
+        FfiConverterString.write(value.displayName, into: &buf)
+        FfiConverterOptionString.write(value.manufacturer, into: &buf)
+        FfiConverterOptionString.write(value.serialNumber, into: &buf)
+        FfiConverterOptionString.write(value.vid, into: &buf)
+        FfiConverterOptionString.write(value.pid, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePortInfo_lift(_ buf: RustBuffer) throws -> PortInfo {
+    return try FfiConverterTypePortInfo.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePortInfo_lower(_ value: PortInfo) -> RustBuffer {
+    return FfiConverterTypePortInfo.lower(value)
 }
 
 
@@ -2234,16 +2438,16 @@ public struct ProbeSummary: Equatable, Hashable, Codable {
     public init(
         /**
          * probe-rs 可解析的探针选择器字符串。
-         */identifier: String, 
+         */identifier: String,
         /**
          * USB vendor id。
-         */vendorId: UInt16, 
+         */vendorId: UInt16,
         /**
          * USB product id。
-         */productId: UInt16, 
+         */productId: UInt16,
         /**
          * 探针序列号。
-         */serialNumber: String?, 
+         */serialNumber: String?,
         /**
          * 探针产品名。
          */product: String?) {
@@ -2254,9 +2458,9 @@ public struct ProbeSummary: Equatable, Hashable, Codable {
         self.product = product
     }
 
-    
 
-    
+
+
 }
 
 #if compiler(>=6)
@@ -2270,10 +2474,10 @@ public struct FfiConverterTypeProbeSummary: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ProbeSummary {
         return
             try ProbeSummary(
-                identifier: FfiConverterString.read(from: &buf), 
-                vendorId: FfiConverterUInt16.read(from: &buf), 
-                productId: FfiConverterUInt16.read(from: &buf), 
-                serialNumber: FfiConverterOptionString.read(from: &buf), 
+                identifier: FfiConverterString.read(from: &buf),
+                vendorId: FfiConverterUInt16.read(from: &buf),
+                productId: FfiConverterUInt16.read(from: &buf),
+                serialNumber: FfiConverterOptionString.read(from: &buf),
                 product: FfiConverterOptionString.read(from: &buf)
         )
     }
@@ -2325,9 +2529,9 @@ public struct ProgressEvent: Equatable, Hashable, Codable {
         self.at = at
     }
 
-    
 
-    
+
+
 }
 
 #if compiler(>=6)
@@ -2341,11 +2545,11 @@ public struct FfiConverterTypeProgressEvent: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ProgressEvent {
         return
             try ProgressEvent(
-                id: FfiConverterString.read(from: &buf), 
-                kind: FfiConverterTypeJobKind.read(from: &buf), 
-                stage: FfiConverterTypeJobStage.read(from: &buf), 
-                progress: FfiConverterOptionFloat.read(from: &buf), 
-                message: FfiConverterString.read(from: &buf), 
+                id: FfiConverterString.read(from: &buf),
+                kind: FfiConverterTypeJobKind.read(from: &buf),
+                stage: FfiConverterTypeJobStage.read(from: &buf),
+                progress: FfiConverterOptionFloat.read(from: &buf),
+                message: FfiConverterString.read(from: &buf),
                 at: FfiConverterTypeAppTimestamp.read(from: &buf)
         )
     }
@@ -2394,9 +2598,9 @@ public struct RecentFirmware: Equatable, Hashable, Codable {
         self.usedAt = usedAt
     }
 
-    
 
-    
+
+
 }
 
 #if compiler(>=6)
@@ -2410,9 +2614,9 @@ public struct FfiConverterTypeRecentFirmware: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RecentFirmware {
         return
             try RecentFirmware(
-                path: FfiConverterString.read(from: &buf), 
-                format: FfiConverterTypeFirmwareFormat.read(from: &buf), 
-                baseAddress: FfiConverterOptionUInt64.read(from: &buf), 
+                path: FfiConverterString.read(from: &buf),
+                format: FfiConverterTypeFirmwareFormat.read(from: &buf),
+                baseAddress: FfiConverterOptionUInt64.read(from: &buf),
                 usedAt: FfiConverterTypeAppTimestamp.read(from: &buf)
         )
     }
@@ -2465,9 +2669,9 @@ public struct SavedProfile: Equatable, Hashable, Codable {
         self.updatedAt = updatedAt
     }
 
-    
 
-    
+
+
 }
 
 #if compiler(>=6)
@@ -2481,12 +2685,12 @@ public struct FfiConverterTypeSavedProfile: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SavedProfile {
         return
             try SavedProfile(
-                id: FfiConverterString.read(from: &buf), 
-                name: FfiConverterString.read(from: &buf), 
-                probe: FfiConverterOptionString.read(from: &buf), 
-                target: FfiConverterTypeTargetSelection.read(from: &buf), 
-                flashOptions: FfiConverterTypeFlashOptions.read(from: &buf), 
-                binBaseAddress: FfiConverterOptionUInt64.read(from: &buf), 
+                id: FfiConverterString.read(from: &buf),
+                name: FfiConverterString.read(from: &buf),
+                probe: FfiConverterOptionString.read(from: &buf),
+                target: FfiConverterTypeTargetSelection.read(from: &buf),
+                flashOptions: FfiConverterTypeFlashOptions.read(from: &buf),
+                binBaseAddress: FfiConverterOptionUInt64.read(from: &buf),
                 updatedAt: FfiConverterTypeAppTimestamp.read(from: &buf)
         )
     }
@@ -2518,6 +2722,212 @@ public func FfiConverterTypeSavedProfile_lower(_ value: SavedProfile) -> RustBuf
 }
 
 
+public struct SerialConfig: Equatable, Hashable, Codable {
+    public var baudRate: UInt32
+    public var dataBits: UInt8
+    public var stopBits: UInt8
+    public var parity: Parity
+    public var flowControl: FlowControl
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(baudRate: UInt32, dataBits: UInt8, stopBits: UInt8, parity: Parity, flowControl: FlowControl) {
+        self.baudRate = baudRate
+        self.dataBits = dataBits
+        self.stopBits = stopBits
+        self.parity = parity
+        self.flowControl = flowControl
+    }
+
+
+
+
+}
+
+#if compiler(>=6)
+extension SerialConfig: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSerialConfig: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SerialConfig {
+        return
+            try SerialConfig(
+                baudRate: FfiConverterUInt32.read(from: &buf),
+                dataBits: FfiConverterUInt8.read(from: &buf),
+                stopBits: FfiConverterUInt8.read(from: &buf),
+                parity: FfiConverterTypeParity.read(from: &buf),
+                flowControl: FfiConverterTypeFlowControl.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: SerialConfig, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.baudRate, into: &buf)
+        FfiConverterUInt8.write(value.dataBits, into: &buf)
+        FfiConverterUInt8.write(value.stopBits, into: &buf)
+        FfiConverterTypeParity.write(value.parity, into: &buf)
+        FfiConverterTypeFlowControl.write(value.flowControl, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSerialConfig_lift(_ buf: RustBuffer) throws -> SerialConfig {
+    return try FfiConverterTypeSerialConfig.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSerialConfig_lower(_ value: SerialConfig) -> RustBuffer {
+    return FfiConverterTypeSerialConfig.lower(value)
+}
+
+
+public struct SerialFrameEvent: Equatable, Hashable, Codable {
+    public var direction: Direction
+    public var bytes: Data
+    public var hex: String
+    public var text: DecodedText
+    public var timestamp: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(direction: Direction, bytes: Data, hex: String, text: DecodedText, timestamp: String) {
+        self.direction = direction
+        self.bytes = bytes
+        self.hex = hex
+        self.text = text
+        self.timestamp = timestamp
+    }
+
+
+
+
+}
+
+#if compiler(>=6)
+extension SerialFrameEvent: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSerialFrameEvent: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SerialFrameEvent {
+        return
+            try SerialFrameEvent(
+                direction: FfiConverterTypeDirection.read(from: &buf),
+                bytes: FfiConverterData.read(from: &buf),
+                hex: FfiConverterString.read(from: &buf),
+                text: FfiConverterTypeDecodedText.read(from: &buf),
+                timestamp: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: SerialFrameEvent, into buf: inout [UInt8]) {
+        FfiConverterTypeDirection.write(value.direction, into: &buf)
+        FfiConverterData.write(value.bytes, into: &buf)
+        FfiConverterString.write(value.hex, into: &buf)
+        FfiConverterTypeDecodedText.write(value.text, into: &buf)
+        FfiConverterString.write(value.timestamp, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSerialFrameEvent_lift(_ buf: RustBuffer) throws -> SerialFrameEvent {
+    return try FfiConverterTypeSerialFrameEvent.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSerialFrameEvent_lower(_ value: SerialFrameEvent) -> RustBuffer {
+    return FfiConverterTypeSerialFrameEvent.lower(value)
+}
+
+
+public struct SerialStatus: Equatable, Hashable, Codable {
+    public var connected: Bool
+    public var path: String?
+    public var config: SerialConfig?
+    public var rxBytes: UInt64
+    public var txBytes: UInt64
+    public var openedAt: String?
+    public var lastError: String?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(connected: Bool, path: String?, config: SerialConfig?, rxBytes: UInt64, txBytes: UInt64, openedAt: String?, lastError: String?) {
+        self.connected = connected
+        self.path = path
+        self.config = config
+        self.rxBytes = rxBytes
+        self.txBytes = txBytes
+        self.openedAt = openedAt
+        self.lastError = lastError
+    }
+
+
+
+
+}
+
+#if compiler(>=6)
+extension SerialStatus: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSerialStatus: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SerialStatus {
+        return
+            try SerialStatus(
+                connected: FfiConverterBool.read(from: &buf),
+                path: FfiConverterOptionString.read(from: &buf),
+                config: FfiConverterOptionTypeSerialConfig.read(from: &buf),
+                rxBytes: FfiConverterUInt64.read(from: &buf),
+                txBytes: FfiConverterUInt64.read(from: &buf),
+                openedAt: FfiConverterOptionString.read(from: &buf),
+                lastError: FfiConverterOptionString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: SerialStatus, into buf: inout [UInt8]) {
+        FfiConverterBool.write(value.connected, into: &buf)
+        FfiConverterOptionString.write(value.path, into: &buf)
+        FfiConverterOptionTypeSerialConfig.write(value.config, into: &buf)
+        FfiConverterUInt64.write(value.rxBytes, into: &buf)
+        FfiConverterUInt64.write(value.txBytes, into: &buf)
+        FfiConverterOptionString.write(value.openedAt, into: &buf)
+        FfiConverterOptionString.write(value.lastError, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSerialStatus_lift(_ buf: RustBuffer) throws -> SerialStatus {
+    return try FfiConverterTypeSerialStatus.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSerialStatus_lower(_ value: SerialStatus) -> RustBuffer {
+    return FfiConverterTypeSerialStatus.lower(value)
+}
+
+
 /**
  * 自动识别失败时，后端按硬件可读信息缩小出的目标候选。
  */
@@ -2536,7 +2946,7 @@ public struct TargetCandidate: Equatable, Hashable, Codable {
     public init(
         /**
          * probe-rs 可接收的目标名称。
-         */name: String, 
+         */name: String,
         /**
          * 候选所属芯片族。
          */family: String) {
@@ -2544,9 +2954,9 @@ public struct TargetCandidate: Equatable, Hashable, Codable {
         self.family = family
     }
 
-    
 
-    
+
+
 }
 
 #if compiler(>=6)
@@ -2560,7 +2970,7 @@ public struct FfiConverterTypeTargetCandidate: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TargetCandidate {
         return
             try TargetCandidate(
-                name: FfiConverterString.read(from: &buf), 
+                name: FfiConverterString.read(from: &buf),
                 family: FfiConverterString.read(from: &buf)
         )
     }
@@ -2617,16 +3027,16 @@ public struct TargetInformation: Equatable, Hashable, Codable {
     public init(
         /**
          * 从调试签名识别出的设备型号或系列。
-         */deviceType: String, 
+         */deviceType: String,
         /**
          * 厂商调试模块中的设备 ID。
-         */deviceId: UInt16?, 
+         */deviceId: UInt16?,
         /**
          * 厂商调试模块中的芯片修订 ID。
-         */revisionId: UInt16?, 
+         */revisionId: UInt16?,
         /**
          * 从 CPUID 识别出的 CPU 内核名称。
-         */cpu: String?, 
+         */cpu: String?,
         /**
          * 从厂商系统存储区读出的 Flash 容量，单位字节。
          */flashSizeBytes: UInt64?) {
@@ -2637,9 +3047,9 @@ public struct TargetInformation: Equatable, Hashable, Codable {
         self.flashSizeBytes = flashSizeBytes
     }
 
-    
 
-    
+
+
 }
 
 #if compiler(>=6)
@@ -2653,10 +3063,10 @@ public struct FfiConverterTypeTargetInformation: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TargetInformation {
         return
             try TargetInformation(
-                deviceType: FfiConverterString.read(from: &buf), 
-                deviceId: FfiConverterOptionUInt16.read(from: &buf), 
-                revisionId: FfiConverterOptionUInt16.read(from: &buf), 
-                cpu: FfiConverterOptionString.read(from: &buf), 
+                deviceType: FfiConverterString.read(from: &buf),
+                deviceId: FfiConverterOptionUInt16.read(from: &buf),
+                revisionId: FfiConverterOptionUInt16.read(from: &buf),
+                cpu: FfiConverterOptionString.read(from: &buf),
                 flashSizeBytes: FfiConverterOptionUInt64.read(from: &buf)
         )
     }
@@ -2712,13 +3122,13 @@ public struct TargetSelection: Equatable, Hashable, Codable {
     public init(
         /**
          * 目标芯片型号；为空时尝试自动识别。
-         */chip: String?, 
+         */chip: String?,
         /**
          * 调试线协议。
-         */`protocol`: WireProtocol, 
+         */`protocol`: WireProtocol,
         /**
          * 连接速度，单位 kHz。
-         */speedKhz: UInt32?, 
+         */speedKhz: UInt32?,
         /**
          * 是否使用 connect-under-reset。
          */connectUnderReset: Bool) {
@@ -2728,9 +3138,9 @@ public struct TargetSelection: Equatable, Hashable, Codable {
         self.connectUnderReset = connectUnderReset
     }
 
-    
 
-    
+
+
 }
 
 #if compiler(>=6)
@@ -2744,9 +3154,9 @@ public struct FfiConverterTypeTargetSelection: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TargetSelection {
         return
             try TargetSelection(
-                chip: FfiConverterOptionString.read(from: &buf), 
-                protocol: FfiConverterTypeWireProtocol.read(from: &buf), 
-                speedKhz: FfiConverterOptionUInt32.read(from: &buf), 
+                chip: FfiConverterOptionString.read(from: &buf),
+                protocol: FfiConverterTypeWireProtocol.read(from: &buf),
+                speedKhz: FfiConverterOptionUInt32.read(from: &buf),
                 connectUnderReset: FfiConverterBool.read(from: &buf)
         )
     }
@@ -2778,26 +3188,26 @@ public func FfiConverterTypeTargetSelection_lower(_ value: TargetSelection) -> R
 /**
  * A structured, recoverable error shared with Swift.
  */
-public 
+public
 enum CoreError: Swift.Error, Equatable, Hashable, Codable, Foundation.LocalizedError {
 
-    
-    
+
+
     /**
      * Retains target candidates and recovery advice.
      */
     case Operation(response: ErrorResponse
     )
 
-    
 
-    
 
-    
+
+
+
     public var errorDescription: String? {
         String(reflecting: self)
     }
-    
+
 }
 
 #if compiler(>=6)
@@ -2814,9 +3224,9 @@ public struct FfiConverterTypeCoreError: FfiConverterRustBuffer {
         let variant: Int32 = try readInt(&buf)
         switch variant {
 
-        
 
-        
+
+
         case 1: return .Operation(
             response: try FfiConverterTypeErrorResponse.read(from: &buf)
             )
@@ -2828,14 +3238,14 @@ public struct FfiConverterTypeCoreError: FfiConverterRustBuffer {
     public static func write(_ value: CoreError, into buf: inout [UInt8]) {
         switch value {
 
-        
 
-        
-        
+
+
+
         case let .Operation(response):
             writeInt(&buf, Int32(1))
             FfiConverterTypeErrorResponse.write(response, into: &buf)
-            
+
         }
     }
 }
@@ -2856,12 +3266,78 @@ public func FfiConverterTypeCoreError_lower(_ value: CoreError) -> RustBuffer {
 }
 
 
+
+public enum Direction: Equatable, Hashable, Codable {
+
+    case receive
+    case send
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension Direction: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDirection: FfiConverterRustBuffer {
+    typealias SwiftType = Direction
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Direction {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .receive
+
+        case 2: return .send
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: Direction, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .receive:
+            writeInt(&buf, Int32(1))
+
+
+        case .send:
+            writeInt(&buf, Int32(2))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDirection_lift(_ buf: RustBuffer) throws -> Direction {
+    return try FfiConverterTypeDirection.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDirection_lower(_ value: Direction) -> RustBuffer {
+    return FfiConverterTypeDirection.lower(value)
+}
+
+
+
 /**
  * 前端可稳定匹配的错误码。
  */
 
 public enum ErrorCode: Equatable, Hashable, Codable {
-    
+
     /**
      * 未找到可用探针。
      */
@@ -2922,74 +3398,74 @@ public struct FfiConverterTypeErrorCode: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ErrorCode {
         let variant: Int32 = try readInt(&buf)
         switch variant {
-        
+
         case 1: return .probeNotFound
-        
+
         case 2: return .targetIdentifyFailed
-        
+
         case 3: return .unsupportedFirmwareFormat
-        
+
         case 4: return .missingBinBaseAddress
-        
+
         case 5: return .invalidFirmwareAddress
-        
+
         case 6: return .probeRsFailure
-        
+
         case 7: return .ioFailure
-        
+
         case 8: return .invalidUserInput
-        
+
         case 9: return .storageFailure
-        
+
         case 10: return .jobAlreadyRunning
-        
+
         default: throw UniffiInternalError.unexpectedEnumCase
         }
     }
 
     public static func write(_ value: ErrorCode, into buf: inout [UInt8]) {
         switch value {
-        
-        
+
+
         case .probeNotFound:
             writeInt(&buf, Int32(1))
-        
-        
+
+
         case .targetIdentifyFailed:
             writeInt(&buf, Int32(2))
-        
-        
+
+
         case .unsupportedFirmwareFormat:
             writeInt(&buf, Int32(3))
-        
-        
+
+
         case .missingBinBaseAddress:
             writeInt(&buf, Int32(4))
-        
-        
+
+
         case .invalidFirmwareAddress:
             writeInt(&buf, Int32(5))
-        
-        
+
+
         case .probeRsFailure:
             writeInt(&buf, Int32(6))
-        
-        
+
+
         case .ioFailure:
             writeInt(&buf, Int32(7))
-        
-        
+
+
         case .invalidUserInput:
             writeInt(&buf, Int32(8))
-        
-        
+
+
         case .storageFailure:
             writeInt(&buf, Int32(9))
-        
-        
+
+
         case .jobAlreadyRunning:
             writeInt(&buf, Int32(10))
-        
+
         }
     }
 }
@@ -3016,7 +3492,7 @@ public func FfiConverterTypeErrorCode_lower(_ value: ErrorCode) -> RustBuffer {
  */
 
 public enum FirmwareFormat: Equatable, Hashable, Codable {
-    
+
     /**
      * ELF 可执行文件，地址信息来自文件内容。
      */
@@ -3049,32 +3525,32 @@ public struct FfiConverterTypeFirmwareFormat: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> FirmwareFormat {
         let variant: Int32 = try readInt(&buf)
         switch variant {
-        
+
         case 1: return .elf
-        
+
         case 2: return .hex
-        
+
         case 3: return .bin
-        
+
         default: throw UniffiInternalError.unexpectedEnumCase
         }
     }
 
     public static func write(_ value: FirmwareFormat, into buf: inout [UInt8]) {
         switch value {
-        
-        
+
+
         case .elf:
             writeInt(&buf, Int32(1))
-        
-        
+
+
         case .hex:
             writeInt(&buf, Int32(2))
-        
-        
+
+
         case .bin:
             writeInt(&buf, Int32(3))
-        
+
         }
     }
 }
@@ -3096,12 +3572,85 @@ public func FfiConverterTypeFirmwareFormat_lower(_ value: FirmwareFormat) -> Rus
 
 
 
+
+public enum FlowControl: Equatable, Hashable, Codable {
+
+    case none
+    case software
+    case hardware
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension FlowControl: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeFlowControl: FfiConverterRustBuffer {
+    typealias SwiftType = FlowControl
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> FlowControl {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .none
+
+        case 2: return .software
+
+        case 3: return .hardware
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: FlowControl, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .none:
+            writeInt(&buf, Int32(1))
+
+
+        case .software:
+            writeInt(&buf, Int32(2))
+
+
+        case .hardware:
+            writeInt(&buf, Int32(3))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFlowControl_lift(_ buf: RustBuffer) throws -> FlowControl {
+    return try FfiConverterTypeFlowControl.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFlowControl_lower(_ value: FlowControl) -> RustBuffer {
+    return FfiConverterTypeFlowControl.lower(value)
+}
+
+
+
 /**
  * 后台任务类型。
  */
 
 public enum JobKind: Equatable, Hashable, Codable {
-    
+
     /**
      * 固件烧录任务。
      */
@@ -3130,26 +3679,26 @@ public struct FfiConverterTypeJobKind: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> JobKind {
         let variant: Int32 = try readInt(&buf)
         switch variant {
-        
+
         case 1: return .flash
-        
+
         case 2: return .erase
-        
+
         default: throw UniffiInternalError.unexpectedEnumCase
         }
     }
 
     public static func write(_ value: JobKind, into buf: inout [UInt8]) {
         switch value {
-        
-        
+
+
         case .flash:
             writeInt(&buf, Int32(1))
-        
-        
+
+
         case .erase:
             writeInt(&buf, Int32(2))
-        
+
         }
     }
 }
@@ -3176,7 +3725,7 @@ public func FfiConverterTypeJobKind_lower(_ value: JobKind) -> RustBuffer {
  */
 
 public enum JobStage: Equatable, Hashable, Codable {
-    
+
     /**
      * 任务已创建，等待执行。
      */
@@ -3233,68 +3782,68 @@ public struct FfiConverterTypeJobStage: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> JobStage {
         let variant: Int32 = try readInt(&buf)
         switch variant {
-        
+
         case 1: return .queued
-        
+
         case 2: return .connecting
-        
+
         case 3: return .preparing
-        
+
         case 4: return .erasing
-        
+
         case 5: return .programming
-        
+
         case 6: return .verifying
-        
+
         case 7: return .resetting
-        
+
         case 8: return .completed
-        
+
         case 9: return .failed
-        
+
         default: throw UniffiInternalError.unexpectedEnumCase
         }
     }
 
     public static func write(_ value: JobStage, into buf: inout [UInt8]) {
         switch value {
-        
-        
+
+
         case .queued:
             writeInt(&buf, Int32(1))
-        
-        
+
+
         case .connecting:
             writeInt(&buf, Int32(2))
-        
-        
+
+
         case .preparing:
             writeInt(&buf, Int32(3))
-        
-        
+
+
         case .erasing:
             writeInt(&buf, Int32(4))
-        
-        
+
+
         case .programming:
             writeInt(&buf, Int32(5))
-        
-        
+
+
         case .verifying:
             writeInt(&buf, Int32(6))
-        
-        
+
+
         case .resetting:
             writeInt(&buf, Int32(7))
-        
-        
+
+
         case .completed:
             writeInt(&buf, Int32(8))
-        
-        
+
+
         case .failed:
             writeInt(&buf, Int32(9))
-        
+
         }
     }
 }
@@ -3316,12 +3865,92 @@ public func FfiConverterTypeJobStage_lower(_ value: JobStage) -> RustBuffer {
 
 
 
+
+public enum LineEnding: Equatable, Hashable, Codable {
+
+    case none
+    case lf
+    case cr
+    case crlf
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension LineEnding: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLineEnding: FfiConverterRustBuffer {
+    typealias SwiftType = LineEnding
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LineEnding {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .none
+
+        case 2: return .lf
+
+        case 3: return .cr
+
+        case 4: return .crlf
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: LineEnding, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .none:
+            writeInt(&buf, Int32(1))
+
+
+        case .lf:
+            writeInt(&buf, Int32(2))
+
+
+        case .cr:
+            writeInt(&buf, Int32(3))
+
+
+        case .crlf:
+            writeInt(&buf, Int32(4))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLineEnding_lift(_ buf: RustBuffer) throws -> LineEnding {
+    return try FfiConverterTypeLineEnding.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLineEnding_lower(_ value: LineEnding) -> RustBuffer {
+    return FfiConverterTypeLineEnding.lower(value)
+}
+
+
+
 /**
  * 目标芯片内存区域类型。
  */
 
 public enum MemoryRegionKind: Equatable, Hashable, Codable {
-    
+
     /**
      * 非易失存储，通常是 Flash。
      */
@@ -3354,32 +3983,32 @@ public struct FfiConverterTypeMemoryRegionKind: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> MemoryRegionKind {
         let variant: Int32 = try readInt(&buf)
         switch variant {
-        
+
         case 1: return .nvm
-        
+
         case 2: return .ram
-        
+
         case 3: return .generic
-        
+
         default: throw UniffiInternalError.unexpectedEnumCase
         }
     }
 
     public static func write(_ value: MemoryRegionKind, into buf: inout [UInt8]) {
         switch value {
-        
-        
+
+
         case .nvm:
             writeInt(&buf, Int32(1))
-        
-        
+
+
         case .ram:
             writeInt(&buf, Int32(2))
-        
-        
+
+
         case .generic:
             writeInt(&buf, Int32(3))
-        
+
         }
     }
 }
@@ -3401,12 +4030,240 @@ public func FfiConverterTypeMemoryRegionKind_lower(_ value: MemoryRegionKind) ->
 
 
 
+
+public enum Parity: Equatable, Hashable, Codable {
+
+    case none
+    case odd
+    case even
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension Parity: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeParity: FfiConverterRustBuffer {
+    typealias SwiftType = Parity
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Parity {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .none
+
+        case 2: return .odd
+
+        case 3: return .even
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: Parity, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .none:
+            writeInt(&buf, Int32(1))
+
+
+        case .odd:
+            writeInt(&buf, Int32(2))
+
+
+        case .even:
+            writeInt(&buf, Int32(3))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeParity_lift(_ buf: RustBuffer) throws -> Parity {
+    return try FfiConverterTypeParity.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeParity_lower(_ value: Parity) -> RustBuffer {
+    return FfiConverterTypeParity.lower(value)
+}
+
+
+
+
+public enum SendFormat: Equatable, Hashable, Codable {
+
+    case hex
+    case ascii
+    case gbk
+    case utf8
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension SendFormat: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSendFormat: FfiConverterRustBuffer {
+    typealias SwiftType = SendFormat
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SendFormat {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .hex
+
+        case 2: return .ascii
+
+        case 3: return .gbk
+
+        case 4: return .utf8
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: SendFormat, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .hex:
+            writeInt(&buf, Int32(1))
+
+
+        case .ascii:
+            writeInt(&buf, Int32(2))
+
+
+        case .gbk:
+            writeInt(&buf, Int32(3))
+
+
+        case .utf8:
+            writeInt(&buf, Int32(4))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSendFormat_lift(_ buf: RustBuffer) throws -> SendFormat {
+    return try FfiConverterTypeSendFormat.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSendFormat_lower(_ value: SendFormat) -> RustBuffer {
+    return FfiConverterTypeSendFormat.lower(value)
+}
+
+
+
+public
+enum SerialError: Swift.Error, Equatable, Hashable, Codable, Foundation.LocalizedError {
+
+
+
+    case Operation(message: String
+    )
+
+
+
+
+
+
+    public var errorDescription: String? {
+        String(reflecting: self)
+    }
+
+}
+
+#if compiler(>=6)
+extension SerialError: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSerialError: FfiConverterRustBuffer {
+    typealias SwiftType = SerialError
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SerialError {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+
+
+
+        case 1: return .Operation(
+            message: try FfiConverterString.read(from: &buf)
+            )
+
+         default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: SerialError, into buf: inout [UInt8]) {
+        switch value {
+
+
+
+
+
+        case let .Operation(message):
+            writeInt(&buf, Int32(1))
+            FfiConverterString.write(message, into: &buf)
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSerialError_lift(_ buf: RustBuffer) throws -> SerialError {
+    return try FfiConverterTypeSerialError.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSerialError_lower(_ value: SerialError) -> RustBuffer {
+    return FfiConverterTypeSerialError.lower(value)
+}
+
+
 /**
  * 调试探针线协议。
  */
 
 public enum WireProtocol: Equatable, Hashable, Codable {
-    
+
     /**
      * Serial Wire Debug。
      */
@@ -3435,26 +4292,26 @@ public struct FfiConverterTypeWireProtocol: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> WireProtocol {
         let variant: Int32 = try readInt(&buf)
         switch variant {
-        
+
         case 1: return .swd
-        
+
         case 2: return .jtag
-        
+
         default: throw UniffiInternalError.unexpectedEnumCase
         }
     }
 
     public static func write(_ value: WireProtocol, into buf: inout [UInt8]) {
         switch value {
-        
-        
+
+
         case .swd:
             writeInt(&buf, Int32(1))
-        
-        
+
+
         case .jtag:
             writeInt(&buf, Int32(2))
-        
+
         }
     }
 }
@@ -3622,6 +4479,30 @@ fileprivate struct FfiConverterOptionString: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeSerialConfig: FfiConverterRustBuffer {
+    typealias SwiftType = SerialConfig?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeSerialConfig.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeSerialConfig.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeTargetInformation: FfiConverterRustBuffer {
     typealias SwiftType = TargetInformation?
 
@@ -3745,6 +4626,31 @@ fileprivate struct FfiConverterSequenceTypeMemoryRegionLayout: FfiConverterRustB
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypePortInfo: FfiConverterRustBuffer {
+    typealias SwiftType = [PortInfo]
+
+    public static func write(_ value: [PortInfo], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypePortInfo.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [PortInfo] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [PortInfo]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypePortInfo.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeProbeSummary: FfiConverterRustBuffer {
     typealias SwiftType = [ProbeSummary]
 
@@ -3837,6 +4743,31 @@ fileprivate struct FfiConverterSequenceTypeSavedProfile: FfiConverterRustBuffer 
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeSavedProfile.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeSerialFrameEvent: FfiConverterRustBuffer {
+    typealias SwiftType = [SerialFrameEvent]
+
+    public static func write(_ value: [SerialFrameEvent], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeSerialFrameEvent.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [SerialFrameEvent] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [SerialFrameEvent]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeSerialFrameEvent.read(from: &buf))
         }
         return seq
     }
@@ -3938,6 +4869,45 @@ public func FfiConverterTypeAppTimestamp_lower(_ value: AppTimestamp) -> Double 
     return FfiConverterTypeAppTimestamp.lower(value)
 }
 
+public func serialConnect(path: String, config: SerialConfig)throws  -> SerialStatus  {
+    return try  FfiConverterTypeSerialStatus_lift(try rustCallWithError(FfiConverterTypeSerialError_lift) {
+        uniffiCallStatus in
+    uniffi_chipdock_core_fn_func_serial_connect(
+        FfiConverterString.lower(path),
+        FfiConverterTypeSerialConfig_lower(config),uniffiCallStatus
+    )
+})
+}
+public func serialDisconnect()throws  -> SerialStatus  {
+    return try  FfiConverterTypeSerialStatus_lift(try rustCallWithError(FfiConverterTypeSerialError_lift) {
+        uniffiCallStatus in
+    uniffi_chipdock_core_fn_func_serial_disconnect(uniffiCallStatus
+    )
+})
+}
+public func serialPoll()throws  -> PollBatch  {
+    return try  FfiConverterTypePollBatch_lift(try rustCallWithError(FfiConverterTypeSerialError_lift) {
+        uniffiCallStatus in
+    uniffi_chipdock_core_fn_func_serial_poll(uniffiCallStatus
+    )
+})
+}
+public func serialPorts()throws  -> [PortInfo]  {
+    return try  FfiConverterSequenceTypePortInfo.lift(try rustCallWithError(FfiConverterTypeSerialError_lift) {
+        uniffiCallStatus in
+    uniffi_chipdock_core_fn_func_serial_ports(uniffiCallStatus
+    )
+})
+}
+public func serialSend(input: String, format: SendFormat, lineEnding: LineEnding)throws   {try rustCallWithError(FfiConverterTypeSerialError_lift) {
+        uniffiCallStatus in
+    uniffi_chipdock_core_fn_func_serial_send(
+        FfiConverterString.lower(input),
+        FfiConverterTypeSendFormat_lower(format),
+        FfiConverterTypeLineEnding_lower(lineEnding),uniffiCallStatus
+    )
+}
+}
 
 private enum InitializationResult {
     case ok
@@ -3953,6 +4923,21 @@ private let initializationResult: InitializationResult = {
     let scaffolding_contract_version = ffi_chipdock_core_uniffi_contract_version()
     if bindings_contract_version != scaffolding_contract_version {
         return InitializationResult.contractVersionMismatch
+    }
+    if (uniffi_chipdock_core_checksum_func_serial_connect() != 35495) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_chipdock_core_checksum_func_serial_disconnect() != 48556) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_chipdock_core_checksum_func_serial_poll() != 44280) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_chipdock_core_checksum_func_serial_ports() != 25043) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_chipdock_core_checksum_func_serial_send() != 9728) {
+        return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_chipdock_core_checksum_method_chipdockcore_connect_target() != 19409) {
         return InitializationResult.apiChecksumMismatch

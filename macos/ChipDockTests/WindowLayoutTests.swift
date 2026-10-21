@@ -14,7 +14,7 @@ final class WindowLayoutTests: XCTestCase {
     @MainActor
     func testNarrowWindowsAndPaneCombinationsDoNotEnterConstraintLoop() async throws {
         let store = WorkbenchStore()
-        let host = NSHostingView(rootView: ContentView(store: store))
+        let host = NSHostingView(rootView: ToolkitView(toolkit: ToolkitState(), store: store, serial: SerialStore()))
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1160, height: 740),
                               styleMask: [.titled, .resizable], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false

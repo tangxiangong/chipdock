@@ -15,6 +15,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .dispatch(Dispatch::single_file("ChipDock.Core"))
         .build()
         .process()?
-        .write_buffers_to(output)?;
+        .write_buffers_to(&output)?;
+    // Keep generated source stable and clean across native builds.
+    let generated = output.join("Interop.cs");
+    let source = std::fs::read_to_string(&generated)?;
+    let clean = source
+        .lines()
+        .map(str::trim_end)
+        .collect::<Vec<_>>()
+        .join("\n");
+    std::fs::write(generated, format!("{}\n", clean.trim_end()))?;
     Ok(())
 }

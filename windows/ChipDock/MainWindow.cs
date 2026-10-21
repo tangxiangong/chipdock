@@ -27,6 +27,11 @@ internal sealed class MainWindow : Window
     private readonly TextBlock titleText = Ui.Text("ChipDock", 12);
     private readonly ActivityView activity;
     private readonly FlashView flash;
+    private readonly SerialView serial;
+    private readonly SelectorBar toolsSelector = new();
+    private readonly SelectorBarItem flashTool = new() { Text = "固件烧录", Icon = new SymbolIcon(Symbol.Download) };
+    private readonly SelectorBarItem serialTool = new() { Text = "串口终端", Icon = new SymbolIcon(Symbol.Link) };
+    private bool SerialSelected => toolsSelector.SelectedItem == serialTool;
     private readonly LogsView logs;
     private readonly MemoryView memory;
     private readonly Grid inspector = new() { Visibility = Visibility.Collapsed };
@@ -64,7 +69,9 @@ internal sealed class MainWindow : Window
         AppWindow.Resize(new Windows.Graphics.SizeInt32((int)(1160 * scale), (int)(780 * scale)));
         SetMinimumSize();
 
-        Updater = new Updater(Store, root);
+        serial = new SerialView();
+        serial.ActivityChanged += Update;
+        Updater = new Updater(Store, root, () => serial.UpdateBlocked);
         activity = new ActivityView(Store);
         flash = new FlashView(Store, this);
         logs = new LogsView(Store, this);
@@ -81,12 +88,12 @@ internal sealed class MainWindow : Window
         var menu = new MenuBar();
         openItem = Ui.MenuItem("打开固件…", Glyphs.OpenFile, () => _ = PickFirmware(), "Ctrl+O");
         targetSetupItem = Ui.MenuItem("目标配置…", Glyphs.Edit, () => _ = ShowTargetSetup());
-        scanItem = Ui.MenuItem("扫描探针", Glyphs.Refresh, () => _ = Store.ScanProbes(), "Ctrl+R");
-        connectItem = Ui.MenuItem("连接目标", Glyphs.Link, () => _ = Store.Connect(), "Ctrl+K");
-        disconnectItem = Ui.MenuItem("断开目标", Glyphs.Cancel, Store.Disconnect, "Ctrl+Shift+K");
+        scanItem = Ui.MenuItem("扫描探针", Glyphs.Refresh, () => { if (SerialSelected) _ = serial.RefreshPorts(); else _ = Store.ScanProbes(); }, "Ctrl+R");
+        connectItem = Ui.MenuItem("连接目标", Glyphs.Link, () => { if (SerialSelected) _ = serial.ToggleConnection(); else _ = Store.Connect(); }, "Ctrl+K");
+        disconnectItem = Ui.MenuItem("断开目标", Glyphs.Cancel, () => { if (SerialSelected) _ = serial.Disconnect(); else Store.Disconnect(); }, "Ctrl+Shift+K");
         chipItem = Ui.MenuItem("选择芯片…", Glyphs.Chip, () => _ = ShowChipPicker());
         saveProfileItem = Ui.MenuItem("保存配置…", Glyphs.Save, () => _ = ShowSaveProfile(), "Ctrl+Shift+S");
-        flashItem = Ui.MenuItem("烧录固件", Glyphs.Flash, () => _ = Store.Flash(), "Ctrl+Enter");
+        flashItem = Ui.MenuItem("烧录固件", Glyphs.Flash, () => { if (SerialSelected) _ = serial.Send(); else _ = Store.Flash(); }, "Ctrl+Enter");
         readItem = Ui.MenuItem("读取内存", Glyphs.Download, ReadMemory, "Ctrl+Shift+R");
         eraseItem = Ui.MenuItem("擦除整个芯片…", Glyphs.Delete, () => _ = ConfirmErase());
         logsItem = new ToggleMenuFlyoutItem { Text = "日志", KeyboardAcceleratorTextOverride = "Ctrl+J" };
@@ -99,7 +106,9 @@ internal sealed class MainWindow : Window
         menu.Items.Add(MenuGroup("目标", targetSetupItem, new MenuFlyoutSeparator(), scanItem, connectItem, disconnectItem,
             new MenuFlyoutSeparator(), chipItem, saveProfileItem, loadProfileMenu));
         menu.Items.Add(MenuGroup("操作", flashItem, readItem, new MenuFlyoutSeparator(), eraseItem));
-        menu.Items.Add(MenuGroup("查看", logsItem, memoryItem, new MenuFlyoutSeparator(),
+        menu.Items.Add(MenuGroup("查看", Ui.MenuItem("固件烧录", Glyphs.Flash, () => toolsSelector.SelectedItem = flashTool, "Ctrl+1"),
+            Ui.MenuItem("串口终端", Glyphs.Link, () => toolsSelector.SelectedItem = serialTool, "Ctrl+2"),
+            new MenuFlyoutSeparator(), logsItem, memoryItem, new MenuFlyoutSeparator(),
             Ui.MenuItem("设置…", Glyphs.Settings, () => _ = ShowSettings(), "Ctrl+,")));
         menu.Items.Add(MenuGroup("帮助",
             Ui.MenuItem("ChipDock 源代码", null, () => OpenUri("https://github.com/tangxiangong/chipdock")),
@@ -133,6 +142,8 @@ internal sealed class MainWindow : Window
         content.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         content.ColumnDefinitions.Add(inspectorColumn);
         content.Children.Add(flash);
+        Grid.SetColumnSpan(serial, 3);
+        content.Children.Add(serial);
         content.Children.Add(dropOverlay);
         Grid.SetColumn(inspectorDivider, 1);
         Ui.SetVisible(inspectorDivider, false);
@@ -140,7 +151,18 @@ internal sealed class MainWindow : Window
         BuildInspector();
         Grid.SetColumn(inspector, 2);
         content.Children.Add(inspector);
-        var layer = new Border { Style = Ui.Style("ContentLayerStyle"), Child = content };
+        toolsSelector.Items.Add(flashTool);
+        toolsSelector.Items.Add(serialTool);
+        toolsSelector.SelectedItem = flashTool;
+        toolsSelector.Margin = new Thickness(12, 0, 12, 6);
+        toolsSelector.SelectionChanged += (_, _) => { if (SerialSelected) ClosePane(); Update(); };
+        var toolContent = new Grid();
+        toolContent.RowDefinitions.Add(new() { Height = GridLength.Auto });
+        toolContent.RowDefinitions.Add(new());
+        toolContent.Children.Add(toolsSelector);
+        Grid.SetRow(content, 1);
+        toolContent.Children.Add(content);
+        var layer = new Border { Style = Ui.Style("ContentLayerStyle"), Child = toolContent };
         Grid.SetRow(layer, 2);
         root.Children.Add(layer);
 
@@ -170,6 +192,7 @@ internal sealed class MainWindow : Window
         {
             if (!Store.IsBusy)
             {
+                serial.Shutdown();
                 Updater.ApplyOnExit();
                 return;
             }
@@ -184,6 +207,12 @@ internal sealed class MainWindow : Window
         // when candidates arrive, and the picker queues behind it.
         Store.ChipPickerRequested += () => _ = ShowChipPicker();
         Update();
+    }
+
+    internal void OpenFirmware(string path)
+    {
+        toolsSelector.SelectedItem = flashTool;
+        Store.SelectFirmware(path);
     }
 
     private double Scale => GetDpiForWindow(WinRT.Interop.WindowNative.GetWindowHandle(this)) / 96.0;
@@ -281,6 +310,7 @@ internal sealed class MainWindow : Window
 
     private void OpenPane(InspectorPane pane)
     {
+        toolsSelector.SelectedItem = flashTool;
         openPane = pane;
         inspectorColumn.Width = new GridLength(InspectorWidth);
         Ui.SetVisible(inspector, true);
@@ -315,15 +345,19 @@ internal sealed class MainWindow : Window
         // Accelerators live on the root, not on menu items, so they work before a menu first opens.
         var accelerators = new[]
         {
+            Ui.Accelerator(VirtualKey.Number1, Control, () => toolsSelector.SelectedItem = flashTool),
+            Ui.Accelerator(VirtualKey.Number2, Control, () => toolsSelector.SelectedItem = serialTool),
+            Ui.Accelerator(VirtualKey.L, Control, () => { if (SerialSelected) serial.ClearTerminal(); }),
+            Ui.Accelerator(VirtualKey.F, Control, () => { if (SerialSelected) serial.Find(); }),
             Ui.Accelerator(VirtualKey.O, Control, () => { if (!Store.IsBusy) _ = PickFirmware(); }),
-            Ui.Accelerator(VirtualKey.R, Control, () => { if (!Store.IsBusy) _ = Store.ScanProbes(); }),
-            Ui.Accelerator(VirtualKey.K, Control, () => _ = Store.Connect()),
-            Ui.Accelerator(VirtualKey.K, Shift, Store.Disconnect),
-            Ui.Accelerator(VirtualKey.S, Shift, () => { if (!Store.IsBusy) _ = ShowSaveProfile(); }),
-            Ui.Accelerator(VirtualKey.Enter, Control, () => _ = Store.Flash()),
-            Ui.Accelerator(VirtualKey.R, Shift, () => { if (Store.CanReadMemory) ReadMemory(); }),
-            Ui.Accelerator(VirtualKey.J, Control, () => TogglePane(InspectorPane.Logs)),
-            Ui.Accelerator(VirtualKey.M, Control | VirtualKeyModifiers.Menu, () => TogglePane(InspectorPane.Memory)),
+            Ui.Accelerator(VirtualKey.R, Control, () => { if (SerialSelected) _ = serial.RefreshPorts(); else if (!Store.IsBusy) _ = Store.ScanProbes(); }),
+            Ui.Accelerator(VirtualKey.K, Control, () => { if (SerialSelected) _ = serial.ToggleConnection(); else _ = Store.Connect(); }),
+            Ui.Accelerator(VirtualKey.K, Shift, () => { if (SerialSelected) _ = serial.Disconnect(); else Store.Disconnect(); }),
+            Ui.Accelerator(VirtualKey.S, Shift, () => { if (!SerialSelected && !Store.IsBusy) _ = ShowSaveProfile(); }),
+            Ui.Accelerator(VirtualKey.Enter, Control, () => { if (SerialSelected) _ = serial.Send(); else _ = Store.Flash(); }),
+            Ui.Accelerator(VirtualKey.R, Shift, () => { if (!SerialSelected && Store.CanReadMemory) ReadMemory(); }),
+            Ui.Accelerator(VirtualKey.J, Control, () => { if (!SerialSelected) TogglePane(InspectorPane.Logs); }),
+            Ui.Accelerator(VirtualKey.M, Control | VirtualKeyModifiers.Menu, () => { if (!SerialSelected) TogglePane(InspectorPane.Memory); }),
             Ui.Accelerator((VirtualKey)188, Control, () => _ = ShowSettings()),
         };
         foreach (var accelerator in accelerators) root.KeyboardAccelerators.Add(accelerator);
@@ -332,22 +366,31 @@ internal sealed class MainWindow : Window
 
     private void Update()
     {
-        var name = Store.FirmwarePath is { } path ? Path.GetFileName(path) : null;
-        AppWindow.Title = titleText.Text = name is null ? "ChipDock" : $"{name} - ChipDock";
+        AppWindow.Title = titleText.Text = "ChipDock";
+        Ui.SetVisible(serial, SerialSelected);
+        Ui.SetVisible(flash, !SerialSelected);
+        Ui.SetVisible(profilesButton, !SerialSelected);
+        Ui.SetVisible(inspectorButton, !SerialSelected);
+        Ui.SetVisible(activity, !SerialSelected);
 
         var busy = Store.IsBusy;
         openItem.IsEnabled = !busy;
         recentMenu.IsEnabled = !busy && Store.RecentFiles.Count > 0;
-        scanItem.IsEnabled = !busy;
-        connectItem.IsEnabled = Store.CanConnect;
-        disconnectItem.IsEnabled = Store.CanDisconnect;
-        chipItem.IsEnabled = saveProfileItem.IsEnabled = !busy;
-        loadProfileMenu.IsEnabled = !busy && Store.Profiles.Count > 0;
-        flashItem.Text = Store.DryRun ? "开始预检查" : "烧录固件";
-        flashItem.IsEnabled = Store.CanFlash;
-        readItem.IsEnabled = Store.CanReadMemory;
-        eraseItem.IsEnabled = Store.CanErase;
+        scanItem.Text = SerialSelected ? "刷新串口" : "扫描探针";
+        scanItem.IsEnabled = SerialSelected ? serial.CanRefresh : !busy;
+        connectItem.Text = SerialSelected ? "连接 / 断开串口" : "连接目标";
+        connectItem.IsEnabled = SerialSelected ? serial.CanToggleConnection : Store.CanConnect;
+        disconnectItem.Text = SerialSelected ? "断开串口" : "断开目标";
+        disconnectItem.IsEnabled = SerialSelected ? serial.CanDisconnect : Store.CanDisconnect;
+        chipItem.IsEnabled = saveProfileItem.IsEnabled = !SerialSelected && !busy;
+        loadProfileMenu.IsEnabled = !SerialSelected && !busy && Store.Profiles.Count > 0;
+        flashItem.Text = SerialSelected ? "发送数据" : Store.DryRun ? "开始预检查" : "烧录固件";
+        flashItem.IsEnabled = SerialSelected ? serial.CanSend : Store.CanFlash;
+        targetSetupItem.IsEnabled = !SerialSelected && !busy;
+        readItem.IsEnabled = !SerialSelected && Store.CanReadMemory;
+        eraseItem.IsEnabled = !SerialSelected && Store.CanErase;
         checkUpdatesItem.IsEnabled = Updater.CanCheck;
+        logsItem.IsEnabled = memoryItem.IsEnabled = !SerialSelected;
         logsItem.IsChecked = openPane == InspectorPane.Logs;
         memoryItem.IsChecked = openPane == InspectorPane.Memory;
         inspectorButton.IsChecked = openPane is not null;
@@ -368,7 +411,7 @@ internal sealed class MainWindow : Window
             foreach (var file in Store.RecentFiles)
             {
                 var missing = Store.MissingRecentPaths.Contains(file.path);
-                var open = Ui.MenuItem(Path.GetFileName(file.path) + (missing ? "（文件不存在）" : ""), null, () => Store.OpenRecent(file));
+                var open = Ui.MenuItem(Path.GetFileName(file.path) + (missing ? "（文件不存在）" : ""), null, () => { toolsSelector.SelectedItem = flashTool; Store.OpenRecent(file); });
                 open.IsEnabled = !missing;
                 recentMenu.Items.Add(open);
                 removeMenu.Items.Add(Ui.MenuItem(Path.GetFileName(file.path), null, () => _ = Store.RemoveRecentFiles([file.path])));
@@ -409,13 +452,14 @@ internal sealed class MainWindow : Window
 
     internal async Task PickFirmware()
     {
+        toolsSelector.SelectedItem = flashTool;
         if (Store.IsBusy) return;
         var picker = new FileOpenPicker { SuggestedStartLocation = PickerLocationId.DocumentsLibrary };
         foreach (var extension in Program.FirmwareExtensions) picker.FileTypeFilter.Add(extension);
         WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(this));
         try
         {
-            if (await picker.PickSingleFileAsync() is { } file) Store.SelectFirmware(file.Path);
+            if (await picker.PickSingleFileAsync() is { } file) OpenFirmware(file.Path);
         }
         catch (Exception error) { Store.Report(error, "打开固件"); }
     }
@@ -530,7 +574,7 @@ internal sealed class MainWindow : Window
         try
         {
             var items = await args.DataView.GetStorageItemsAsync();
-            if (items.OfType<StorageFile>().FirstOrDefault() is { } file) Store.SelectFirmware(file.Path);
+            if (items.OfType<StorageFile>().FirstOrDefault() is { } file) OpenFirmware(file.Path);
         }
         catch (Exception error) { Store.Report(error, "打开固件"); }
         finally { deferral.Complete(); }

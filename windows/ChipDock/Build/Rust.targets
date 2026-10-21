@@ -15,7 +15,7 @@
   <ItemGroup>
     <Content Include="$(RustLibrary)" Link="chipdock_csharp.dll" CopyToOutputDirectory="PreserveNewest" />
     <Compile Remove="$(GeneratedBindingsDirectory)/**" />
-    <_RustBindingInputs Include="$(RepositoryRoot)/crates/**/*.rs;$(RepositoryRoot)/crates/**/Cargo.toml;$(RepositoryRoot)/Cargo.toml;$(RepositoryRoot)/Cargo.lock" Exclude="$(RepositoryRoot)/**/target/**" />
+    <_RustBindingInputs Include="$(RepositoryRoot)/crates/**/*.rs;$(RepositoryRoot)/crates/**/Cargo.toml;$(RepositoryRoot)/Cargo.toml;$(RepositoryRoot)/Cargo.lock;$(RepositoryRoot)/usb-device.json" Exclude="$(RepositoryRoot)/**/target/**" />
     <UpToDateCheckInput Include="@(_RustBindingInputs)" />
     <!-- IntelliSense consumes the checked-in bindings, but never starts Cargo. -->
     <Compile Include="$(GeneratedBindingsDirectory)/*.cs" Link="Generated/%(Filename)%(Extension)" Condition="'$(DesignTimeBuild)' == 'true'" />

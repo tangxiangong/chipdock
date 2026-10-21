@@ -7,6 +7,8 @@ ChipDock（原 FlashDesk）是原生嵌入式开发工具集：macOS 版使用 *
 ## 功能
 
 - **固件烧录**：支持 ELF、AXF、Intel HEX 和 BIN，分析写入地址与区段，配置擦除、校验和完成后复位。
+- **串口终端**：配置与连接串口，支持 HEX / ASCII / GBK / UTF-8 收发、行尾设置、搜索、方向筛选、自动滚动及 RX / TX 统计；内置 `usb-device.json` 识别常见 USB 串口适配器。
+- **并行使用**：烧录与串口各用独立工作线程，可边烧录边查看终端，两者互不阻塞。两者位于同级导航；使用 macOS ⌘1 / ⌘2 或 Windows Ctrl+1 / Ctrl+2 切换，运行中的任务和串口收发会继续。
 - **擦除芯片**：在主界面整片擦除 Flash，不烧录，执行前需确认。
 - **目标连接**：基于 probe-rs，支持 SWD / JTAG、芯片搜索、通信速度和复位下连接。
 - **内存查看**：按地址读取内存，查看十六进制与 ASCII，导出二进制，查看芯片内存映射。
@@ -69,14 +71,14 @@ windows/
   scripts/                  安装包构建与发布
   ChipDock.sln             Visual Studio 解决方案
 crates/
-  chipdock-core/           固件分析、目标连接、烧录、内存与存储
+  chipdock-core/           固件分析、目标连接、烧录、串口、内存与存储
   chipdock-bindgen/        UniFFI 绑定生成工具
   chipdock-csharp/         Windows 的 Interoptopus 导出层
   chipdock-csharp-bindgen/ C# 绑定生成工具
 script/                     构建、运行、测试与发布工具
 ```
 
-Rust Core 提供类型化 API、结构化错误和进度事件。硬件操作串行执行，阻塞操作由后台队列调用。
+Rust Core 提供类型化 API、结构化错误和进度事件。探针操作在专用线程上串行执行，串口调用使用另一条专用线程，异步接收由独立的 Tokio 运行时维持；串口不会等待烧录完成。串口传输、编码与 USB 设备库来自 `serial-port` 项目，通过 ChipDock 现有 UniFFI / Interoptopus 绑定提供给两端。
 
 修改 Rust API 后，Xcode 构建会重新生成绑定。依赖版本由 `Cargo.lock` 和 `Package.resolved` 固定。调整工程结构时，在 `macos/` 下运行 `xcodegen generate` 并同步生成的工程。
 
@@ -96,7 +98,7 @@ xcodebuild -project macos/ChipDock.xcodeproj -scheme ChipDock \
 - `test_backend.sh` 运行 Rust Core 单元测试和独立的 Swift/UniFFI 集成测试，不启动应用或连接硬件。
 - `test_updates.sh` 验证更新包签名、文件长度、版本、下载地址，以及发布回退保护。
 - `chipdock-release-notes` 的逻辑测试覆盖通用公告、平台筛选、Markdown 保留和错误标记拦截。
-- Xcode 测试覆盖应用集成、窗口回归、Sparkle 配置和硬件操作期间的重启保护。
+- Xcode 测试覆盖应用集成、同级工具布局、烧录工作线程阻塞时的串口轮询、Sparkle 配置和硬件操作期间的重启保护。
 
 测试按平台划分，均不访问硬件：`Rust` 工作流在 Linux 上检查格式并测试与平台无关的 Rust Core；`macOS` 工作流在 Apple Silicon 和 Intel 上测试 Rust Core、UniFFI 桥接与应用，并保存 Xcode 测试报告；`Windows` 工作流在 x64 与 ARM64 上测试 Rust Core、Interoptopus 桥接与应用。Windows 的测试与 CI 见 [windows/README.md](windows/README.md#测试)。
 
@@ -106,7 +108,7 @@ xcodebuild -project macos/ChipDock.xcodeproj -scheme ChipDock \
 
 从 **ChipDock → 检查更新…** 或设置的“关于”页面手动检查。默认每 6 小时自动检查；自动检查和自动下载安装均可在设置中关闭。
 
-Sparkle 验证 Ed25519 签名后安装更新并重新启动应用。硬件操作未完成时，应用会延后更新重启。
+Sparkle 验证 Ed25519 签名后安装更新并重新启动应用。探针操作未完成、串口仍连接或正在收发时，应用会延后更新重启。
 
 macOS 启动时优先选择 `tangxiangong/chipdock` 的 `update-feed/appcast.xml`，新源尚不可用时使用 `tangxiangong/flashdesk`。Windows 每次检查均优先新仓库，网络失败时回退旧仓库；更新包下载也支持两个地址，签名或哈希错误不会触发回退。两端继续使用原签名密钥、安装标识与配置目录，Windows 的 Velopack 包 ID 保留 `FlashDesk`，源码中的可执行文件名已统一为 `ChipDock.exe`。
 

@@ -334,6 +334,34 @@ RustBuffer uniffi_chipdock_core_fn_method_chipdockcore_target_memory_map(uint64_
 RustBuffer uniffi_chipdock_core_fn_method_chipdockcore_version(uint64_t ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CHIPDOCK_CORE_FN_FUNC_SERIAL_CONNECT
+#define UNIFFI_FFIDEF_UNIFFI_CHIPDOCK_CORE_FN_FUNC_SERIAL_CONNECT
+RustBuffer uniffi_chipdock_core_fn_func_serial_connect(RustBuffer path, RustBuffer config, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CHIPDOCK_CORE_FN_FUNC_SERIAL_DISCONNECT
+#define UNIFFI_FFIDEF_UNIFFI_CHIPDOCK_CORE_FN_FUNC_SERIAL_DISCONNECT
+RustBuffer uniffi_chipdock_core_fn_func_serial_disconnect(RustCallStatus *_Nonnull out_status
+
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CHIPDOCK_CORE_FN_FUNC_SERIAL_POLL
+#define UNIFFI_FFIDEF_UNIFFI_CHIPDOCK_CORE_FN_FUNC_SERIAL_POLL
+RustBuffer uniffi_chipdock_core_fn_func_serial_poll(RustCallStatus *_Nonnull out_status
+
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CHIPDOCK_CORE_FN_FUNC_SERIAL_PORTS
+#define UNIFFI_FFIDEF_UNIFFI_CHIPDOCK_CORE_FN_FUNC_SERIAL_PORTS
+RustBuffer uniffi_chipdock_core_fn_func_serial_ports(RustCallStatus *_Nonnull out_status
+
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CHIPDOCK_CORE_FN_FUNC_SERIAL_SEND
+#define UNIFFI_FFIDEF_UNIFFI_CHIPDOCK_CORE_FN_FUNC_SERIAL_SEND
+void uniffi_chipdock_core_fn_func_serial_send(RustBuffer input, RustBuffer format, RustBuffer line_ending, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_FFI_CHIPDOCK_CORE_RUSTBUFFER_ALLOC
 #define UNIFFI_FFIDEF_FFI_CHIPDOCK_CORE_RUSTBUFFER_ALLOC
 RustBuffer ffi_chipdock_core_rustbuffer_alloc(uint64_t size, RustCallStatus *_Nonnull out_status
@@ -592,6 +620,36 @@ void ffi_chipdock_core_rust_future_free_void(uint64_t handle
 #ifndef UNIFFI_FFIDEF_FFI_CHIPDOCK_CORE_RUST_FUTURE_COMPLETE_VOID
 #define UNIFFI_FFIDEF_FFI_CHIPDOCK_CORE_RUST_FUTURE_COMPLETE_VOID
 void ffi_chipdock_core_rust_future_complete_void(uint64_t handle, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CHIPDOCK_CORE_CHECKSUM_FUNC_SERIAL_CONNECT
+#define UNIFFI_FFIDEF_UNIFFI_CHIPDOCK_CORE_CHECKSUM_FUNC_SERIAL_CONNECT
+uint16_t uniffi_chipdock_core_checksum_func_serial_connect(void
+
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CHIPDOCK_CORE_CHECKSUM_FUNC_SERIAL_DISCONNECT
+#define UNIFFI_FFIDEF_UNIFFI_CHIPDOCK_CORE_CHECKSUM_FUNC_SERIAL_DISCONNECT
+uint16_t uniffi_chipdock_core_checksum_func_serial_disconnect(void
+
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CHIPDOCK_CORE_CHECKSUM_FUNC_SERIAL_POLL
+#define UNIFFI_FFIDEF_UNIFFI_CHIPDOCK_CORE_CHECKSUM_FUNC_SERIAL_POLL
+uint16_t uniffi_chipdock_core_checksum_func_serial_poll(void
+
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CHIPDOCK_CORE_CHECKSUM_FUNC_SERIAL_PORTS
+#define UNIFFI_FFIDEF_UNIFFI_CHIPDOCK_CORE_CHECKSUM_FUNC_SERIAL_PORTS
+uint16_t uniffi_chipdock_core_checksum_func_serial_ports(void
+
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CHIPDOCK_CORE_CHECKSUM_FUNC_SERIAL_SEND
+#define UNIFFI_FFIDEF_UNIFFI_CHIPDOCK_CORE_CHECKSUM_FUNC_SERIAL_SEND
+uint16_t uniffi_chipdock_core_checksum_func_serial_send(void
+
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CHIPDOCK_CORE_CHECKSUM_METHOD_CHIPDOCKCORE_CONNECT_TARGET

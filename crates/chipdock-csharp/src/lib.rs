@@ -1,6 +1,8 @@
 //! Windows binding declarations. Interoptopus owns the ABI and wire encoding;
 //! hardware, firmware and storage behaviour remains in `chipdock-core`.
 
+mod serial;
+
 use chipdock_core::{
     api::{ChipDockCore, CoreError, ProgressEvent},
     error::{AppError, ErrorResponse},
@@ -457,6 +459,11 @@ pub fn save_recent_files(
 pub fn inventory() -> RustInventory {
     RustInventory::new()
         .register(builtins_wire!())
+        .register(function!(serial::chipdock_serial_ports))
+        .register(function!(serial::chipdock_serial_poll))
+        .register(function!(serial::chipdock_serial_connect))
+        .register(function!(serial::chipdock_serial_disconnect))
+        .register(function!(serial::chipdock_serial_send))
         .register(function!(version))
         .register(function!(list_probes))
         .register(function!(connect_target))

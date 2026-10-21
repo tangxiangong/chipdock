@@ -1,7 +1,7 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-struct ContentView: View {
+struct FlashWorkbenchView: View {
     @Bindable var store: WorkbenchStore
     @Environment(\.scenePhase) private var scenePhase
 

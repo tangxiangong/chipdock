@@ -15,6 +15,8 @@
     <PackageReference Include="Velopack" Version="1.2.161" />
     <Compile Include="../ChipDock/Services/UpdateFeed.cs" Link="Linked/UpdateFeed.cs" />
     <Compile Include="../ChipDock/Services/UpdateSource.cs" Link="Linked/UpdateSource.cs" />
+    <Compile Include="../ChipDock/Services/NativeWorker.cs" Link="Linked/NativeWorker.cs" />
+    <Compile Include="../ChipDock/Services/SerialBackend.cs" Link="Linked/SerialBackend.cs" />
     <Compile Include="../ChipDock/Services/RustCore.cs" Link="Linked/RustCore.cs" />
     <Compile Include="../ChipDock/Services/RecentFirmwareHistory.cs" Link="Linked/RecentFirmwareHistory.cs" />
     <Compile Include="../ChipDock/Support/ActivityText.cs" Link="Linked/ActivityText.cs" />

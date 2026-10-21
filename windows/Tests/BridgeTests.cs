@@ -9,6 +9,8 @@ internal static class BridgeTests
     {
         Check.That(System.Text.RegularExpressions.Regex.IsMatch(RustCore.Version(), @"^\d+\.\d+\.\d+$"), "core version crosses the bridge");
 
+        await SerialBridgeTests.Run();
+
         var chips = await RustCore.SearchChips("STM32F103C8", 10);
         Check.That(chips.Count is > 0 and <= 10 && chips.All(chip => chip.StartsWith("STM32F103C8", StringComparison.OrdinalIgnoreCase)),
             "chip search honours query and limit");

@@ -5,12 +5,13 @@ import Foundation
 /// event queue lock.
 final class RustService: @unchecked Sendable {
     private let core = ChipDockCore()
+    private static let worker = NativeWorker(name: "com.xiaoyu.chipdock.probe")
 
     var version: String { core.version() }
 
     func run<T: Sendable>(_ operation: @escaping @Sendable (ChipDockCore) throws -> T) async throws -> T {
         try await withCheckedThrowingContinuation { continuation in
-            CoreThread.shared.submit { [core] in
+            Self.worker.submit { [core] in
                 do { continuation.resume(returning: try operation(core)) }
                 catch { continuation.resume(throwing: error) }
             }
@@ -28,15 +29,14 @@ final class RustService: @unchecked Sendable {
 /// The thread runs at default QoS because nusb parks it until its own
 /// default-QoS run loop thread completes each transfer; a higher QoS would only
 /// create a priority inversion without making USB work faster.
-private final class CoreThread: @unchecked Sendable {
-    static let shared = CoreThread()
+final class NativeWorker: @unchecked Sendable {
 
     private let condition = NSCondition()
     private var jobs: [@Sendable () -> Void] = []
 
-    private init() {
+    init(name: String) {
         let thread = Thread { [unowned self] in drain() }
-        thread.name = "com.xiaoyu.chipdock.core"
+        thread.name = name
         thread.qualityOfService = .default
         thread.start()
     }

@@ -22,9 +22,9 @@ public partial class App : Application
         {
             if (main is null) return;
             main.Activate();
-            if (Program.FirmwareArgument(activation) is { } path) main.Store.SelectFirmware(path);
+            if (Program.FirmwareArgument(activation) is { } path) main.OpenFirmware(path);
         });
         main.Activate();
-        if (Program.FirmwareArgument(Environment.GetCommandLineArgs().Skip(1)) is { } firmware) main.Store.SelectFirmware(firmware);
+        if (Program.FirmwareArgument(Environment.GetCommandLineArgs().Skip(1)) is { } firmware) main.OpenFirmware(firmware);
     }
 }

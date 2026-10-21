@@ -20,16 +20,19 @@ internal sealed class Updater
 
     private readonly WorkbenchStore store;
     private readonly FrameworkElement owner;
+    private readonly Func<bool> serialBusy;
+    private bool HardwareBusy => store.IsBusy || serialBusy();
     private readonly UpdateManager? manager;
     private CancellationTokenSource? backgroundDownload;
     private string? announced;
     private bool checking;
     private bool started;
 
-    internal Updater(WorkbenchStore store, FrameworkElement owner)
+    internal Updater(WorkbenchStore store, FrameworkElement owner, Func<bool>? serialBusy = null)
     {
         this.store = store;
         this.owner = owner;
+        this.serialBusy = serialBusy ?? (() => false);
         manager = CreateManager(out var reason);
         UnavailableReason = reason;
     }
@@ -39,7 +42,7 @@ internal sealed class Updater
 
     internal string? UnavailableReason { get; }
 
-    internal bool CanCheck => UnavailableReason is null && !checking && !store.IsBusy;
+    internal bool CanCheck => UnavailableReason is null && !checking && !HardwareBusy;
 
     internal string CurrentVersion => manager?.CurrentVersion?.ToString() ?? store.CoreVersion;
 
@@ -158,9 +161,9 @@ internal sealed class Updater
     internal async Task Check(bool manual = true)
     {
         if (manager is null || checking) return;
-        if (store.IsBusy)
+        if (HardwareBusy)
         {
-            if (manual) await ShowMessage("无法检查更新", "请等待当前硬件操作完成后检查更新。");
+            if (manual) await ShowMessage("无法检查更新", "请等待硬件操作完成并断开串口后检查更新。");
             return;
         }
         SetChecking(true);
@@ -261,12 +264,12 @@ internal sealed class Updater
                 await manager!.DownloadUpdatesAsync(update,
                     value => owner.DispatcherQueue.TryEnqueue(() => progress.Value = value), cancellation.Token);
                 // Like Sparkle on macOS, the relaunch waits for a running hardware operation.
-                if (store.IsBusy)
+                if (HardwareBusy)
                 {
-                    status.Text = "将在当前硬件操作完成后重新启动…";
+                    status.Text = "将在硬件操作完成并断开串口后重新启动…";
                     progress.IsIndeterminate = true;
                 }
-                while (store.IsBusy) await Task.Delay(TimeSpan.FromSeconds(1), cancellation.Token);
+                while (HardwareBusy) await Task.Delay(TimeSpan.FromSeconds(1), cancellation.Token);
                 status.Text = "正在重新启动…";
                 AppSettings.PendingUpdate = "";
                 manager.ApplyUpdatesAndRestart(target);
