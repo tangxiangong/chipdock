@@ -51,6 +51,12 @@ jobs:
             -configuration Debug -destination 'platform=macOS' \
             -derivedDataPath .build/Xcode -clonedSourcePackagesDirPath .build/SourcePackages \
             -resultBundlePath .build/TestResults/ChipDock.xcresult SWIFT_TREAT_WARNINGS_AS_ERRORS=YES test
+      - name: Test serial send and macOS interaction logic
+        env:
+          CHIPDOCK_BRIDGE_LIBRARY: ${{ github.workspace }}/target/debug/libchipdock_core.a
+        run: |
+          bash script/test_serial.sh
+          bash script/test_macos_interactions.sh
       - name: Verify generated bindings are current
         run: git diff --exit-code -- macos/ChipDock/Generated
       - name: Upload Xcode test results

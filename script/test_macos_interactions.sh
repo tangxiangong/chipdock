@@ -3,7 +3,7 @@ set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TEST_BUILD_DIR="$PROJECT_ROOT/.build/MacInteractionTests"
-BRIDGE_LIBRARY="$PROJECT_ROOT/.build/Rust/libchipdock_core.a"
+BRIDGE_LIBRARY="${CHIPDOCK_BRIDGE_LIBRARY:-$PROJECT_ROOT/.build/Rust/libchipdock_core.a}"
 mkdir -p "$TEST_BUILD_DIR"
 if [[ ! -f "$BRIDGE_LIBRARY" ]]; then
     echo 'Build the macOS Rust bridge first with script/build_rust.sh.' >&2

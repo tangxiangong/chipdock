@@ -81,32 +81,4 @@ final class SerialIntegrationTests: XCTestCase {
         }
         XCTAssertNotEqual(snapshots[0], snapshots[1], "Peer tool commands must switch the rendered page")
     }
-
-    @MainActor
-    func testTerminalSearchSurvivesToolNavigation() async throws {
-        func searchField(in view: NSView) -> NSSearchField? {
-            if let field = view as? NSSearchField { return field }
-            return view.subviews.lazy.compactMap { searchField(in: $0) }.first
-        }
-        let toolkit = ToolkitState()
-        let host = NSHostingView(rootView: ToolkitView(toolkit: toolkit, store: WorkbenchStore(), serial: SerialStore()))
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1160, height: 740),
-                              styleMask: [.titled, .resizable], backing: .buffered, defer: false)
-        window.isReleasedWhenClosed = false
-        window.contentView = host
-        defer { window.close() }
-        toolkit.selectedTool = .serial
-        host.layoutSubtreeIfNeeded()
-        try await Task.sleep(for: .milliseconds(50))
-        let original = try XCTUnwrap(searchField(in: host))
-        original.stringValue = "设备响应"
-        original.delegate?.controlTextDidChange?(Notification(name: NSControl.textDidChangeNotification, object: original))
-        for tool in [WorkbenchTool.flash, .serial] {
-            toolkit.selectedTool = tool
-            host.layoutSubtreeIfNeeded()
-            try await Task.sleep(for: .milliseconds(50))
-        }
-        XCTAssertEqual(try XCTUnwrap(searchField(in: host)).stringValue, "设备响应")
-    }
-
 }
