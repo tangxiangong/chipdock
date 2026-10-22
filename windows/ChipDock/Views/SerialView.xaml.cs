@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Text.Json;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
@@ -19,7 +20,7 @@ public sealed partial class SerialView : UserControl
     private readonly DispatcherQueueTimer timer;
     private readonly SerialAutoSender autoSender = new();
     private SerialStatus status = new() { connected = false, path = null, config = null, rx_bytes = 0, tx_bytes = 0, opened_at = null, last_error = null };
-    private bool busy, sending, polling, refreshing, updating = true, started, closed;
+    private bool busy, sending, polling, refreshing, exporting, updating = true, started, closed;
     private int ticks, retainedBytes, connectionRevision;
     private double composerHeight = 190;
     private static readonly string[] Formats = ["hex", "ascii", "gbk", "utf-8"];
@@ -249,6 +250,7 @@ public sealed partial class SerialView : UserControl
         FrameCount.Text = TerminalSearch.Text.Length == 0 && DirectionPicker.SelectedIndex == 0
             ? $"{frames.Count} 条" : $"{visibleFrames.Count}/{frames.Count} 条";
         ClearButton.IsEnabled = frames.Count > 0;
+        ExportButton.IsEnabled = frames.Count > 0 && !exporting && ExportRequested is not null;
         var parity = preferences.Parity switch { 1 => "O", 2 => "E", _ => "N" };
         Ui.SetLiveText(ConnectionStatus, busy ? "正在处理…" : status.connected
             ? $"已连接 · {status.path} · {preferences.BaudRate} · {preferences.DataBits}{parity}{preferences.StopBits}" : "未连接");
@@ -297,6 +299,18 @@ public sealed partial class SerialView : UserControl
     }
     private void OnInputChanged(object sender, TextChangedEventArgs args) { if (!updating) RefreshState(); }
     private void OnClear(object sender, RoutedEventArgs args) { frames.Clear(); visibleFrames.Clear(); retainedBytes = 0; RefreshState(); }
+    private async void OnExport(object sender, RoutedEventArgs args)
+    {
+        if (frames.Count == 0 || exporting || ExportRequested is not { } export) return;
+        exporting = true; RefreshState();
+        try
+        {
+            var data = JsonSerializer.SerializeToUtf8Bytes(frames.Select(frame => frame.ExportRecord), new JsonSerializerOptions { WriteIndented = true });
+            await export(data);
+        }
+        catch (Exception error) { ShowError($"导出串口记录失败：{error.Message}"); }
+        finally { exporting = false; RefreshState(); }
+    }
     private async void OnRefresh(object sender, RoutedEventArgs args) => await RefreshPorts();
     private void RefreshTerminal()
     {
@@ -411,6 +425,7 @@ public sealed partial class SerialView : UserControl
                 Grid.SetRow(AutoScrollToggle, compact ? 1 : 0);
                 Grid.SetColumn(AutoScrollToggle, compact ? 0 : 3);
                 Grid.SetColumnSpan(AutoScrollToggle, compact ? 2 : 1);
+                Grid.SetRow(ExportButton, compact ? 1 : 0);
                 Grid.SetRow(ClearButton, compact ? 1 : 0);
 
                 Grid.SetColumnSpan(SendHeading, compact ? 6 : 1);
@@ -468,6 +483,7 @@ public sealed partial class SerialView : UserControl
     internal bool UpdateBlocked => status.connected || busy || sending || autoSender.IsRunning;
     private bool lastUpdateBlocked, lastCanSend, lastCanToggle, lastRefreshing;
     internal event Action? ActivityChanged;
+    internal event Func<byte[], Task>? ExportRequested;
     internal void ClearTerminal() => OnClear(this, new());
     internal void Find() { TerminalSearch.Focus(FocusState.Programmatic); TerminalSearch.SelectAll(); }
     private void CopyFrames(bool selectedOnly)

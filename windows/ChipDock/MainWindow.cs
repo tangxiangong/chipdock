@@ -74,6 +74,7 @@ internal sealed class MainWindow : Window
 
         serial = new SerialView();
         serial.ActivityChanged += Update;
+        serial.ExportRequested += data => Export(data, "ChipDock-Serial", "JSON 文件", ".json", "导出串口记录");
         Updater = new Updater(Store, root, () => serial.UpdateBlocked);
         activity = new ActivityView(Store);
         flash = new FlashView(Store, this);

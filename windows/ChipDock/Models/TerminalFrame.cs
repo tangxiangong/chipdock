@@ -15,6 +15,14 @@ public sealed class TerminalFrame : INotifyPropertyChanged
         ? value.ToLocalTime().ToString("HH:mm:ss.fff", System.Globalization.CultureInfo.InvariantCulture) : frame.timestamp;
     public string Size => frame.bytes.Count.ToString(System.Globalization.CultureInfo.CurrentCulture);
     internal int MemoryCost => frame.bytes.Count * 16 + 1024;
+    internal object ExportRecord => new
+    {
+        direction = IsReceive ? "receive" : "send",
+        bytes = frame.bytes,
+        hex = frame.hex,
+        text = new Dictionary<string, string> { ["ascii"] = frame.text.ascii, ["gbk"] = frame.text.gbk, ["utf-8"] = frame.text.utf8 },
+        timestamp = frame.timestamp,
+    };
     public string DisplayText => format == "hex" ? frame.hex : (format switch { "ascii" => frame.text.ascii, "gbk" => frame.text.gbk, _ => frame.text.utf8 })
         .Replace("\0", "␀").Replace("\r", "␍").Replace("\n", "␊\n").Replace("\t", "⇥").TrimEnd('\n');
     internal void SetFormat(string value) { format = value; PropertyChanged?.Invoke(this, new(nameof(DisplayText))); }

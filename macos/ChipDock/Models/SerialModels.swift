@@ -69,13 +69,17 @@ enum SerialDirectionFilter: String, CaseIterable, Identifiable, Sendable {
     var id: Self { self }
 }
 
-struct SerialFrame: Identifiable, Sendable {
+struct SerialFrame: Identifiable, Encodable, Sendable {
     var id = UUID()
     let direction: String
     let bytes: [UInt8]
     let hex: String
     let text: [String: String]
     let timestamp: String
+
+    private enum CodingKeys: String, CodingKey {
+        case direction, bytes, hex, text, timestamp
+    }
 
     var isReceive: Bool { direction == "receive" }
     @MainActor private static let timestampParser: ISO8601DateFormatter = {

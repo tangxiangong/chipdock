@@ -1,11 +1,13 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct SerialTerminalView: View {
     @Bindable var serial: SerialStore
     @Binding var connectionExpanded: Bool
     @Binding var composerExpanded: Bool
     @State private var searchRequested = false
+    @State private var pendingExport: PendingExport?
 
     private var visibleFrames: [SerialFrame] {
         serial.frames.filter { frame in
@@ -35,6 +37,11 @@ struct SerialTerminalView: View {
                 }
                 .toggleStyle(.button)
                 .help(serial.preferences.autoScroll ? "关闭自动滚动" : "滚动到最新数据")
+                Button(action: exportHistory) {
+                    Label("导出", systemImage: "square.and.arrow.up")
+                }
+                .disabled(serial.frames.isEmpty)
+                .help("将当前保留的全部收发记录导出为 JSON（不受筛选影响）")
                 Button(action: serial.clear) {
                     Label("清屏", systemImage: "trash")
                 }
@@ -64,6 +71,19 @@ struct SerialTerminalView: View {
             }
         }
         .focusedSceneValue(\.serialSearchRequested, $searchRequested)
+        .exportPresentation($pendingExport)
+    }
+
+    private func exportHistory() {
+        guard !serial.frames.isEmpty else { return }
+        do {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            pendingExport = PendingExport(data: try encoder.encode(serial.frames), contentType: .json,
+                                          filename: "ChipDock-Serial.json", operation: "导出串口记录")
+        } catch {
+            serial.error = "导出串口记录失败：\(error.localizedDescription)"
+        }
     }
 
     private func emptyState(filtered: Bool) -> some View {

@@ -191,6 +191,7 @@
               <ColumnDefinition Width="*" />
               <ColumnDefinition Width="Auto" />
               <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <TextBlock Text="接收编码" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
             <ComboBox x:Name="DisplayPicker" Grid.Column="1" MinWidth="96" VerticalAlignment="Center"
@@ -202,7 +203,14 @@
                 <TextBlock Text="自动滚动" FontSize="12" />
               </StackPanel>
             </ToggleButton>
-            <Button x:Name="ClearButton" Grid.Column="4" Click="OnClear" VerticalAlignment="Center" ToolTipService.ToolTip="清空终端 (Ctrl+L)">
+            <Button x:Name="ExportButton" Grid.Column="4" Click="OnExport" VerticalAlignment="Center"
+                    AutomationProperties.Name="导出串口记录为 JSON" ToolTipService.ToolTip="将当前保留的全部收发记录导出为 JSON（不受筛选影响）">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <FontIcon Glyph="&#xEDE1;" />
+                <TextBlock Text="导出" FontSize="12" />
+              </StackPanel>
+            </Button>
+            <Button x:Name="ClearButton" Grid.Column="5" Click="OnClear" VerticalAlignment="Center" ToolTipService.ToolTip="清空终端 (Ctrl+L)">
               <StackPanel Orientation="Horizontal" Spacing="6">
                 <SymbolIcon Symbol="Delete" />
                 <TextBlock Text="清屏" FontSize="12" />
