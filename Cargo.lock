@@ -353,14 +353,14 @@ dependencies = [
 
 [[package]]
 name = "chipdock-bindgen"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "uniffi",
 ]
 
 [[package]]
 name = "chipdock-core"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -383,7 +383,7 @@ dependencies = [
 
 [[package]]
 name = "chipdock-csharp"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "chipdock-core",
  "chrono",
@@ -394,7 +394,7 @@ dependencies = [
 
 [[package]]
 name = "chipdock-csharp-bindgen"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "chipdock-csharp",
  "interoptopus_csharp",
@@ -402,7 +402,7 @@ dependencies = [
 
 [[package]]
 name = "chipdock-release-notes"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "anyhow",
  "tempfile",
@@ -3524,7 +3524,7 @@ dependencies = [
 
 [[package]]
 name = "xtask"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "base64 0.23.1",
  "ed25519-dalek",
