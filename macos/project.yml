@@ -42,7 +42,7 @@ targets:
         buildPhase: resources
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.xiaoyu.flashdesk
+        PRODUCT_BUNDLE_IDENTIFIER: com.xiaoyu.chipdock
         PRODUCT_NAME: ChipDock
         PRODUCT_MODULE_NAME: ChipDock
         GENERATE_INFOPLIST_FILE: NO

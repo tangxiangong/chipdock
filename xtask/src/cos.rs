@@ -15,7 +15,7 @@ use std::{
 pub const PUBLIC_ROOT: &str =
     "https://app-release-1302963684.cos.ap-guangzhou.myqcloud.com/chipdock";
 const UPLOAD_HOST: &str = "app-release-1302963684.cos.accelerate.myqcloud.com";
-const CATALOG: &str = "update-feed/state.json";
+const CATALOG: &str = "updates/state.json";
 const IMMUTABLE_CACHE: &str = "public, max-age=31536000, immutable";
 const FEED_CACHE: &str = "no-cache, max-age=60";
 
@@ -297,7 +297,7 @@ fn publish_to_with_replacement(
         if let Some(previous) = channels.feeds.get(name) {
             predecessors.push(previous.clone());
         }
-        if let Some(previous) = store.read(&format!("update-feed/{name}"))? {
+        if let Some(previous) = store.read(&format!("updates/{name}"))? {
             match identity(name, &previous, keys) {
                 Ok(previous) => predecessors.push(previous),
                 // Like BibCiTeX's catalog, an existing reservation remains authoritative
@@ -351,7 +351,7 @@ fn publish_to_with_replacement(
     // Reserve all target versions first: older repairs cannot downgrade a partial publication.
     store.upload(CATALOG, &catalog, false)?;
     for name in promoted {
-        store.upload(&format!("update-feed/{name}"), &plan.feeds[name], false)?;
+        store.upload(&format!("updates/{name}"), &plan.feeds[name], false)?;
     }
     Ok(())
 }

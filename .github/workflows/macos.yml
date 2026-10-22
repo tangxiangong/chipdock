@@ -75,9 +75,9 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 45
     environment: release
-    # Keep the lock name stable so historical release reruns share it with both platforms.
+    # Serialize both platforms and COS publication for the ChipDock identity.
     concurrency:
-      group: flashdesk-update-feed
+      group: chipdock-updates
       cancel-in-progress: false
     permissions:
       contents: write

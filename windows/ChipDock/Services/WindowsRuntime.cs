@@ -26,7 +26,7 @@ internal static class WindowsRuntime
 
     internal static void EnsureInstalled()
     {
-        using var mutex = new Mutex(false, @"Local\FlashDesk.WindowsAppRuntime.Install");
+        using var mutex = new Mutex(false, @"Local\ChipDock.WindowsAppRuntime.Install");
         var acquired = false;
         try
         {

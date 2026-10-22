@@ -33,9 +33,9 @@ internal static class UpdateFeedTests
         Check.That(UpdateFeed.Channel("x64") == "win-x64" && UpdateFeed.Channel("arm64") == "win-arm64", "architecture channels");
         Check.Throws<ArgumentException>(() => UpdateFeed.Channel("x86"), "unsupported architecture");
         Check.That(UpdateFeed.IsChannel("win-arm64") && !UpdateFeed.IsChannel("win-x64/../x") && !UpdateFeed.IsChannel(null), "channel allow-list");
-        Check.That(UpdateFeed.SignedFeedUrl("win-x64") == $"{UpdateFeed.CosRoot}/update-feed/releases.win-x64.signed.json",
+        Check.That(UpdateFeed.SignedFeedUrl("win-x64") == $"{UpdateFeed.CosRoot}/updates/releases.win-x64.signed.json",
             "COS is the primary update feed");
-        Check.That(UpdateFeed.SignedFeedUrl("win-x64", fallback: true) == "https://github.com/tangxiangong/chipdock/releases/download/update-feed/releases.win-x64.signed.json",
+        Check.That(UpdateFeed.SignedFeedUrl("win-x64", fallback: true) == "https://github.com/tangxiangong/chipdock/releases/download/chipdock-updates/releases.win-x64.signed.json",
             "GitHub is the fallback update feed");
 
         using var publicKey = UpdateFeed.ImportPublicKey(Keys.Public) ?? throw new InvalidOperationException("FAIL: generated public key imports");
@@ -68,6 +68,7 @@ internal static class UpdateFeedTests
         Check.Throws<InvalidDataException>(() => UpdateFeed.Parse(Feed(count: 0)), "empty feed", "只包含一个");
         Check.Throws<InvalidDataException>(() => UpdateFeed.Parse(Feed(type: "Delta")), "no delta packages", "完整安装包");
         Check.Throws<InvalidDataException>(() => UpdateFeed.Parse(Feed(packageId: "Other")), "package identity", "不属于");
+        Check.Throws<InvalidDataException>(() => UpdateFeed.Parse(Feed(packageId: "FlashDesk")), "retired package identity is rejected", "不属于");
         Check.Throws<InvalidDataException>(() => UpdateFeed.Parse(Feed(version: "0.3.0-beta.1")), "no prerelease versions", "版本无效");
         Check.Throws<InvalidDataException>(() => UpdateFeed.Parse(Feed(sha256: "")), "SHA-256 required", "SHA-256");
         Check.Throws<InvalidDataException>(() => UpdateFeed.Parse(Feed(sha256: new string('z', 64))), "SHA-256 is hex", "SHA-256");

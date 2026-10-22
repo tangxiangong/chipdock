@@ -14,10 +14,10 @@ pub(crate) fn fixture(tag: &str) -> (tempfile::TempDir, UpdateKeys) {
     fs::write(directory.path().join("appcast.xml"), format!(r#"<?xml version="1.0"?><rss xmlns:sparkle="{SPARKLE}"><channel><item><sparkle:version>42</sparkle:version><sparkle:shortVersionString>{value}</sparkle:shortVersionString><description><![CDATA[<p>Update &amp; notes</p>]]></description><enclosure url="https://github.com/{REPOSITORY}/releases/download/{tag}/{filename}" length="{}" sparkle:edSignature="{signature}" /></item></channel></rss>"#, archive.len())).unwrap();
     let windows = p256::ecdsa::SigningKey::from_bytes((&[23; 32]).into()).unwrap();
     for arch in ["x64", "arm64"] {
-        let filename = format!("FlashDesk-{value}-win-{arch}-full.nupkg");
+        let filename = format!("ChipDock-{value}-win-{arch}-full.nupkg");
         let path = directory.path().join(&filename);
         fs::write(&path, b"package").unwrap();
-        let feed = serde_json::to_vec(&json!({"Assets":[{"PackageId":"FlashDesk","Version":value,
+        let feed = serde_json::to_vec(&json!({"Assets":[{"PackageId":"ChipDock","Version":value,
             "Type":"Full","FileName":filename,"Size":7,"SHA256":hash(&path).unwrap()}]}))
         .unwrap();
         let signature: p256::ecdsa::Signature =
@@ -109,10 +109,29 @@ fn signed_windows_metadata_cannot_cross_architectures() {
 }
 
 #[test]
+fn signed_windows_feed_rejects_retired_package_identity() {
+    let (_directory, keys) = fixture("v0.2.0");
+    let signing = p256::ecdsa::SigningKey::from_bytes((&[23; 32]).into()).unwrap();
+    let feed = serde_json::to_vec(&json!({"Assets":[{"PackageId":"FlashDesk","Version":"0.2.0",
+        "Type":"Full","FileName":"FlashDesk-0.2.0-win-x64-full.nupkg","Size":7,"SHA256":"ab".repeat(32)}]}))
+    .unwrap();
+    let signature: p256::ecdsa::Signature = p256::ecdsa::signature::Signer::sign(&signing, &feed);
+    let envelope = serde_json::to_vec(&json!({"feed":STANDARD.encode(&feed),
+        "signature":STANDARD.encode(signature.to_bytes())}))
+    .unwrap();
+    assert_eq!(
+        windows_identity(&envelope, "x64", &keys.windows)
+            .unwrap_err()
+            .to_string(),
+        "Unexpected Windows app, architecture or package"
+    );
+}
+
+#[test]
 fn altered_windows_package_is_rejected() {
     let (directory, keys) = fixture("v0.2.0");
     fs::write(
-        directory.path().join("FlashDesk-0.2.0-win-x64-full.nupkg"),
+        directory.path().join("ChipDock-0.2.0-win-x64-full.nupkg"),
         b"changed",
     )
     .unwrap();

@@ -32,7 +32,10 @@ final class UpdateTests: XCTestCase {
                        UpdateConfiguration.githubFeedURL)
         XCTAssertNoThrow(try UpdateConfiguration(bundle: .main))
         XCTAssertEqual(Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String, "ChipDock")
-        XCTAssertEqual(Bundle.main.bundleIdentifier, "com.xiaoyu.flashdesk")
+        XCTAssertEqual(Bundle.main.bundleIdentifier, "com.xiaoyu.chipdock")
+        XCTAssertEqual(Bundle.main.bundleURL.lastPathComponent, "ChipDock.app")
+        XCTAssertEqual(Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String, "ChipDock")
+        XCTAssertEqual(Bundle.main.object(forInfoDictionaryKey: "CFBundleExecutable") as? String, "ChipDock")
         XCTAssertEqual(Bundle.main.object(forInfoDictionaryKey: "SUVerifyUpdateBeforeExtraction") as? Bool, true)
         XCTAssertEqual(Bundle.main.object(forInfoDictionaryKey: "SUAutomaticallyUpdate") as? Bool, true)
     }

@@ -45,9 +45,9 @@ Rust 动态库位于 `target/<目标三元组>/<debug或release>/chipdock_csharp
 - `crates/chipdock-csharp-bindgen`：生成 `ChipDock/Generated/Interop.cs`（命名空间 `ChipDock.Core`）。修改 Rust API 后 MSBuild 会重新生成，也可以手动运行 `cargo run -p chipdock-csharp-bindgen`。
 - `ChipDock/Services/RustCore.cs`：在线程池调用阻塞的硬件与文件操作，释放 Wire 缓冲区并把错误转换为 `CoreException`。烧录和擦除期间 UI 线程每 100 ms 取一次进度事件。
 
-配置与最近使用的固件由 Rust Core 存储在 `%APPDATA%\FlashDesk`；外观、烧录默认值与更新偏好存储在 `%LOCALAPPDATA%\FlashDesk\settings.json`。
+配置与最近使用的固件由 Rust Core 存储在 `%APPDATA%\ChipDock`；外观、烧录默认值与更新偏好存储在 `%LOCALAPPDATA%\ChipDock\settings.json`。
 
-启动或运行期间可捕获的未处理 .NET / WinUI 异常会写入 `%LOCALAPPDATA%\FlashDesk\logs\crash.log`，包含异常消息和调用栈，可用于排查主窗口尚未打开时的闪退。
+启动或运行期间可捕获的未处理 .NET / WinUI 异常会写入 `%LOCALAPPDATA%\ChipDock\logs\crash.log`，包含异常消息和调用栈，可用于排查主窗口尚未打开时的闪退。
 
 ## 运行时
 
@@ -80,7 +80,7 @@ Rust 动态库位于 `target/<目标三元组>/<debug或release>/chipdock_csharp
 Windows 构建没有代码签名证书，因此更新信息单独签名：
 
 - 每个架构使用一个通道（`win-x64`、`win-arm64`）。COS 主源与 GitHub 备用源上的 `releases.win-<arch>.signed.json` 把 Velopack 的 `releases.win-<arch>.json` 和它的 ECDSA P-256 签名放在同一个文件中，替换期间不会出现更新信息与签名不匹配。
-- 应用先用 `ChipDock.csproj` 中 `UpdatePublicKey` 嵌入的公钥验证签名，再解析内容：只接受一个包 ID 为 `FlashDesk` 的稳定版完整包，文件名必须是安全的 `.nupkg` 基本名，并给出大小和 SHA-256。与 BibCiTeX 一样，每次检查先访问 COS，更新源或包下载失败时尝试 GitHub，两个来源都必须通过验证；包下载回退保留已选版本、文件名和哈希。下载后校验大小与 SHA-256，不一致时删除；用户取消停止下载，不切换来源。Velopack 不会安装比当前更旧的版本。配置与补传见 [COS 发布说明](../README.md#cos-主源与-github-备用源)。
+- 应用先用 `ChipDock.csproj` 中 `UpdatePublicKey` 嵌入的公钥验证签名，再解析内容：只接受一个包 ID 为 `ChipDock` 的稳定版完整包，文件名必须是安全的 `.nupkg` 基本名，并给出大小和 SHA-256。与 BibCiTeX 一样，每次检查先访问 COS，更新源或包下载失败时尝试 GitHub，两个来源都必须通过验证；包下载回退保留已选版本、文件名和哈希。下载后校验大小与 SHA-256，不一致时删除；用户取消停止下载，不切换来源。Velopack 不会安装比当前更旧的版本。配置与补传见 [COS 发布说明](../README.md#cos-主源与-github-备用源)。
 - 首次发布前没有更新信息，检查更新会提示暂时无法获取更新信息。
 
 ### 签名密钥
@@ -97,9 +97,9 @@ Windows 构建没有代码签名证书，因此更新信息单独签名：
 `Windows` 工作流在 x64 与 ARM64 检查全部通过后，分别在对应架构的 Windows Runner 上运行 `windows/scripts/publish.ps1`：校验标签、Rust Core 与应用版本一致且已配置公钥，`dotnet publish` 依赖框架的输出，再用 `vpk pack` 生成：
 
 - `ChipDock-<版本号>-windows-<arch>.exe` 与 `ChipDock-<版本号>-windows-<arch>.msi`：安装程序，缺少时会安装 .NET 10 运行时和 VC++ 运行库；Windows App Runtime 仍由应用首次启动时准备。
-- `FlashDesk-<版本号>-win-<arch>-full.nupkg`：应用内更新下载的完整包，用户安装使用 exe 或 msi。
+- `ChipDock-<版本号>-win-<arch>-full.nupkg`：应用内更新下载的完整包，用户安装使用 exe 或 msi。
 
-随后 `publish` 作业（`release` 环境）运行 `windows/scripts/publish-release.ps1`：用私钥签名两个架构的更新信息并立即用工程公钥验证，确认版本、包名、大小和 SHA-256，并与已发布的更新信息比较，拒绝版本回退或替换同版本中内容不同的安装包。版本 Release 同时保留签名更新信息，重试时复用并验证已有签名，避免 ECDSA 随机签名改变字节。版本 Release 中已存在的同名文件必须字节一致；全部安装包上传后才更新 GitHub `update-feed`，再运行 `cargo run --locked -p xtask -- publish-cos --tag v<版本号> --platform windows` 同步 COS。该作业、macOS 发布和 COS 补传共用 `flashdesk-update-feed` 并发组，让更新源串行推进。
+随后 `publish` 作业（`release` 环境）运行 `windows/scripts/publish-release.ps1`：用私钥签名两个架构的更新信息并立即用工程公钥验证，确认版本、包名、大小和 SHA-256，并与已发布的更新信息比较，拒绝版本回退或替换同版本中内容不同的安装包。版本 Release 同时保留签名更新信息，重试时复用并验证已有签名，避免 ECDSA 随机签名改变字节。版本 Release 中已存在的同名文件必须字节一致；全部安装包上传后才更新 GitHub `chipdock-updates`，再运行 `cargo run --locked -p xtask -- publish-cos --tag v<版本号> --platform windows` 同步 COS。该作业、macOS 发布和 COS 补传共用 `chipdock-updates` 并发组，让更新源串行推进。
 
 本机打包（输出未签名，不会发布）：
 
@@ -122,8 +122,10 @@ dotnet run --project windows/Tests -- --workbench-only
 
 `.github/workflows/windows.yml` 在 x64 与 ARM64 上运行 Rust Core 与 Interoptopus 桥接的 Clippy 和测试、WinUI 编译、绑定一致性检查、`windows/Tests` 和发布资源检查；macOS 不测试 Windows 桥接。界面通过人工验收。
 
-## 改名与升级兼容
+## 安装身份
 
-GitHub 仓库已改名为小写 [tangxiangong/chipdock](https://github.com/tangxiangong/chipdock)。更新检查与安装包下载均使用新仓库；旧版中的旧地址由 GitHub 重定向到新仓库。发布脚本使用 `GITHUB_REPOSITORY`，本地发布默认使用 `tangxiangong/chipdock`。
+发布脚本使用 `GITHUB_REPOSITORY`，本地发布默认使用 [tangxiangong/chipdock](https://github.com/tangxiangong/chipdock)。客户端从 COS `chipdock/updates/` 或 GitHub `chipdock-updates` 获取更新信息。
 
-应用与安装程序显示为 ChipDock，源码工程与可执行文件名为 `ChipDock` / `ChipDock.exe`。Velopack 包 ID `FlashDesk`、原配置目录与更新验证公钥继续沿用，以便现有安装原位升级并保留设置。签名或哈希失败会拒绝更新。
+应用、EXE/MSI 安装程序、快捷方式和“已安装的应用”统一显示 ChipDock，Velopack 包 ID 为 `ChipDock`，主程序为 `ChipDock.exe`。单实例标识、运行时锁和配置目录也使用 ChipDock。
+
+旧 FlashDesk 安装身份（包括此前发布的 ChipDock v0.2.0）不再支持原位升级或配置迁移。请先退出并卸载旧版，移除旧任务栏固定项，再使用新版 EXE 或 MSI 安装包重新安装和固定 ChipDock。新身份的后续版本继续使用同一个名称和包 ID，避免 MSI 与快捷方式残留旧显示名称。签名或哈希失败仍会拒绝更新。

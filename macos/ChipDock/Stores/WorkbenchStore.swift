@@ -110,7 +110,7 @@ final class WorkbenchStore {
     }
     var storageDirectory: String {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("com.xiaoyu.flashdesk", isDirectory: true).path
+            .appendingPathComponent("com.xiaoyu.chipdock", isDirectory: true).path
     }
 
     func start() async {

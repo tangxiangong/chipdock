@@ -4,8 +4,8 @@ import Observation
 import Sparkle
 
 struct UpdateConfiguration: Sendable {
-    static let primaryFeedURL = "https://app-release-1302963684.cos.ap-guangzhou.myqcloud.com/chipdock/update-feed/appcast.xml"
-    static let githubFeedURL = "https://github.com/tangxiangong/chipdock/releases/download/update-feed/appcast.xml"
+    static let primaryFeedURL = "https://app-release-1302963684.cos.ap-guangzhou.myqcloud.com/chipdock/updates/appcast.xml"
+    static let githubFeedURL = "https://github.com/tangxiangong/chipdock/releases/download/chipdock-updates/appcast.xml"
     let feedURL: URL
     let fallbackFeedURL: URL
     let publicKey: String

@@ -64,8 +64,7 @@ New-Item -ItemType Directory -Force $OutputDirectory | Out-Null
 # MSI versions are numeric; the CI run number keeps them increasing independently of SemVer.
 if ($BuildNumber -ge 16777216) { throw 'MSI build sequence exhausted.' }
 $MsiVersion = "1.$([math]::Floor($BuildNumber / 65536)).$($BuildNumber % 65536)"
-# Keep the deployed package ID while the product and executable use ChipDock.
-& $Vpk pack --packId FlashDesk --packVersion $Version --packTitle ChipDock --packAuthors tangxiangong `
+& $Vpk pack --packId ChipDock --packVersion $Version --packTitle ChipDock --packAuthors tangxiangong `
     --packDir $Publish --mainExe ChipDock.exe --icon (Join-Path $Repo 'windows/ChipDock/Assets/ChipDock.ico') `
     --runtime $InstallerRuntime --framework "net10.0-$Arch-runtime,vcredist143-$Arch" --channel $Rid `
     @NotesArguments --outputDir $OutputDirectory --msi --msiVersion $MsiVersion
@@ -83,8 +82,8 @@ Get-ChildItem $OutputDirectory -File |
     Where-Object { $_.Extension -notin @('.exe', '.msi', '.nupkg') -and $_.Name -ne $Feed } |
     Remove-Item
 $Packages = @(Get-ChildItem $OutputDirectory -File -Filter '*.nupkg')
-if ($Packages.Count -ne 1 -or $Packages[0].Name -ne "FlashDesk-$Version-$Rid-full.nupkg") {
-    throw "Expected exactly FlashDesk-$Version-$Rid-full.nupkg, found: $($Packages.Name -join ', ')"
+if ($Packages.Count -ne 1 -or $Packages[0].Name -ne "ChipDock-$Version-$Rid-full.nupkg") {
+    throw "Expected exactly ChipDock-$Version-$Rid-full.nupkg, found: $($Packages.Name -join ', ')"
 }
 if (-not (Test-Path (Join-Path $OutputDirectory $Feed))) { throw "Velopack did not write $Feed." }
 Remove-Item -Recurse -Force $Publish

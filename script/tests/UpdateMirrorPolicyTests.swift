@@ -29,8 +29,12 @@ struct UpdateMirrorPolicyTests {
         try check(!UpdateMirrorPolicy.canRetry(NSError(domain: NSURLErrorDomain, code: NSURLErrorUnknown,
                                                        userInfo: [NSUnderlyingErrorKey: invalidSignature])), "Wrapped signature error must not retry")
         let key = Data(repeating: 1, count: 32).base64EncodedString()
+        try check(UpdateConfiguration.primaryFeedURL == "https://app-release-1302963684.cos.ap-guangzhou.myqcloud.com/chipdock/updates/appcast.xml",
+                  "Primary feed must use the ChipDock installation identity")
+        try check(UpdateConfiguration.githubFeedURL == "https://github.com/tangxiangong/chipdock/releases/download/chipdock-updates/appcast.xml",
+                  "Fallback feed must use the ChipDock installation identity")
         let configuration = try UpdateConfiguration(feedURL: UpdateConfiguration.primaryFeedURL, publicKey: key)
-        try check(configuration.fallbackFeedURL.absoluteString == UpdateConfiguration.githubFeedURL, "Default fallback must use the renamed GitHub repository")
+        try check(configuration.fallbackFeedURL.absoluteString == UpdateConfiguration.githubFeedURL, "Default fallback must use the ChipDock feed")
         do {
             _ = try UpdateConfiguration(feedURL: UpdateConfiguration.primaryFeedURL, publicKey: key, fallbackFeedURL: "http://example.com/appcast.xml")
             try check(false, "Insecure fallback must be rejected")

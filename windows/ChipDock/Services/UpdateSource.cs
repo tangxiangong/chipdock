@@ -5,7 +5,7 @@ using Velopack.Sources;
 
 namespace ChipDock;
 
-/// Reads the signed feed from `update-feed`, then downloads the package it pins
+/// Reads the signed feed from `chipdock-updates`, then downloads the package it pins
 /// from the version release and checks it against the feed before Velopack does.
 internal sealed class UpdateSource(ECDsa publicKey, IFileDownloader? downloader = null) : IUpdateSource
 {

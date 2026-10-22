@@ -9,7 +9,7 @@ namespace ChipDock;
 
 internal static class Program
 {
-    private const string InstanceKey = "FlashDesk";
+    private const string InstanceKey = "ChipDock";
 
     [STAThread]
     private static void Main(string[] args)

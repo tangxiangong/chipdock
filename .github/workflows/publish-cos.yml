@@ -17,7 +17,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing stable GitHub release tag (for example v0.2.0)
+        description: Existing stable GitHub release tag with the ChipDock installation identity
         required: true
         type: string
       platform:
@@ -59,7 +59,7 @@ jobs:
     timeout-minutes: 30
     environment: release
     concurrency:
-      group: flashdesk-update-feed
+      group: chipdock-updates
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v7

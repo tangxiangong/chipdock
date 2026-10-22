@@ -652,7 +652,7 @@
 				);
 				LIBRARY_SEARCH_PATHS = "$(inherited) $(BUILT_PRODUCTS_DIR)";
 				OTHER_LDFLAGS = "$(inherited) -lchipdock_core -framework IOKit -framework CoreFoundation -framework Security -framework SystemConfiguration -liconv -lresolv -lc++";
-				PRODUCT_BUNDLE_IDENTIFIER = com.xiaoyu.flashdesk;
+				PRODUCT_BUNDLE_IDENTIFIER = com.xiaoyu.chipdock;
 				PRODUCT_MODULE_NAME = ChipDock;
 				PRODUCT_NAME = ChipDock;
 				SDKROOT = macosx;
@@ -676,7 +676,7 @@
 				);
 				LIBRARY_SEARCH_PATHS = "$(inherited) $(BUILT_PRODUCTS_DIR)";
 				OTHER_LDFLAGS = "$(inherited) -lchipdock_core -framework IOKit -framework CoreFoundation -framework Security -framework SystemConfiguration -liconv -lresolv -lc++";
-				PRODUCT_BUNDLE_IDENTIFIER = com.xiaoyu.flashdesk;
+				PRODUCT_BUNDLE_IDENTIFIER = com.xiaoyu.chipdock;
 				PRODUCT_MODULE_NAME = ChipDock;
 				PRODUCT_NAME = ChipDock;
 				SDKROOT = macosx;

@@ -33,7 +33,7 @@ try {
         throw "Could not read release ${Name}: $Output"
     }
 
-    $FeedRelease = Get-Release 'update-feed'
+    $FeedRelease = Get-Release 'chipdock-updates'
     $Release = Get-Release $Tag
     if (-not $Release) { throw "Release $Tag does not exist." }
     $Uploads = @()
@@ -51,7 +51,7 @@ try {
         $Previous = @()
         if ($FeedRelease -and ($FeedRelease.assets | Where-Object name -eq $Signed)) {
             $PreviousDirectory = Join-Path $Work "previous-$Arch"
-            & gh release download update-feed --repo $Repository --pattern $Signed --dir $PreviousDirectory
+            & gh release download chipdock-updates --repo $Repository --pattern $Signed --dir $PreviousDirectory
             if ($LASTEXITCODE -ne 0) { throw "Could not download the published $Signed." }
             $Previous = @(Join-Path $PreviousDirectory $Signed)
         }
@@ -80,12 +80,12 @@ try {
 
     if (-not $FeedRelease) {
         $Target = if ($env:GITHUB_SHA) { $env:GITHUB_SHA } else { (& git -C $Repo rev-parse HEAD).Trim() }
-        & gh release create update-feed --repo $Repository --target $Target `
+        & gh release create chipdock-updates --repo $Repository --target $Target `
             --title 'ChipDock update feed' --notes 'Sparkle and Velopack update metadata.' --prerelease --latest=false
-        if ($LASTEXITCODE -ne 0) { throw 'Could not create the update-feed release.' }
+        if ($LASTEXITCODE -ne 0) { throw 'Could not create the chipdock-updates release.' }
     }
     # Publish the feeds only after the immutable packages are available.
-    & gh release upload update-feed @Feeds --repo $Repository --clobber
+    & gh release upload chipdock-updates @Feeds --repo $Repository --clobber
     if ($LASTEXITCODE -ne 0) { throw 'Feed upload failed.' }
     Write-Host "Published ChipDock $Version for Windows: $($Uploads.Name -join ', ')"
 }

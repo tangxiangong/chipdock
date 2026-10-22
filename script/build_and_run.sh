@@ -14,7 +14,7 @@ esac
 
 # A standard Quit event lets the app refuse to exit during a hardware operation.
 if pgrep -x ChipDock >/dev/null; then
-    /usr/bin/osascript -e 'tell application id "com.xiaoyu.flashdesk" to quit' || true
+    /usr/bin/osascript -e 'tell application id "com.xiaoyu.chipdock" to quit' || true
     for ATTEMPT in {1..20}; do
         if ! pgrep -x ChipDock >/dev/null; then break; fi
         sleep 0.1
@@ -36,7 +36,7 @@ case "$MODE" in
         ;;
     --telemetry|telemetry)
         /usr/bin/open -n "$APP_BUNDLE"
-        /usr/bin/log stream --info --style compact --predicate 'subsystem == "com.xiaoyu.flashdesk"'
+        /usr/bin/log stream --info --style compact --predicate 'subsystem == "com.xiaoyu.chipdock"'
         ;;
     --verify|verify)
         /usr/bin/open -n "$APP_BUNDLE"

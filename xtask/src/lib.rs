@@ -181,9 +181,9 @@ fn windows_identity(data: &[u8], arch: &str, key: &str) -> Result<Identity> {
     let asset = &assets[0];
     let value = asset["Version"].as_str().ok_or("Missing Windows version")?;
     version(&format!("v{value}"))?;
-    let filename = format!("FlashDesk-{value}-win-{arch}-full.nupkg");
+    let filename = format!("ChipDock-{value}-win-{arch}-full.nupkg");
     ensure(
-        asset["PackageId"] == "FlashDesk"
+        asset["PackageId"] == "ChipDock"
             && (asset["Type"] == "Full" || asset["Type"] == 1)
             && asset["FileName"] == filename,
         "Unexpected Windows app, architecture or package",
@@ -371,41 +371,23 @@ pub fn download_release(tag: &str, platform: Platform, directory: &Path) -> Resu
         for arch in ["x64", "arm64"] {
             names.extend([
                 format!("releases.win-{arch}.signed.json"),
-                format!("FlashDesk-{value}-win-{arch}-full.nupkg"),
+                format!("ChipDock-{value}-win-{arch}-full.nupkg"),
                 format!("ChipDock-{value}-windows-{arch}.exe"),
                 format!("ChipDock-{value}-windows-{arch}.msi"),
             ]);
         }
     }
     for name in names {
-        let mut source = tag;
-        let info = if let Some(asset) = assets.iter().find(|asset| asset["name"] == name) {
-            asset.clone()
-        } else {
-            ensure(
-                name == "appcast.xml" || name.ends_with(".signed.json"),
-                "Missing versioned GitHub payload",
-            )?;
-            // Legacy v0.2.0 retained only current feeds; prepare() still requires its exact signed version.
-            let feed: Value = serde_json::from_slice(&github(&[
-                "api",
-                &format!("repos/{REPOSITORY}/releases/tags/update-feed"),
-            ])?)?;
-            source = "update-feed";
-            feed["assets"]
-                .as_array()
-                .ok_or("Missing legacy feed assets")?
-                .iter()
-                .find(|asset| asset["name"] == name)
-                .ok_or("Missing signed GitHub feed")?
-                .clone()
-        };
+        let info = assets
+            .iter()
+            .find(|asset| asset["name"] == name)
+            .ok_or("Missing versioned GitHub payload")?;
         let target = directory.join(&name);
         if !target.try_exists()? {
             github(&[
                 "release",
                 "download",
-                source,
+                tag,
                 "--repo",
                 REPOSITORY,
                 "--pattern",

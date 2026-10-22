@@ -28,7 +28,7 @@ internal static class UpdateSourceTests
         await source.GetReleaseFeed(null!, UpdateFeed.AppId, "win-x64");
         Check.That(downloader.Requests.SequenceEqual([primary, fallback]), "invalid COS feed falls back to a verified signed GitHub feed");
 
-        downloader.Files[primary] = UpdateFeed.Seal(UpdateFeedTests.Feed(fileName: "FlashDesk-0.2.0-win-arm64-full.nupkg"), UpdateFeedTests.Keys.Private);
+        downloader.Files[primary] = UpdateFeed.Seal(UpdateFeedTests.Feed(fileName: "ChipDock-0.2.0-win-arm64-full.nupkg"), UpdateFeedTests.Keys.Private);
         downloader.Requests.Clear();
         await source.GetReleaseFeed(null!, UpdateFeed.AppId, "win-x64");
         Check.That(downloader.Requests.SequenceEqual([primary, fallback]), "wrong-architecture primary is replaced only by a valid signed fallback");

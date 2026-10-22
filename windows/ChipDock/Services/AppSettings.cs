@@ -6,14 +6,13 @@ namespace ChipDock;
 /// Profiles and recent firmware are stored by the Rust Core instead.
 internal static class AppSettings
 {
-    // Keep the existing directories through the product rename.
     private static readonly string FilePath =
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FlashDesk", "settings.json");
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ChipDock", "settings.json");
     private static readonly Dictionary<string, string> Values = Load();
 
     /// The Rust Core's profile and recent-file directory, alongside the user's roaming data.
     internal static string StorageDirectory { get; } =
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlashDesk");
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ChipDock");
 
     internal static Appearance Appearance
     {

@@ -6,6 +6,9 @@ MODE="${1:-package}"
 case "$MODE" in package|--publish) ;; *) echo "usage: $0 [package|--publish]" >&2; exit 2 ;; esac
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_BUNDLE="${APP_BUNDLE:-$PROJECT_ROOT/.build/Release/Build/Products/Release/ChipDock.app}"
+[[ "$(basename "${APP_BUNDLE%/}")" == ChipDock.app ]] || {
+    echo 'error: Release application bundle must be named ChipDock.app' >&2; exit 1;
+}
 OUTPUT_DIR="${RELEASE_OUTPUT_DIR:-$PROJECT_ROOT/.build/ReleaseAssets}"
 SPARKLE_BIN="${SPARKLE_BIN:-$PROJECT_ROOT/.build/SourcePackages/artifacts/sparkle/Sparkle/bin}"
 GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-tangxiangong/chipdock}"
@@ -24,8 +27,8 @@ python3 - "$APP_BUNDLE/Contents/Info.plist" "$GITHUB_REPOSITORY" <<'PYCODE'
 import plistlib, sys
 with open(sys.argv[1], 'rb') as source:
     info = plistlib.load(source)
-primary = 'https://app-release-1302963684.cos.ap-guangzhou.myqcloud.com/chipdock/update-feed/appcast.xml'
-fallback = f'https://github.com/{sys.argv[2]}/releases/download/update-feed/appcast.xml'
+primary = 'https://app-release-1302963684.cos.ap-guangzhou.myqcloud.com/chipdock/updates/appcast.xml'
+fallback = f'https://github.com/{sys.argv[2]}/releases/download/chipdock-updates/appcast.xml'
 if info.get('SUFeedURL') != primary or info.get('SUFallbackFeedURL') != fallback:
     sys.exit('error: Update feed does not match the release repository')
 PYCODE
@@ -68,7 +71,7 @@ APPCAST_ARGS=(--maximum-deltas 0 --embed-release-notes --download-url-prefix "$D
 if [[ -n "${SPARKLE_PRIVATE_ED_KEY:-}" ]]; then
     printf '%s' "$SPARKLE_PRIVATE_ED_KEY" | "$SPARKLE_BIN/generate_appcast" --ed-key-file - "${APPCAST_ARGS[@]}"
 else
-    "$SPARKLE_BIN/generate_appcast" --account com.xiaoyu.flashdesk "${APPCAST_ARGS[@]}"
+    "$SPARKLE_BIN/generate_appcast" --account com.xiaoyu.chipdock "${APPCAST_ARGS[@]}"
 fi
 xcrun swiftc -swift-version 6 "$PROJECT_ROOT/script/verify_update.swift" -o "$WORK_DIR/verify_update"
 "$WORK_DIR/verify_update" "$OUTPUT_DIR/appcast.xml" "$ARCHIVE" "$APP_BUNDLE/Contents/Info.plist" "$DOWNLOAD_PREFIX"
@@ -77,11 +80,11 @@ cp "$ARCHIVE" "$OUTPUT_DIR/$ARCHIVE_NAME"
 if [[ "$MODE" == --publish ]]; then
     [[ -n "${GH_TOKEN:-}" ]] || { echo 'error: GH_TOKEN is required for publication' >&2; exit 1; }
     FEED_EXISTS=false
-    if gh api "repos/$GITHUB_REPOSITORY/releases/tags/update-feed" > "$WORK_DIR/feed-release.json" 2> "$WORK_DIR/feed-error.log"; then
+    if gh api "repos/$GITHUB_REPOSITORY/releases/tags/chipdock-updates" > "$WORK_DIR/feed-release.json" 2> "$WORK_DIR/feed-error.log"; then
         FEED_EXISTS=true
         HAS_FEED="$(python3 -c 'import json,sys; print(any(a["name"] == "appcast.xml" for a in json.load(sys.stdin)["assets"]))' < "$WORK_DIR/feed-release.json")"
         if [[ "$HAS_FEED" == True ]]; then
-            gh release download update-feed --repo "$GITHUB_REPOSITORY" --pattern appcast.xml --dir "$WORK_DIR"
+            gh release download chipdock-updates --repo "$GITHUB_REPOSITORY" --pattern appcast.xml --dir "$WORK_DIR"
             "$WORK_DIR/verify_update" "$OUTPUT_DIR/appcast.xml" "$ARCHIVE" "$APP_BUNDLE/Contents/Info.plist" "$DOWNLOAD_PREFIX" "$WORK_DIR/appcast.xml"
         fi
     elif [[ "$(cat "$WORK_DIR/feed-error.log")" != *"(HTTP 404)"* ]]; then
@@ -115,10 +118,10 @@ PYCODE
         done
     fi
     if [[ "$FEED_EXISTS" == false ]]; then
-        gh release create update-feed --repo "$GITHUB_REPOSITORY" --target "${GITHUB_SHA:?}" \
+        gh release create chipdock-updates --repo "$GITHUB_REPOSITORY" --target "${GITHUB_SHA:?}" \
             --title 'ChipDock update feed' --notes 'Sparkle update metadata.' --prerelease --latest=false
     fi
     # Publish the feed only after the immutable archive is available.
-    gh release upload update-feed "$OUTPUT_DIR/appcast.xml" --repo "$GITHUB_REPOSITORY" --clobber
+    gh release upload chipdock-updates "$OUTPUT_DIR/appcast.xml" --repo "$GITHUB_REPOSITORY" --clobber
 fi
 printf 'Packaged and verified: %s\n' "$OUTPUT_DIR/$ARCHIVE_NAME"

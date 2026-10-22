@@ -55,7 +55,37 @@ fn payloads_are_verified_before_catalog_and_feed_publication() {
     assert!(
         uploads[catalog + 1..]
             .iter()
-            .all(|key| key.starts_with("update-feed/"))
+            .all(|key| key.starts_with("updates/"))
+    );
+}
+
+#[test]
+fn chipdock_publication_does_not_reuse_retired_feed_state() {
+    let (directory, keys) = fixture("v0.2.0");
+    let plan = prepare(directory.path(), "v0.2.0", Platform::All, &keys).unwrap();
+    let store = MemoryStore::default();
+    let retired_keys = [
+        "update-feed/state.json",
+        "update-feed/appcast.xml",
+        "update-feed/releases.win-x64.signed.json",
+    ];
+    for key in retired_keys {
+        store
+            .objects
+            .borrow_mut()
+            .insert(key.into(), b"retired identity".to_vec());
+    }
+    publish_to(&plan, directory.path(), &keys, &store).unwrap();
+    for key in retired_keys {
+        assert_eq!(store.objects.borrow()[key], b"retired identity");
+    }
+    assert!(store.objects.borrow().contains_key("updates/state.json"));
+    assert!(
+        store
+            .uploads
+            .borrow()
+            .iter()
+            .all(|key| !key.starts_with("update-feed/"))
     );
 }
 
@@ -93,7 +123,7 @@ fn same_version_retry_completes_a_partial_publication() {
     let (directory, keys) = fixture("v0.2.0");
     let plan = prepare(directory.path(), "v0.2.0", Platform::All, &keys).unwrap();
     let store = MemoryStore::default();
-    let last = "update-feed/releases.win-x64.signed.json";
+    let last = "updates/releases.win-x64.signed.json";
     *store.fail.borrow_mut() = Some(last.into());
     assert!(publish_to(&plan, directory.path(), &keys, &store).is_err());
     let count = store
@@ -121,7 +151,7 @@ fn older_repair_cannot_downgrade_a_partially_published_newer_release() {
     let store = MemoryStore::default();
     let (newer, keys) = fixture("v0.3.0");
     let plan = prepare(newer.path(), "v0.3.0", Platform::All, &keys).unwrap();
-    let last = "update-feed/releases.win-x64.signed.json";
+    let last = "updates/releases.win-x64.signed.json";
     *store.fail.borrow_mut() = Some(last.into());
     assert!(publish_to(&plan, newer.path(), &keys, &store).is_err());
     *store.fail.borrow_mut() = None;
@@ -167,13 +197,13 @@ fn a_valid_reservation_can_repair_corrupt_client_feeds_without_replacing_package
         store
             .objects
             .borrow_mut()
-            .insert(format!("update-feed/{name}"), b"corrupt feed".to_vec());
+            .insert(format!("updates/{name}"), b"corrupt feed".to_vec());
     }
     store.uploads.borrow_mut().clear();
     publish_to(&plan, directory.path(), &keys, &store).unwrap();
     for (name, path) in &plan.feeds {
         assert_eq!(
-            store.objects.borrow()[&format!("update-feed/{name}")],
+            store.objects.borrow()[&format!("updates/{name}")],
             fs::read(path).unwrap()
         );
     }
@@ -182,7 +212,7 @@ fn a_valid_reservation_can_repair_corrupt_client_feeds_without_replacing_package
             .uploads
             .borrow()
             .iter()
-            .all(|name| name.starts_with("update-feed/"))
+            .all(|name| name.starts_with("updates/"))
     );
 }
 
@@ -194,7 +224,7 @@ fn corrupt_feeds_without_a_reservation_block_all_writes() {
     store
         .objects
         .borrow_mut()
-        .insert("update-feed/appcast.xml".into(), b"corrupt feed".to_vec());
+        .insert("updates/appcast.xml".into(), b"corrupt feed".to_vec());
     assert!(publish_to(&plan, directory.path(), &keys, &store).is_err());
     assert!(store.uploads.borrow().is_empty());
 }
@@ -205,7 +235,7 @@ fn repairing_a_corrupt_feed_cannot_bypass_a_higher_version_reservation() {
     let plan = prepare(newer.path(), "v0.3.0", Platform::All, &keys).unwrap();
     let store = MemoryStore::default();
     publish_to(&plan, newer.path(), &keys, &store).unwrap();
-    let name = "update-feed/releases.win-x64.signed.json";
+    let name = "updates/releases.win-x64.signed.json";
     store
         .objects
         .borrow_mut()
@@ -255,12 +285,12 @@ fn explicit_replacement_can_resume_after_reserving_changed_same_version_metadata
     fs::write(directory.path().join("appcast.xml"), xml).unwrap();
     let replacement = prepare(directory.path(), "v0.2.0", Platform::All, &keys).unwrap();
     assert!(publish_to(&replacement, directory.path(), &keys, &store).is_err());
-    *store.fail.borrow_mut() = Some("update-feed/appcast.xml".into());
+    *store.fail.borrow_mut() = Some("updates/appcast.xml".into());
     assert!(replace_release_to(&replacement, directory.path(), &keys, &store).is_err());
     *store.fail.borrow_mut() = None;
     publish_to(&replacement, directory.path(), &keys, &store).unwrap();
     assert_eq!(
-        store.objects.borrow()["update-feed/appcast.xml"],
+        store.objects.borrow()["updates/appcast.xml"],
         fs::read(&replacement.feeds["appcast.xml"]).unwrap()
     );
     assert_eq!(store.objects.borrow()["releases/v0.1.0/keep.zip"], b"keep");

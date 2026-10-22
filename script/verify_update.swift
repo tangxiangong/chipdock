@@ -37,6 +37,12 @@ func verify() throws {
           let keyBytes = Data(base64Encoded: publicKey) else {
         throw UpdateVerificationError(message: "Missing app version or public key")
     }
+    let bundleURL = URL(fileURLWithPath: arguments[3]).deletingLastPathComponent().deletingLastPathComponent()
+    try require(bundleURL.lastPathComponent == "ChipDock.app", "Release application bundle must be named ChipDock.app")
+    for (name, expected) in ["CFBundleIdentifier": "com.xiaoyu.chipdock", "CFBundleName": "ChipDock",
+                             "CFBundleDisplayName": "ChipDock", "CFBundleExecutable": "ChipDock"] {
+        try require(info[name] as? String == expected, "Unexpected application identity: \(name) must be \(expected)")
+    }
     let candidateVersion = try versionParts(version)
     let items = try feedItems(arguments[1])
     try require(items.count == 1, "Expected exactly one release in the generated feed")
