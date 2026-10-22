@@ -115,17 +115,17 @@ xcodebuild -project macos/ChipDock.xcodeproj -scheme ChipDock \
 
 Sparkle 验证 Ed25519 签名后安装更新并重新启动应用。探针操作未完成、串口仍连接或正在收发时，应用会延后更新重启。
 
-macOS 与 Windows 均从 `tangxiangong/chipdock` 的 `update-feed` Release 获取更新信息，更新包从对应版本 Release 下载；新版只使用改名后的仓库地址。签名或哈希错误会拒绝更新。两端继续使用原签名密钥、安装标识与配置目录，以便现有安装原位升级；Windows 的 Velopack 包 ID 保留 `FlashDesk`，可执行文件名为 `ChipDock.exe`。
+与 BibCiTeX 一样，macOS 与 Windows 每次检查都优先使用腾讯云 COS，主源失败时尝试 GitHub 备用源。有效的主源没有新版本时不会查询备用源。macOS 仅在更新源或下载传输失败时重试一次，保留手动或后台检查模式；取消、签名、验证或安装错误不重试。Windows 的更新源和包下载失败时回退，两个来源都必须通过签名验证；包回退保留已选版本、文件名、大小和 SHA-256，用户取消即停止。两端继续使用原签名密钥、安装标识与配置目录，以便现有安装原位升级；Windows 的 Velopack 包 ID 保留 `FlashDesk`，可执行文件名为 `ChipDock.exe`。
 
 GitHub 仓库已改名为小写 `chipdock`，发布脚本随 `GITHUB_REPOSITORY` 使用当前仓库。旧版中的 `flashdesk` 地址由 GitHub 重定向到新仓库；不要重新占用该名称，以保留旧版更新能力。
 
 ## 发布
 
 1. 同步 `Cargo.toml`、`macos/project.yml` 和 `windows/ChipDock/ChipDock.csproj` 中的版本，在 `macos/` 下运行 `xcodegen generate`。
-2. GitHub 仓库的 `release` 环境需要 `SPARKLE_PRIVATE_ED_KEY` 与 `WINDOWS_UPDATE_PRIVATE_KEY` secret，分别对应工程内的 Sparkle 公钥和 Windows 更新公钥（均已配置）。
+2. GitHub 仓库的 `release` 环境需要 `SPARKLE_PRIVATE_ED_KEY`、`WINDOWS_UPDATE_PRIVATE_KEY`、`COS_SECRET_ID` 和 `COS_SECRET_KEY` secret。前两项对应工程内的更新公钥；后两项可复用 BibCiTeX 的 COS 发布子账号。
 3. 创建与版本一致的标签，例如 `v0.1.0`，并发布 GitHub Release。
 
-`macOS` 与 `Windows` 两个工作流各自构建并上传本平台的安装包，再更新 `update-feed` 中本平台的更新信息。
+`macOS` 与 `Windows` 两个工作流各自构建并上传本平台的安装包和签名更新信息，再更新 GitHub `update-feed`，最后将经过验证的相同安装包和 COS 更新信息发布到 COS。GitHub 备用源就绪后 COS 才会推进。
 
 CI 通过全部检查后，构建 Apple Silicon + Intel universal 应用，生成 `ChipDock-<版本号>-macOS-universal.zip` 和签名 appcast。版本包上传完成后，才会更新 `update-feed`；流程会拒绝版本回退或覆盖内容不同的已发布安装包。
 
@@ -138,6 +138,33 @@ CI 通过全部检查后，构建 Apple Silicon + Intel universal 应用，生�
 ```
 
 打包产物位于 `.build/ReleaseAssets/`。`--publish` 模式由 CI 使用。
+
+### COS 主源与 GitHub 备用源
+
+与 BibCiTeX 共用广州地域的 `app-release-1302963684` 桶，ChipDock 仅写入 `chipdock/`，不修改其他应用的对象：
+
+- 主源：`https://app-release-1302963684.cos.ap-guangzhou.myqcloud.com/chipdock/update-feed`
+- 备用：`https://github.com/tangxiangong/chipdock/releases/download/update-feed`
+- 安装包与保留的签名更新信息：`chipdock/releases/v<版本号>/`。
+
+桶需启用全球加速；发布通过加速端点上传，客户端通过广州 HTTPS 端点公开下载。发布子账号需要 `cos:HeadObject`、`cos:PutObject` 和 `cos:PutObjectACL`，范围至少覆盖 `chipdock/*`；已有的共享桶发布策略可以继续使用。发布设置 `public-read`，更新源使用 `no-cache, max-age=60`，版本文件使用一年不可变缓存。对象 ACL 和禁止覆盖请求头遵循腾讯云的 [PUT Object 文档](https://cloud.tencent.com/document/product/436/7749)。凭据仅用于发布，不嵌入应用。
+
+与 BibCiTeX 使用同样的 Rust `xtask`，COS v5 签名、上传重试、匿名字节校验和 XML 解析直接复用其实现。`xtask publish-cos` 先下载 GitHub 发布文件，核对 GitHub SHA-256、Sparkle Ed25519 签名和 Windows P-256 签名，并校验 Windows 包大小与 SHA-256。COS appcast 只改安装包 URL，原 XML、安装包、签名和公告内容保持不变；Windows 两个来源使用相同签名更新信息。所有版本文件公开可读且字节一致后才更新可变源。发布前检查全部不可变对象，拒绝覆盖不同内容；先保存 `update-feed/state.json` 中所有待推进版本，再更新各架构的源，让中断重试或旧版补传不会回退更新源。所有发布工作流共用 `flashdesk-update-feed` 并发组。
+
+COS 上传失败时，使用 **Publish existing release to COS**，填写已发布的标签并选择 `all`、`macos` 或 `windows`；无需重建、重新签名或替换 GitHub 安装包。新发布在版本 Release 中保留签名更新信息；接入前的 v0.2.0 可在当前 `update-feed` 仍与其版本一致时完成首次补传。不要删除 `state.json`，也不要对仍被更新源引用的文件配置过期清理。旧版客户端仍从 GitHub 更新，升级到包含此接入代码的版本后开始优先使用 COS。
+
+与 BibCiTeX 相同，普通补传拒绝不同字节；只有维护者明确替换了该版本的 GitHub 发布文件后，才启用 `replace_existing`，调用 `xtask replace-cos-release` 修复该版本。修复先验证完整签名发布，要求已有有效 COS 清单，保留其他版本，并遵守更新源的防回退规则。
+
+已有版本预留时，可从经过验证的发布文件恢复损坏的客户端更新源，仍须遵守预留版本的防回退限制。没有预留且现有更新源损坏时，发布会停止，不擅自重置版本记录。GitHub 发布也会先检查全部已有文件的摘要，再上传缺失文件。
+
+本机验证发布工具（不上传）：
+
+```sh
+cargo test --locked -p xtask
+cargo run --locked -p xtask -- verify-release --tag v0.2.0
+```
+
+macOS 的回退策略可在 Xcode 已解析 Sparkle 依赖后通过 `bash script/test_update_mirrors.sh` 验证；可移植 C# 更新逻辑使用 `dotnet run --project windows/Tests/ChipDock.Tests.csproj -- --updates-only`。这些检查不运行应用或访问硬件。
 
 ### 分平台更新公告
 

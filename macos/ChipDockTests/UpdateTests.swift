@@ -27,7 +27,9 @@ final class UpdateTests: XCTestCase {
 
     func testAppContainsStableFeedAndRequiresArchiveVerification() {
         XCTAssertEqual(Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") as? String,
-                       "https://github.com/tangxiangong/chipdock/releases/download/update-feed/appcast.xml")
+                       UpdateConfiguration.primaryFeedURL)
+        XCTAssertEqual(Bundle.main.object(forInfoDictionaryKey: "SUFallbackFeedURL") as? String,
+                       UpdateConfiguration.githubFeedURL)
         XCTAssertNoThrow(try UpdateConfiguration(bundle: .main))
         XCTAssertEqual(Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String, "ChipDock")
         XCTAssertEqual(Bundle.main.bundleIdentifier, "com.xiaoyu.flashdesk")

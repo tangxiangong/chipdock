@@ -34,13 +34,20 @@ try {
     }
 
     $FeedRelease = Get-Release 'update-feed'
+    $Release = Get-Release $Tag
+    if (-not $Release) { throw "Release $Tag does not exist." }
     $Uploads = @()
     $Feeds = @()
     foreach ($Arch in $Architectures) {
         $Directory = Join-Path $AssetsDirectory "windows-$Arch"
         $Channel = "win-$Arch"
         $Signed = "releases.$Channel.signed.json"
-        Invoke-UpdateTool seal $Directory $Arch $Project
+        if ($Release.assets | Where-Object name -eq $Signed) {
+            # ECDSA signatures are randomized. Reuse the verified envelope for idempotent retries.
+            & gh release download $Tag --repo $Repository --pattern $Signed --dir $Directory --clobber
+            if ($LASTEXITCODE -ne 0) { throw "Could not download the retained $Signed." }
+        }
+        else { Invoke-UpdateTool seal $Directory $Arch $Project }
         $Previous = @()
         if ($FeedRelease -and ($FeedRelease.assets | Where-Object name -eq $Signed)) {
             $PreviousDirectory = Join-Path $Work "previous-$Arch"
@@ -54,17 +61,21 @@ try {
         $Feeds += Join-Path $Directory $Signed
     }
 
-    $Release = Get-Release $Tag
-    if (-not $Release) { throw "Release $Tag does not exist." }
-    foreach ($File in $Uploads) {
+    # Keep signed metadata on the versioned release as well, for verifiable COS repairs.
+    $PendingUploads = @()
+    foreach ($File in @($Uploads) + @($Feeds | ForEach-Object { Get-Item $_ })) {
         $Existing = $Release.assets | Where-Object name -eq $File.Name
         if (-not $Existing) {
-            & gh release upload $Tag $File.FullName --repo $Repository
-            if ($LASTEXITCODE -ne 0) { throw "Upload failed: $($File.Name)" }
+            $PendingUploads += $File
             continue
         }
         $Digest = "sha256:$((Get-FileHash -Algorithm SHA256 $File.FullName).Hash.ToLowerInvariant())"
         if ($Existing.digest -ne $Digest) { throw "Refusing to overwrite the published $($File.Name) with different bytes." }
+    }
+    # A conflicting retained feed or installer must fail before the first new upload.
+    foreach ($File in $PendingUploads) {
+        & gh release upload $Tag $File.FullName --repo $Repository
+        if ($LASTEXITCODE -ne 0) { throw "Upload failed: $($File.Name)" }
     }
 
     if (-not $FeedRelease) {

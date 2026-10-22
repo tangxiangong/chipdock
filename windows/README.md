@@ -79,8 +79,8 @@ Rust 动态库位于 `target/<目标三元组>/<debug或release>/chipdock_csharp
 
 Windows 构建没有代码签名证书，因此更新信息单独签名：
 
-- 每个架构使用一个通道（`win-x64`、`win-arm64`）。`update-feed` Release 上的 `releases.win-<arch>.signed.json` 把 Velopack 的 `releases.win-<arch>.json` 和它的 ECDSA P-256 签名放在同一个文件中，替换期间不会出现更新信息与签名不匹配。
-- 应用先用 `ChipDock.csproj` 中 `UpdatePublicKey` 嵌入的公钥验证签名，再解析内容：只接受一个包 ID 为 `FlashDesk` 的稳定版完整包，文件名必须是安全的 `.nupkg` 基本名，并给出大小和 SHA-256。安装包从对应的 `v<版本号>` Release 下载，下载后校验大小与 SHA-256，不一致时删除；Velopack 不会安装比当前更旧的版本。
+- 每个架构使用一个通道（`win-x64`、`win-arm64`）。COS 主源与 GitHub 备用源上的 `releases.win-<arch>.signed.json` 把 Velopack 的 `releases.win-<arch>.json` 和它的 ECDSA P-256 签名放在同一个文件中，替换期间不会出现更新信息与签名不匹配。
+- 应用先用 `ChipDock.csproj` 中 `UpdatePublicKey` 嵌入的公钥验证签名，再解析内容：只接受一个包 ID 为 `FlashDesk` 的稳定版完整包，文件名必须是安全的 `.nupkg` 基本名，并给出大小和 SHA-256。与 BibCiTeX 一样，每次检查先访问 COS，更新源或包下载失败时尝试 GitHub，两个来源都必须通过验证；包下载回退保留已选版本、文件名和哈希。下载后校验大小与 SHA-256，不一致时删除；用户取消停止下载，不切换来源。Velopack 不会安装比当前更旧的版本。配置与补传见 [COS 发布说明](../README.md#cos-主源与-github-备用源)。
 - 首次发布前没有更新信息，检查更新会提示暂时无法获取更新信息。
 
 ### 签名密钥
@@ -99,7 +99,7 @@ Windows 构建没有代码签名证书，因此更新信息单独签名：
 - `ChipDock-<版本号>-windows-<arch>.exe` 与 `ChipDock-<版本号>-windows-<arch>.msi`：安装程序，缺少时会安装 .NET 10 运行时和 VC++ 运行库；Windows App Runtime 仍由应用首次启动时准备。
 - `FlashDesk-<版本号>-win-<arch>-full.nupkg`：应用内更新下载的完整包，用户安装使用 exe 或 msi。
 
-随后 `publish` 作业（`release` 环境）运行 `windows/scripts/publish-release.ps1`：用私钥签名两个架构的更新信息并立即用工程公钥验证，确认版本、包名、大小和 SHA-256，并与已发布的更新信息比较，拒绝版本回退或替换同版本中内容不同的安装包。版本 Release 中已存在的同名文件必须字节一致；全部安装包上传后才更新 `update-feed`。该作业与 macOS 发布共用 `flashdesk-update-feed` 并发组。该名称保持稳定，让两个平台及历史版本重跑始终串行更新 `update-feed`。
+随后 `publish` 作业（`release` 环境）运行 `windows/scripts/publish-release.ps1`：用私钥签名两个架构的更新信息并立即用工程公钥验证，确认版本、包名、大小和 SHA-256，并与已发布的更新信息比较，拒绝版本回退或替换同版本中内容不同的安装包。版本 Release 同时保留签名更新信息，重试时复用并验证已有签名，避免 ECDSA 随机签名改变字节。版本 Release 中已存在的同名文件必须字节一致；全部安装包上传后才更新 GitHub `update-feed`，再运行 `cargo run --locked -p xtask -- publish-cos --tag v<版本号> --platform windows` 同步 COS。该作业、macOS 发布和 COS 补传共用 `flashdesk-update-feed` 并发组，让更新源串行推进。
 
 本机打包（输出未签名，不会发布）：
 

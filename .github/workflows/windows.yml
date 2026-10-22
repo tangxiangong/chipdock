@@ -134,6 +134,8 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
@@ -144,7 +146,12 @@ jobs:
       - name: Require update signing key
         env:
           WINDOWS_UPDATE_PRIVATE_KEY: ${{ secrets.WINDOWS_UPDATE_PRIVATE_KEY }}
-        run: test -n "$WINDOWS_UPDATE_PRIVATE_KEY"
+          COS_SECRET_ID: ${{ secrets.COS_SECRET_ID }}
+          COS_SECRET_KEY: ${{ secrets.COS_SECRET_KEY }}
+        run: |
+          test -n "$WINDOWS_UPDATE_PRIVATE_KEY"
+          test -n "$COS_SECRET_ID"
+          test -n "$COS_SECRET_KEY"
       - name: Sign, verify and publish Velopack updates
         shell: pwsh
         env:
@@ -155,3 +162,11 @@ jobs:
           Rename-Item dist/release-windows-x64 windows-x64
           Rename-Item dist/release-windows-arm64 windows-arm64
           ./windows/scripts/publish-release.ps1 -Version $env:RELEASE_TAG.Substring(1) -AssetsDirectory dist
+      - name: Mirror verified Windows release to COS
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          COS_SECRET_ID: ${{ secrets.COS_SECRET_ID }}
+          COS_SECRET_KEY: ${{ secrets.COS_SECRET_KEY }}
+        run: |
+          cargo run --locked -p xtask -- publish-cos --tag "$RELEASE_TAG" --platform windows

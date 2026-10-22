@@ -5,6 +5,7 @@ members = [
     "crates/chipdock-csharp",
     "crates/chipdock-csharp-bindgen",
     "crates/chipdock-release-notes",
+    "xtask",
 ]
 default-members = ["crates/chipdock-core"]
 resolver = "3"

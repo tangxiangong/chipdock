@@ -3,6 +3,13 @@ using System.Runtime.InteropServices;
 using ChipDock.Tests;
 
 // Usage: ChipDock.Tests [path to the built chipdock_csharp library]
+if (args.SequenceEqual(["--updates-only"]))
+{
+    UpdateFeedTests.Run();
+    await UpdateSourceTests.Run();
+    Console.WriteLine($"Portable update checks passed ({Check.Count} assertions).");
+    return;
+}
 var driverRulesOnly = args.SequenceEqual(["--driver-rules-only"]);
 if (!driverRulesOnly)
 {

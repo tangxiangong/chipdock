@@ -24,8 +24,9 @@ python3 - "$APP_BUNDLE/Contents/Info.plist" "$GITHUB_REPOSITORY" <<'PYCODE'
 import plistlib, sys
 with open(sys.argv[1], 'rb') as source:
     info = plistlib.load(source)
-expected = f'https://github.com/{sys.argv[2]}/releases/download/update-feed/appcast.xml'
-if info.get('SUFeedURL') != expected:
+primary = 'https://app-release-1302963684.cos.ap-guangzhou.myqcloud.com/chipdock/update-feed/appcast.xml'
+fallback = f'https://github.com/{sys.argv[2]}/releases/download/update-feed/appcast.xml'
+if info.get('SUFeedURL') != primary or info.get('SUFallbackFeedURL') != fallback:
     sys.exit('error: Update feed does not match the release repository')
 PYCODE
 if [[ "${CI:-false}" == true && -z "${SPARKLE_PRIVATE_ED_KEY:-}" ]]; then
@@ -88,20 +89,30 @@ if [[ "$MODE" == --publish ]]; then
         exit 1
     fi
     gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" > "$WORK_DIR/release.json"
-    EXISTING_DIGEST="$(python3 - "$WORK_DIR/release.json" "$ARCHIVE_NAME" <<'PYCODE'
+    # Retain the signed appcast with its immutable release, so COS repairs never need a rebuild.
+    PENDING_ASSETS=()
+    for ASSET_NAME in "$ARCHIVE_NAME" appcast.xml; do
+        EXISTING_DIGEST="$(python3 - "$WORK_DIR/release.json" "$ASSET_NAME" <<'PYCODE'
 import json, sys
 with open(sys.argv[1]) as source:
     asset = next((a for a in json.load(source)['assets'] if a['name'] == sys.argv[2]), None)
 print('absent' if asset is None else asset.get('digest') or 'unknown')
 PYCODE
 )"
-    if [[ "$EXISTING_DIGEST" == absent ]]; then
-        gh release upload "$RELEASE_TAG" "$OUTPUT_DIR/$ARCHIVE_NAME" --repo "$GITHUB_REPOSITORY"
-    else
-        LOCAL_DIGEST="sha256:$(shasum -a 256 "$OUTPUT_DIR/$ARCHIVE_NAME" | awk '{print $1}')"
-        [[ "$EXISTING_DIGEST" == "$LOCAL_DIGEST" ]] || {
-            echo 'error: Refusing to overwrite a published archive with different bytes' >&2; exit 1;
-        }
+        if [[ "$EXISTING_DIGEST" == absent ]]; then
+            PENDING_ASSETS+=("$ASSET_NAME")
+        else
+            LOCAL_DIGEST="sha256:$(shasum -a 256 "$OUTPUT_DIR/$ASSET_NAME" | awk '{print $1}')"
+            [[ "$EXISTING_DIGEST" == "$LOCAL_DIGEST" ]] || {
+                echo "error: Refusing to overwrite published $ASSET_NAME with different bytes" >&2; exit 1;
+            }
+        fi
+    done
+    # Check every existing digest before adding any missing asset to this release.
+    if [[ ${#PENDING_ASSETS[@]} -gt 0 ]]; then
+        for ASSET_NAME in "${PENDING_ASSETS[@]}"; do
+            gh release upload "$RELEASE_TAG" "$OUTPUT_DIR/$ASSET_NAME" --repo "$GITHUB_REPOSITORY"
+        done
     fi
     if [[ "$FEED_EXISTS" == false ]]; then
         gh release create update-feed --repo "$GITHUB_REPOSITORY" --target "${GITHUB_SHA:?}" \

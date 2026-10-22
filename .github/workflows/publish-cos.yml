@@ -1,0 +1,83 @@
+name: Publish existing release to COS
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/publish-cos.yml
+      - Cargo.toml
+      - Cargo.lock
+      - xtask/**
+  pull_request:
+    paths:
+      - .github/workflows/publish-cos.yml
+      - Cargo.toml
+      - Cargo.lock
+      - xtask/**
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing stable GitHub release tag (for example v0.2.0)
+        required: true
+        type: string
+      platform:
+        description: Platforms to mirror without rebuilding
+        required: true
+        default: all
+        type: choice
+        options: [all, macos, windows]
+      replace_existing:
+        description: Replace this version only after explicitly replacing its GitHub release assets
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Test COS publication without credentials
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: swatinem/rust-cache@v2
+      - name: Test signature verification and interrupted publication
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --locked -p xtask --all-targets -- -D warnings
+          cargo test --locked -p xtask
+
+  publish:
+    if: github.event_name == 'workflow_dispatch'
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: release
+    concurrency:
+      group: flashdesk-update-feed
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+      - name: Download, verify and mirror the published release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          RELEASE_PLATFORM: ${{ inputs.platform }}
+          REPLACE_EXISTING: ${{ inputs.replace_existing }}
+          COS_SECRET_ID: ${{ secrets.COS_SECRET_ID }}
+          COS_SECRET_KEY: ${{ secrets.COS_SECRET_KEY }}
+        run: |
+          test -n "$COS_SECRET_ID"
+          test -n "$COS_SECRET_KEY"
+          if [[ "$REPLACE_EXISTING" == true ]]; then
+            cargo run --locked -p xtask -- replace-cos-release --tag "$RELEASE_TAG" --platform "$RELEASE_PLATFORM"
+          else
+            cargo run --locked -p xtask -- publish-cos --tag "$RELEASE_TAG" --platform "$RELEASE_PLATFORM"
+          fi

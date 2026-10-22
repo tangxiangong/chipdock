@@ -8,7 +8,7 @@ namespace ChipDock;
 /// The Windows update feed, shared by the app, the release tool and the tests.
 ///
 /// Like the macOS appcast, each architecture's feed lives on the `update-feed`
-/// GitHub release while its package stays on the immutable version release.
+/// source directory while its package stays on the immutable version release.
 /// Windows builds are not code-signed, so the Velopack feed is published inside
 /// an envelope that carries an ECDSA P-256 signature over its exact bytes; the
 /// feed in turn pins the package's size and SHA-256. One file holds both, so a
@@ -18,7 +18,9 @@ internal static class UpdateFeed
     // Keep the deployed Velopack identity so existing installations can upgrade.
     internal const string AppId = "FlashDesk";
     internal const string Repository = "tangxiangong/chipdock";
-    internal const string FeedUrl = $"https://github.com/{Repository}/releases/download/update-feed";
+    internal const string CosRoot = "https://app-release-1302963684.cos.ap-guangzhou.myqcloud.com/chipdock";
+    internal const string FeedUrl = $"{CosRoot}/update-feed";
+    internal const string FallbackFeedUrl = $"https://github.com/{Repository}/releases/download/update-feed";
     internal const string PrivateKeyVariable = "WINDOWS_UPDATE_PRIVATE_KEY";
     internal static readonly string[] Architectures = ["x64", "arm64"];
 
@@ -34,11 +36,12 @@ internal static class UpdateFeed
     /// The signed envelope that clients read from `update-feed`.
     internal static string SignedFeedFile(string channel) => $"releases.{channel}.signed.json";
 
-    internal static string SignedFeedUrl(string channel) =>
-        $"{FeedUrl}/{SignedFeedFile(channel)}";
+    internal static string SignedFeedUrl(string channel, bool fallback = false) =>
+        $"{(fallback ? FallbackFeedUrl : FeedUrl)}/{SignedFeedFile(channel)}";
 
-    internal static string PackageUrl(VelopackAsset asset) =>
-        $"https://github.com/{Repository}/releases/download/v{asset.Version}/{asset.FileName}";
+    internal static string PackageUrl(VelopackAsset asset, bool fallback = false) => fallback
+        ? $"https://github.com/{Repository}/releases/download/v{asset.Version}/{asset.FileName}"
+        : $"{CosRoot}/releases/v{asset.Version}/{asset.FileName}";
 
     /// Creates a key pair: the public key goes into the project file, the private key into the release secret.
     internal static (string PublicKey, string PrivateKey) CreateKeyPair()

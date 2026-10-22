@@ -8,54 +8,103 @@ internal static class UpdateSourceTests
     internal static async Task Run()
     {
         var package = new byte[] { 1, 2, 3, 4 };
+        var signed = UpdateFeed.Seal(UpdateFeedTests.Feed(package: package), UpdateFeedTests.Keys.Private);
         var downloader = new FakeDownloader();
-        downloader.Files[UpdateFeed.SignedFeedUrl("win-x64")] = UpdateFeed.Seal(UpdateFeedTests.Feed(package: package), UpdateFeedTests.Keys.Private);
+        var primary = UpdateFeed.SignedFeedUrl("win-x64");
+        var fallback = UpdateFeed.SignedFeedUrl("win-x64", fallback: true);
+        downloader.Files[primary] = signed;
+        downloader.Files[fallback] = signed;
         using var key = UpdateFeed.ImportPublicKey(UpdateFeedTests.Keys.Public)!;
         var source = new UpdateSource(key, downloader);
 
         var asset = (await source.GetReleaseFeed(null!, UpdateFeed.AppId, "win-x64")).Assets.Single();
-        Check.That(asset.Version.ToString() == "0.2.0", "signed feed is read from update-feed");
+        Check.That(downloader.Requests.SequenceEqual([primary]), "valid COS feed does not query GitHub");
+        Check.That(asset.Version.ToString() == "0.2.0", "signed feed preserves the selected version");
         await Check.ThrowsAsync<InvalidDataException>(() => source.GetReleaseFeed(null!, UpdateFeed.AppId, "win-x64/../../evil"), "channel cannot escape the feed URL");
         await Check.ThrowsAsync<InvalidDataException>(() => source.GetReleaseFeed(null!, "Other", "win-x64"), "feed belongs to ChipDock");
-        downloader.Files[UpdateFeed.SignedFeedUrl("win-arm64")] = UpdateFeedTests.Feed();
+
+        downloader.Files[primary] = UpdateFeedTests.Feed();
         downloader.Requests.Clear();
-        await Check.ThrowsAsync<InvalidDataException>(() => source.GetReleaseFeed(null!, UpdateFeed.AppId, "win-arm64"), "unsigned feed is refused");
-        Check.That(downloader.Requests.Count == 1, "signature validation failure does not retry another feed");
+        await source.GetReleaseFeed(null!, UpdateFeed.AppId, "win-x64");
+        Check.That(downloader.Requests.SequenceEqual([primary, fallback]), "invalid COS feed falls back to a verified signed GitHub feed");
+
+        downloader.Files[primary] = UpdateFeed.Seal(UpdateFeedTests.Feed(fileName: "FlashDesk-0.2.0-win-arm64-full.nupkg"), UpdateFeedTests.Keys.Private);
+        downloader.Requests.Clear();
+        await source.GetReleaseFeed(null!, UpdateFeed.AppId, "win-x64");
+        Check.That(downloader.Requests.SequenceEqual([primary, fallback]), "wrong-architecture primary is replaced only by a valid signed fallback");
+
+        downloader.Files.Remove(primary);
+        downloader.Requests.Clear();
+        asset = (await source.GetReleaseFeed(null!, UpdateFeed.AppId, "win-x64")).Assets.Single();
+        Check.That(downloader.Requests.SequenceEqual([primary, fallback]), "unavailable COS feed retries GitHub once");
+        downloader.Files[fallback] = UpdateFeedTests.Feed();
+        await Check.ThrowsAsync<InvalidDataException>(() => source.GetReleaseFeed(null!, UpdateFeed.AppId, "win-x64"), "GitHub feed must also be signed");
+
         var unavailable = new FakeDownloader();
         await Check.ThrowsAsync<HttpRequestException>(() => new UpdateSource(key, unavailable).GetReleaseFeed(null!, UpdateFeed.AppId, "win-x64"),
-            "missing feed surfaces as an HTTP error");
-        Check.That(unavailable.Requests.SequenceEqual(new[]
-            { "https://github.com/tangxiangong/chipdock/releases/download/update-feed/releases.win-x64.signed.json" }),
-            "unavailable feed only requests the renamed repository");
+            "both feed errors remain visible");
+        Check.That(unavailable.Requests.SequenceEqual([primary, fallback]), "each feed is requested at most once");
 
+        var primaryPackage = UpdateFeed.PackageUrl(asset);
+        var fallbackPackage = UpdateFeed.PackageUrl(asset, fallback: true);
         var path = Path.Combine(Path.GetTempPath(), $"ChipDock-test-{Guid.NewGuid():N}.nupkg");
         try
         {
+            downloader.Files[fallback] = signed;
+            await source.GetReleaseFeed(null!, UpdateFeed.AppId, "win-x64");
+            downloader.Files[fallbackPackage] = package;
             downloader.Requests.Clear();
-            await Check.ThrowsAsync<HttpRequestException>(() => source.DownloadReleaseEntry(null!, asset, path, _ => { }),
-                "missing package surfaces as an HTTP error");
-            Check.That(downloader.Requests.SequenceEqual(new[]
-                { "https://github.com/tangxiangong/chipdock/releases/download/v0.2.0/FlashDesk-0.2.0-win-x64-full.nupkg" }),
-                "unavailable package only requests the renamed repository");
-            Check.That(!File.Exists(path), "failed download leaves no package");
-            downloader.Files[UpdateFeed.PackageUrl(asset)] = package;
             await source.DownloadReleaseEntry(null!, asset, path, _ => { });
-            Check.That(File.ReadAllBytes(path).SequenceEqual(package) && downloader.Requests[^1] == UpdateFeed.PackageUrl(asset),
-                "package downloads from the version release");
+            Check.That(downloader.Requests.SequenceEqual([fallbackPackage]), "GitHub feed uses its versioned GitHub package directly");
 
-            downloader.Files[UpdateFeed.PackageUrl(asset)] = [1, 2, 3, 5];
-            await Check.ThrowsAsync<InvalidDataException>(() => source.DownloadReleaseEntry(null!, asset, path, _ => { }), "corrupt package is refused");
-            Check.That(!File.Exists(path), "corrupt package is deleted");
+            downloader.Files[primary] = signed;
+            downloader.Requests.Clear();
+            await source.GetReleaseFeed(null!, UpdateFeed.AppId, "win-x64");
+            Check.That(downloader.Requests.SequenceEqual([primary]), "every new check returns to COS");
+            downloader.Files[primaryPackage] = package;
+            downloader.Requests.Clear();
+            await source.DownloadReleaseEntry(null!, asset, path, _ => { });
+            Check.That(File.ReadAllBytes(path).SequenceEqual(package) && downloader.Requests.SequenceEqual([primaryPackage]),
+                "healthy COS package does not query GitHub");
+
+            downloader.Files.Remove(primaryPackage);
+            downloader.Requests.Clear();
+            var progress = new List<int>();
+            await source.DownloadReleaseEntry(null!, asset, path, progress.Add);
+            Check.That(downloader.Requests.SequenceEqual([primaryPackage, fallbackPackage]), "COS package transport failure retries the same GitHub package");
+            Check.That(File.ReadAllBytes(path).SequenceEqual(package) && progress.Contains(0), "partial primary download is replaced and progress resets");
+
+            downloader.Files[primaryPackage] = [1, 2, 3, 5];
+            downloader.Requests.Clear();
+            await source.DownloadReleaseEntry(null!, asset, path, _ => { });
+            Check.That(File.ReadAllBytes(path).SequenceEqual(package) && downloader.Requests.SequenceEqual([primaryPackage, fallbackPackage]),
+                "corrupt COS bytes are replaced by the identical hash-pinned GitHub package");
+
+            downloader.Files.Remove(primaryPackage);
+            downloader.Files[fallbackPackage] = [1, 2, 3, 5];
+            await Check.ThrowsAsync<InvalidDataException>(() => source.DownloadReleaseEntry(null!, asset, path, _ => { }), "corrupt GitHub package is refused");
+            Check.That(!File.Exists(path), "corrupt fallback leaves no pending package");
+
+            downloader.Files.Remove(fallbackPackage);
+            await Check.ThrowsAsync<HttpRequestException>(() => source.DownloadReleaseEntry(null!, asset, path, _ => { }), "both package transport failures remain visible");
+            Check.That(!File.Exists(path), "failed download leaves no pending package");
 
             var redirected = asset with { FileName = "../../evil.nupkg" };
+            downloader.Requests.Clear();
             await Check.ThrowsAsync<InvalidDataException>(() => source.DownloadReleaseEntry(null!, redirected, path, _ => { }), "package name cannot redirect");
+            Check.That(downloader.Requests.Count == 0, "invalid package name fails before network access");
 
             using var cancellation = new CancellationTokenSource();
             cancellation.Cancel();
-            downloader.Files[UpdateFeed.PackageUrl(asset)] = package;
             await Check.ThrowsAsync<OperationCanceledException>(() => source.DownloadReleaseEntry(null!, asset, path, _ => { }, cancellation.Token),
-                "cancellation stops the download");
-            Check.That(!File.Exists(path), "cancelled download leaves no package");
+                "cancellation stops before either download");
+            Check.That(downloader.Requests.Count == 0 && !File.Exists(path), "cancelled operation does not query fallback");
+
+            using var midflight = new CancellationTokenSource();
+            downloader.OnDownload = midflight.Cancel;
+            await Check.ThrowsAsync<OperationCanceledException>(() => source.DownloadReleaseEntry(null!, asset, path, _ => { }, midflight.Token),
+                "mid-download cancellation stops fallback");
+            Check.That(downloader.Requests.SequenceEqual([primaryPackage]) && !File.Exists(path), "cancelled partial download is deleted");
         }
         finally { File.Delete(path); }
     }
@@ -64,6 +113,7 @@ internal static class UpdateSourceTests
     {
         internal Dictionary<string, byte[]> Files { get; } = [];
         internal List<string> Requests { get; } = [];
+        internal Action? OnDownload { get; set; }
 
         private byte[] Get(string url)
         {
@@ -77,6 +127,12 @@ internal static class UpdateSourceTests
             double timeout = 30, CancellationToken cancelToken = default)
         {
             cancelToken.ThrowIfCancellationRequested();
+            // Leave a partial file even when the simulated transport fails or is cancelled.
+            await File.WriteAllBytesAsync(targetFile, [0], cancelToken);
+            Requests.Add(url);
+            OnDownload?.Invoke();
+            cancelToken.ThrowIfCancellationRequested();
+            Requests.RemoveAt(Requests.Count - 1);
             await File.WriteAllBytesAsync(targetFile, Get(url), cancelToken);
             progress(100);
         }

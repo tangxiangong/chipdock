@@ -57,6 +57,7 @@ jobs:
         run: |
           bash script/test_serial.sh
           bash script/test_macos_interactions.sh
+          bash script/test_update_mirrors.sh
       - name: Verify generated bindings are current
         run: git diff --exit-code -- macos/ChipDock/Generated
       - name: Upload Xcode test results
@@ -89,7 +90,12 @@ jobs:
       - name: Require update signing key
         env:
           SPARKLE_PRIVATE_ED_KEY: ${{ secrets.SPARKLE_PRIVATE_ED_KEY }}
-        run: test -n "$SPARKLE_PRIVATE_ED_KEY"
+          COS_SECRET_ID: ${{ secrets.COS_SECRET_ID }}
+          COS_SECRET_KEY: ${{ secrets.COS_SECRET_KEY }}
+        run: |
+          test -n "$SPARKLE_PRIVATE_ED_KEY"
+          test -n "$COS_SECRET_ID"
+          test -n "$COS_SECRET_KEY"
       - name: Verify release tag matches Rust version
         run: |
           CORE_VERSION="$(cargo metadata --format-version 1 --no-deps --locked | \
@@ -117,3 +123,11 @@ jobs:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
           RELEASE_NOTES_FILE: .build/ReleaseNotes.md
           SPARKLE_PRIVATE_ED_KEY: ${{ secrets.SPARKLE_PRIVATE_ED_KEY }}
+      - name: Mirror verified macOS release to COS
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          COS_SECRET_ID: ${{ secrets.COS_SECRET_ID }}
+          COS_SECRET_KEY: ${{ secrets.COS_SECRET_KEY }}
+        run: |
+          cargo run --locked -p xtask -- publish-cos --tag "$RELEASE_TAG" --platform macos
