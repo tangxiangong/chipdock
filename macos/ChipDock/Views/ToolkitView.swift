@@ -16,7 +16,7 @@ struct ToolkitView: View {
             case .serial: SerialView(serial: serial)
             }
         }
-        .navigationTitle(toolkit.selectedTool == .flash ? store.firmwareURL?.lastPathComponent ?? "ChipDock" : "串口连接")
+        .navigationTitle(toolkit.selectedTool == .flash ? "固件烧录" : "串口连接")
         .toolbar {
             ToolbarItem(placement: .navigation) {
                 Picker("开发工具", selection: $toolkit.selectedTool) {

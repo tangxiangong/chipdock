@@ -24,7 +24,7 @@ internal sealed class MainWindow : Window
     internal Updater Updater { get; }
 
     private readonly Grid root = new();
-    private readonly TextBlock titleText = Ui.Text("ChipDock", 12);
+    private readonly TextBlock titleText = Ui.Text("固件烧录", 12);
     private readonly ActivityView activity;
     private readonly FlashView flash;
     private readonly SerialView serial;
@@ -61,7 +61,7 @@ internal sealed class MainWindow : Window
 
     internal MainWindow()
     {
-        Title = "ChipDock";
+        Title = "固件烧录";
         ExtendsContentIntoTitleBar = true;
         SystemBackdrop = MicaController.IsSupported() ? new MicaBackdrop() : new DesktopAcrylicBackdrop();
         AppWindow.TitleBar.PreferredHeightOption = TitleBarHeightOption.Tall;
@@ -386,7 +386,7 @@ internal sealed class MainWindow : Window
 
     private void Update()
     {
-        AppWindow.Title = titleText.Text = "ChipDock";
+        AppWindow.Title = titleText.Text = SerialSelected ? "串口连接" : "固件烧录";
         Ui.SetVisible(serial, SerialSelected);
         Ui.SetVisible(flash, !SerialSelected);
         Ui.SetVisible(profilesButton, !SerialSelected);
