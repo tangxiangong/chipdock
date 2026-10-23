@@ -101,7 +101,6 @@
               <ColumnDefinition Width="*" />
               <ColumnDefinition Width="Auto" />
               <ColumnDefinition Width="*" MaxWidth="220" />
-              <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <ToggleButton x:Name="ConnectionPaneToggle" IsChecked="True" Width="32" Height="32" Padding="0"
                           VerticalAlignment="Center" Click="OnToggleConnectionPane"
@@ -122,11 +121,6 @@
             </ComboBox>
             <TextBox x:Name="TerminalSearch" Grid.Column="5" PlaceholderText="搜索数据" VerticalAlignment="Center"
                      AutomationProperties.Name="搜索终端数据" ToolTipService.ToolTip="搜索数据 (Ctrl+F)" TextChanged="OnSearchChanged" />
-            <ToggleButton x:Name="ComposerPaneToggle" Grid.Column="6" IsChecked="True" Width="32" Height="32" Padding="0"
-                          VerticalAlignment="Center" Click="OnToggleComposerPane"
-                          AutomationProperties.Name="发送区" ToolTipService.ToolTip="收起发送区">
-              <FontIcon Glyph="&#xE90E;" FontSize="16" />
-            </ToggleButton>
           </Grid>
 
           <Grid Grid.Row="1">
@@ -192,6 +186,7 @@
               <ColumnDefinition Width="Auto" />
               <ColumnDefinition Width="Auto" />
               <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <TextBlock Text="接收编码" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
             <ComboBox x:Name="DisplayPicker" Grid.Column="1" MinWidth="96" VerticalAlignment="Center"
@@ -216,6 +211,14 @@
                 <TextBlock Text="清屏" FontSize="12" />
               </StackPanel>
             </Button>
+            <ToggleButton x:Name="ComposerPaneToggle" Grid.Column="6" IsChecked="True" Padding="10,4"
+                          VerticalAlignment="Center" Click="OnToggleComposerPane"
+                          AutomationProperties.Name="收起发送区" ToolTipService.ToolTip="收起发送区">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <FontIcon x:Name="ComposerPaneChevron" Glyph="&#xE70D;" FontSize="12" />
+                <TextBlock x:Name="ComposerPaneLabel" Text="收起发送区" FontSize="12" />
+              </StackPanel>
+            </ToggleButton>
           </Grid>
         </Grid>
 

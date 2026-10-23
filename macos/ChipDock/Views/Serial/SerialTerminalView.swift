@@ -25,40 +25,26 @@ struct SerialTerminalView: View {
                     if frames.isEmpty { emptyState(filtered: !serial.frames.isEmpty) }
                 }
             Divider()
-            HStack(spacing: 12) {
-                Picker("接收编码", selection: $serial.preferences.displayFormat) {
-                    ForEach(SerialDataFormat.allCases) { Text($0.title).tag($0) }
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 12) {
+                    displayOptions(count: frames.count).fixedSize()
+                    Spacer(minLength: 12)
+                    terminalActions.fixedSize()
                 }
-                .frame(width: 160)
-                Text("\(frames.count)/\(serial.frames.count) 条").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                Spacer(minLength: 12)
-                Toggle(isOn: $serial.preferences.autoScroll) {
-                    Label("自动滚动", systemImage: "arrow.down.to.line")
+                VStack(alignment: .leading, spacing: 8) {
+                    displayOptions(count: frames.count)
+                    terminalActions.frame(maxWidth: .infinity, alignment: .trailing)
                 }
-                .toggleStyle(.button)
-                .help(serial.preferences.autoScroll ? "关闭自动滚动" : "滚动到最新数据")
-                Button(action: exportHistory) {
-                    Label("导出", systemImage: "square.and.arrow.up")
-                }
-                .disabled(serial.frames.isEmpty)
-                .help("将当前保留的全部收发记录导出为 JSON（不受筛选影响）")
-                Button(action: serial.clear) {
-                    Label("清屏", systemImage: "trash")
-                }
-                .disabled(serial.frames.isEmpty)
-                .help("清空终端（⌘L）")
             }
             .controlSize(.small)
             .padding(.horizontal, 18)
-            .frame(height: 44)
+            .padding(.vertical, 8)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .toolbar {
             ToolbarItemGroup(placement: .navigation) {
                 Toggle(isOn: $connectionExpanded) { Label("连接区", systemImage: "sidebar.left") }
                     .toggleStyle(.button).help(connectionExpanded ? "收起连接区" : "展开连接区")
-                Toggle(isOn: $composerExpanded) { Label("发送区", systemImage: "rectangle.bottomthird.inset.filled") }
-                    .toggleStyle(.button).help(composerExpanded ? "收起发送区" : "展开发送区")
             }
             ToolbarItemGroup(placement: .primaryAction) {
                 Picker("数据方向", selection: $serial.direction) {
@@ -72,6 +58,44 @@ struct SerialTerminalView: View {
         }
         .focusedSceneValue(\.serialSearchRequested, $searchRequested)
         .exportPresentation($pendingExport)
+    }
+
+    private func displayOptions(count: Int) -> some View {
+        HStack(spacing: 12) {
+            Picker("接收编码", selection: $serial.preferences.displayFormat) {
+                ForEach(SerialDataFormat.allCases) { Text($0.title).tag($0) }
+            }
+            .frame(width: 160)
+            Text("\(count)/\(serial.frames.count) 条")
+                .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+        }
+    }
+
+    private var terminalActions: some View {
+        HStack(spacing: 12) {
+            Toggle(isOn: $serial.preferences.autoScroll) {
+                Label("自动滚动", systemImage: "arrow.down.to.line")
+            }
+            .toggleStyle(.button)
+            .help(serial.preferences.autoScroll ? "关闭自动滚动" : "滚动到最新数据")
+            Button(action: exportHistory) {
+                Label("导出", systemImage: "square.and.arrow.up")
+            }
+            .disabled(serial.frames.isEmpty)
+            .help("将当前保留的全部收发记录导出为 JSON（不受筛选影响）")
+            Button(action: serial.clear) {
+                Label("清屏", systemImage: "trash")
+            }
+            .disabled(serial.frames.isEmpty)
+            .help("清空终端（⌘L）")
+            Button { composerExpanded.toggle() } label: {
+                Label(composerExpanded ? "收起发送区" : "展开发送区",
+                      systemImage: composerExpanded ? "chevron.down" : "chevron.up")
+            }
+            .buttonStyle(.bordered)
+            .help(composerExpanded ? "收起发送区" : "展开发送区")
+            .accessibilityValue(composerExpanded ? "已展开" : "已收起")
+        }
     }
 
     private func exportHistory() {

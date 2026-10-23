@@ -368,7 +368,10 @@ public sealed partial class SerialView : UserControl
         ComposerSplitterRow.Height = new GridLength(expanded ? 5 : 0);
         if (expanded) SetComposerHeight(composerHeight);
         else ComposerRow.Height = new GridLength(0);
-        ToolTipService.SetToolTip(ComposerPaneToggle, expanded ? "收起发送区" : "展开发送区");
+        ComposerPaneChevron.Glyph = expanded ? Glyphs.ChevronDown : "\uE70E";
+        ComposerPaneLabel.Text = expanded ? "收起发送区" : "展开发送区";
+        Ui.Name(ComposerPaneToggle, ComposerPaneLabel.Text);
+        ToolTipService.SetToolTip(ComposerPaneToggle, ComposerPaneLabel.Text);
         UpdateResponsiveLayout();
     }
     private void OnComposerResize(object sender, DragDeltaEventArgs args)
@@ -418,7 +421,7 @@ public sealed partial class SerialView : UserControl
                 Grid.SetColumnSpan(DirectionPicker, compact ? 3 : 1);
                 Grid.SetRow(TerminalSearch, compact ? 1 : 0);
                 Grid.SetColumn(TerminalSearch, compact ? 3 : 5);
-                Grid.SetColumnSpan(TerminalSearch, compact ? 4 : 1);
+                Grid.SetColumnSpan(TerminalSearch, compact ? 3 : 1);
                 DirectionPicker.Width = compact ? double.NaN : 112;
                 DirectionPicker.HorizontalAlignment = HorizontalAlignment.Stretch;
 
@@ -427,6 +430,7 @@ public sealed partial class SerialView : UserControl
                 Grid.SetColumnSpan(AutoScrollToggle, compact ? 2 : 1);
                 Grid.SetRow(ExportButton, compact ? 1 : 0);
                 Grid.SetRow(ClearButton, compact ? 1 : 0);
+                Grid.SetRow(ComposerPaneToggle, compact ? 1 : 0);
 
                 Grid.SetColumnSpan(SendHeading, compact ? 6 : 1);
                 Ui.SetVisible(SendEncodingLabel, !compact);
