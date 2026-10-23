@@ -631,6 +631,7 @@ internal sealed class ActivityView : UserControl
 {
     private readonly WorkbenchStore store;
     private readonly ProgressRing ring = new() { Width = 14, Height = 14, IsActive = true };
+    private readonly FontIcon completed = Ui.Glyph(Glyphs.Verify, 14, "SuccessGlyphStyle");
     private readonly TextBlock message = Ui.Secondary(size: 13);
     private readonly ProgressBar bar = new() { Width = 90, Maximum = 1, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock percent = Ui.Mono(size: 13, style: "SecondaryTextStyle");
@@ -653,15 +654,18 @@ internal sealed class ActivityView : UserControl
         Grid.SetColumn(message, 1);
         Grid.SetColumn(bar, 2);
         Grid.SetColumn(percent, 3);
-        foreach (var child in new FrameworkElement[] { ring, message, bar, percent }) row.Children.Add(child);
+        foreach (var child in new FrameworkElement[] { ring, completed, message, bar, percent }) row.Children.Add(child);
         foreach (var child in row.Children) ((FrameworkElement)child).VerticalAlignment = VerticalAlignment.Center;
         Content = row;
+        Ui.Name(bar, "操作进度");
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetLiveSetting(message, Microsoft.UI.Xaml.Automation.Peers.AutomationLiveSetting.Polite);
     }
 
     internal void Update()
     {
         var progress = store.IsBusy && store.LatestEvent is { } latest && !latest.stage.IsTerminal() ? latest : null;
+        var success = !store.IsBusy && store.LatestEvent is { } terminal
+            && terminal.stage.IsCompleted && store.Status == terminal.message;
         var fraction = progress?.progress;
         var stage = progress?.stage.ToString();
         Ui.SetLiveText(message, ActivityText.Message(progress?.message ?? store.Status, fraction is not null),
@@ -669,8 +673,12 @@ internal sealed class ActivityView : UserControl
         previousOperation = store.Operation;
         previousStage = stage;
         ToolTipService.SetToolTip(message, message.Text);
-        Ui.SetVisible(ring, store.IsBusy && fraction is null);
-        Ui.SetVisible(bar, fraction is not null);
+        Ui.SetVisible(ring, store.IsBusy && progress is null);
+        Ui.SetVisible(completed, success);
+        message.Style = success ? null : Ui.Style("SecondaryTextStyle");
+        message.FontWeight = success ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal;
+        bar.IsIndeterminate = progress is not null && fraction is null;
+        Ui.SetVisible(bar, progress is not null);
         Ui.SetVisible(percent, fraction is not null);
         if (fraction is { } value)
         {

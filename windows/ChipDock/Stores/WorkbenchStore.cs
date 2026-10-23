@@ -267,10 +267,10 @@ internal sealed partial class WorkbenchStore
         if (IsBusy) return null;
         Operation = operation;
         Status = $"{operation.Title()}…";
+        LatestEvent = null;
         if (operation is WorkbenchOperation.Flash or WorkbenchOperation.Erase)
         {
             _ = RustCore.TakeEvents();
-            LatestEvent = null;
         }
         Notify();
         using var polling = new CancellationTokenSource();

@@ -229,9 +229,9 @@ final class WorkbenchStore {
         self.operation = operation
         status = "\(operation.rawValue)…"
         failure = nil
+        latestEvent = nil
         if operation == .flash || operation == .erase {
             _ = rust.takeEvents()
-            latestEvent = nil
         }
         let poller = Task { @MainActor [weak self] in
             while !Task.isCancelled {

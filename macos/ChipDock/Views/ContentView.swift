@@ -1,3 +1,4 @@
+import Accessibility
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -115,12 +116,21 @@ private struct ActivityView: View {
         return event
     }
 
+    private var completion: ProgressEvent? {
+        guard !store.isBusy, let event = store.latestEvent,
+              event.stage == .completed, store.status == event.message else { return nil }
+        return event
+    }
+
     var body: some View {
         HStack(spacing: 8) {
             if let event {
                 Text(event.progress == nil ? event.message : messageWithoutPercentage(event.message)).lineLimit(1)
+                ProgressView(value: event.progress.map(Double.init))
+                    .progressViewStyle(.linear)
+                    .frame(width: 90)
+                    .accessibilityLabel(event.message)
                 if let progress = event.progress {
-                    ProgressView(value: Double(progress)).progressViewStyle(.linear).frame(width: 90)
                     Text("\(Int((progress * 100).rounded()))%")
                         .monospacedDigit()
                         .frame(minWidth: 34, alignment: .trailing)
@@ -128,7 +138,15 @@ private struct ActivityView: View {
                 }
             } else {
                 if store.isBusy { ProgressView().controlSize(.small) }
-                Text(store.status).lineLimit(1).truncationMode(.middle)
+                if completion != nil {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                        .accessibilityHidden(true)
+                }
+                Text(store.status)
+                    .fontWeight(completion == nil ? .regular : .semibold)
+                    .foregroundStyle(completion == nil ? .secondary : .primary)
+                    .lineLimit(1).truncationMode(.middle)
             }
         }
         .font(.callout)
@@ -136,6 +154,9 @@ private struct ActivityView: View {
         .padding(.horizontal, 12)
         .frame(minWidth: 280, maxWidth: 440)
         .accessibilityElement(children: .combine)
+        .onChange(of: completion?.id) { _, _ in
+            if let completion { AccessibilityNotification.Announcement(completion.message).post() }
+        }
     }
 
     private func messageWithoutPercentage(_ message: String) -> String {
