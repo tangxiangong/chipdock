@@ -1,5 +1,5 @@
 # Builds the Windows installers and the Velopack update package for one architecture.
-# The output is unsigned: publish-release.ps1 seals the feed after verifying it.
+# The output is unsigned: ci/release-windows.ps1 seals the feed after verifying it.
 param(
     [Parameter(Mandatory)][ValidateSet('x64', 'ARM64')][string]$Architecture,
     [Parameter(Mandatory)][string]$Version,

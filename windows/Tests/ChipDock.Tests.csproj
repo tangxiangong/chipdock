@@ -13,18 +13,18 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Velopack" Version="1.2.161" />
-    <Compile Include="../ChipDock/Services/UpdateFeed.cs" Link="Linked/UpdateFeed.cs" />
-    <Compile Include="../ChipDock/Services/UpdateSource.cs" Link="Linked/UpdateSource.cs" />
-    <Compile Include="../ChipDock/Services/NativeWorker.cs" Link="Linked/NativeWorker.cs" />
-    <Compile Include="../ChipDock/Services/SerialBackend.cs" Link="Linked/SerialBackend.cs" />
-    <Compile Include="../ChipDock/Services/SerialAutoSender.cs" Link="Linked/SerialAutoSender.cs" />
-    <Compile Include="../ChipDock/Services/RustCore.cs" Link="Linked/RustCore.cs" />
-    <Compile Include="../ChipDock/Services/RecentFirmwareHistory.cs" Link="Linked/RecentFirmwareHistory.cs" />
-    <Compile Include="../ChipDock/Support/ActivityText.cs" Link="Linked/ActivityText.cs" />
-    <Compile Include="../ChipDock/Support/WindowLayout.cs" Link="Linked/WindowLayout.cs" />
-    <Compile Include="../ChipDock/Services/ProbeDriver.cs" Link="Linked/ProbeDriver.cs" />
-    <Compile Include="../ChipDock/Services/ProbeUsb.cs" Link="Linked/ProbeUsb.cs" />
-    <Compile Include="../ChipDock/Services/ProbeDriverRules.cs" Link="Linked/ProbeDriverRules.cs" />
-    <Compile Include="../ChipDock/Generated/*.cs" Link="Generated/%(Filename)%(Extension)" />
+    <Compile Include="../ChipDock/UpdateFeed.cs" Link="Linked/UpdateFeed.cs" />
+    <Compile Include="../ChipDock/UpdateSource.cs" Link="Linked/UpdateSource.cs" />
+    <Compile Include="../ChipDock/NativeWorker.cs" Link="Linked/NativeWorker.cs" />
+    <Compile Include="../ChipDock/SerialBackend.cs" Link="Linked/SerialBackend.cs" />
+    <Compile Include="../ChipDock/SerialAutoSender.cs" Link="Linked/SerialAutoSender.cs" />
+    <Compile Include="../ChipDock/RustCore.cs" Link="Linked/RustCore.cs" />
+    <Compile Include="../ChipDock/RecentFirmwareHistory.cs" Link="Linked/RecentFirmwareHistory.cs" />
+    <Compile Include="../ChipDock/ActivityText.cs" Link="Linked/ActivityText.cs" />
+    <Compile Include="../ChipDock/WindowLayout.cs" Link="Linked/WindowLayout.cs" />
+    <Compile Include="../ChipDock/ProbeDriver.cs" Link="Linked/ProbeDriver.cs" />
+    <Compile Include="../ChipDock/ProbeUsb.cs" Link="Linked/ProbeUsb.cs" />
+    <Compile Include="../ChipDock/ProbeDriverRules.cs" Link="Linked/ProbeDriverRules.cs" />
+    <Compile Include="../../bindings/generated/csharp/*.cs" Link="Generated/%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>

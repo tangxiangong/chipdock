@@ -6,7 +6,7 @@ C# / WinUI 3（Windows App SDK 2.5.1）原生客户端，与 macOS 版共享 Rus
 
 ## 界面
 
-“固件烧录”和“串口连接”是同级工具，通过顶部导航或 Ctrl+1 / Ctrl+2 切换。两者各自拥有状态和专用工作线程，切换不会停止烧录、断开串口或清除记录。串口支持 HEX / ASCII / GBK / UTF-8、行尾、搜索、方向筛选和流量统计；设备名称由系统信息和共享 `usb-device.json` 补全。串口使用现有 COM 驱动，不走烧录探针的 WinUSB 修复流程。
+“固件烧录”和“串口连接”是同级工具，通过顶部导航或 Ctrl+1 / Ctrl+2 切换。两者各自拥有状态和专用工作线程，切换不会停止烧录、断开串口或清除记录。串口支持 HEX / ASCII / GBK / UTF-8、行尾、搜索、方向筛选和流量统计；设备名称由系统信息和共享 `data/usb-device.json` 补全。串口使用现有 COM 驱动，不走烧录探针的 WinUSB 修复流程。
 
 与 macOS 版相同的单一烧录流程，按 Windows 习惯呈现：
 
@@ -25,7 +25,7 @@ C# / WinUI 3（Windows App SDK 2.5.1）原生客户端，与 macOS 版共享 Rus
 
 安装 Visual Studio 2026 的 Windows 应用开发、C++ 桌面开发工具和对应 Windows SDK，.NET 10 LTS、Rust MSVC 工具链。打开 `windows/ChipDock.sln`，选择 `Debug` / `Release` 和 `x64` / `ARM64` 后直接生成并运行。
 
-MSBuild（`ChipDock/Build/Rust.targets`）会依次构建 `chipdock-csharp` 动态库、运行 Interoptopus 生成器，再编译 WinUI；不需要预先执行脚本。有 rustup 时自动补齐所选目标和生成器宿主目标；找不到 Cargo 时依次检查 PATH 和 `%USERPROFILE%/.cargo/bin/cargo.exe`。设计时 IntelliSense 使用已签入的绑定，不启动 Cargo。
+MSBuild（`ChipDock/Build/Rust.targets`）会依次构建 `chipdock-csharp` 动态库、运行 Interoptopus 生成器，再编译 WinUI；不需要预先执行脚本。有 rustup 时自动补齐所选目标和生成器宿主目标；找不到 Cargo 时依次检查 PATH 和 `%USERPROFILE%/.cargo/bin/cargo.exe`。设计时 IntelliSense 使用上次构建生成的绑定，不启动 Cargo；首次构建会自动生成绑定。
 
 命令行使用同一构建链：
 
@@ -40,10 +40,14 @@ Rust 动态库位于 `target/<目标三元组>/<debug或release>/chipdock_csharp
 
 与 BibCiTeX 相同，Windows 使用 Interoptopus 0.16 生成 C# 绑定，macOS 继续使用 UniFFI：
 
-- `crates/chipdock-core`：`csharp` 特性为共享模型添加 Interoptopus 类型元数据，业务逻辑不重复。
+- `crates/chipdock-core`：固件、探针、串口传输与存储原语；`csharp` 特性为共享模型添加 Interoptopus 类型元数据。
+- `crates/chipdock-service`：两端共用的应用 API、硬件互斥、进度与串口工作线程。
+- `crates/chipdock-ffi`：Swift UniFFI 导出与共享类型注册。
 - `crates/chipdock-csharp`：薄导出层。请求和响应均为类型化 Wire 结构，错误以 `ErrorResponse` 返回，保留候选目标与恢复建议；Rust panic 在边界转换为结果。时间戳在 C# 侧为 Unix 毫秒。
-- `crates/chipdock-csharp-bindgen`：生成 `ChipDock/Generated/Interop.cs`（命名空间 `ChipDock.Core`）。修改 Rust API 后 MSBuild 会重新生成，也可以手动运行 `cargo run -p chipdock-csharp-bindgen`。
-- `ChipDock/Services/RustCore.cs`：在线程池调用阻塞的硬件与文件操作，释放 Wire 缓冲区并把错误转换为 `CoreException`。烧录和擦除期间 UI 线程每 100 ms 取一次进度事件。
+- `bindings/csharp-generator`：生成 仓库根目录下的 `bindings/generated/csharp/Interop.cs`（命名空间 `ChipDock.Core`）。修改 Rust API 后 MSBuild 会重新生成，也可以手动运行 `cargo run -p chipdock-csharp-bindgen`。
+- `ChipDock/RustCore.cs`：在线程池调用阻塞的硬件与文件操作，释放 Wire 缓冲区并把错误转换为 `CoreException`。烧录和擦除期间 UI 线程每 100 ms 取一次进度事件。
+
+生成文件不纳入 Git，MSBuild 在生成完成后再将它们加入编译；干净检出可直接生成解决方案。完整布局见 [bindings/README.md](../bindings/README.md)。
 
 配置与最近使用的固件由 Rust Core 存储在 `%APPDATA%\ChipDock`；外观、烧录默认值与更新偏好存储在 `%LOCALAPPDATA%\ChipDock\settings.json`。
 
@@ -91,7 +95,7 @@ Windows 构建没有代码签名证书，因此更新信息单独签名：
 
 ## 发布
 
-1. 同步 `Cargo.toml`、`macos/project.yml` 与 `windows/ChipDock/ChipDock.csproj` 中的版本；CI 会检查 Rust Core 与 Windows 应用版本一致。
+1. 同步 `Cargo.toml`、`macos/ChipDock.xcodeproj/project.pbxproj` 的 `MARKETING_VERSION` 与 `windows/ChipDock/ChipDock.csproj` 中的版本；CI 会检查 Rust Core 与 Windows 应用版本一致。
 2. 创建与版本一致的标签（例如 `v0.1.0`）并发布 GitHub Release；Release 正文作为更新说明。
 
 `Windows` 工作流在 x64 与 ARM64 检查全部通过后，分别在对应架构的 Windows Runner 上运行 `windows/scripts/publish.ps1`：校验标签、Rust Core 与应用版本一致且已配置公钥，`dotnet publish` 依赖框架的输出，再用 `vpk pack` 生成：
@@ -99,7 +103,7 @@ Windows 构建没有代码签名证书，因此更新信息单独签名：
 - `ChipDock-<版本号>-windows-<arch>.exe` 与 `ChipDock-<版本号>-windows-<arch>.msi`：安装程序，缺少时会安装 .NET 10 运行时和 VC++ 运行库；Windows App Runtime 仍由应用首次启动时准备。
 - `ChipDock-<版本号>-win-<arch>-full.nupkg`：应用内更新下载的完整包，用户安装使用 exe 或 msi。
 
-随后 `publish` 作业（`release` 环境）运行 `windows/scripts/publish-release.ps1`：用私钥签名两个架构的更新信息并立即用工程公钥验证，确认版本、包名、大小和 SHA-256，并与已发布的更新信息比较，拒绝版本回退或替换同版本中内容不同的安装包。版本 Release 同时保留签名更新信息，重试时复用并验证已有签名，避免 ECDSA 随机签名改变字节。版本 Release 中已存在的同名文件必须字节一致；全部安装包上传后才更新 GitHub `chipdock-updates`，再运行 `cargo run --locked -p xtask -- publish-cos --tag v<版本号> --platform windows` 同步 COS。该作业、macOS 发布和 COS 补传共用 `chipdock-updates` 并发组，让更新源串行推进。
+随后 `publish` 作业（`release` 环境）运行 `ci/release-windows.ps1`：用私钥签名两个架构的更新信息并立即用工程公钥验证，确认版本、包名、大小和 SHA-256，并与已发布的更新信息比较，拒绝版本回退或替换同版本中内容不同的安装包。版本 Release 同时保留签名更新信息，重试时复用并验证已有签名，避免 ECDSA 随机签名改变字节。版本 Release 中已存在的同名文件必须字节一致；全部安装包上传后才更新 GitHub `chipdock-updates`，再运行 `cargo run --locked -p xtask -- publish-cos --tag v<版本号> --platform windows` 同步 COS。该作业、macOS 发布和 COS 补传共用 `chipdock-updates` 并发组，让更新源串行推进。
 
 本机打包（输出未签名，不会发布）：
 

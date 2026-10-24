@@ -17,7 +17,7 @@ struct Product {
 // the same IDs without a separate resource copy or runtime filesystem access.
 const SOURCE: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../usb-device.json"
+    "/../../data/usb-device.json"
 ));
 static CATALOG: LazyLock<Result<HashMap<String, Vendor>, serde_json::Error>> =
     LazyLock::new(|| serde_json::from_str(SOURCE));

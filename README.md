@@ -7,7 +7,7 @@ ChipDock 是原生嵌入式开发工具集：macOS 版使用 **SwiftUI + UniFFI*
 ## 功能
 
 - **固件烧录**：支持 ELF、AXF、Intel HEX 和 BIN，分析写入地址与区段，配置擦除、校验和完成后复位。
-- **串口连接**：配置与连接串口，支持 HEX / ASCII / GBK / UTF-8 收发、行尾设置、搜索、方向筛选、自动滚动及 RX / TX 统计；可将当前保留的全部收发记录导出为 JSON，包含时间、方向、原始字节、HEX 和各编码文本，不受筛选影响；内置 `usb-device.json` 识别常见 USB 串口适配器。
+- **串口连接**：配置与连接串口，支持 HEX / ASCII / GBK / UTF-8 收发、行尾设置、搜索、方向筛选、自动滚动及 RX / TX 统计；可将当前保留的全部收发记录导出为 JSON，包含时间、方向、原始字节、HEX 和各编码文本，不受筛选影响；内置 `data/usb-device.json` 识别常见 USB 串口适配器。
 - **发送控制**：macOS 与 Windows 均支持自定义波特率、可配置毫秒间隔的自动发送，以及校验和、奇／偶校验、异或校验和 CRC16/MODBUS；默认无校验，选中后每次发送自动追加。自动发送在断开连接或发送失败时停止。
 - **并行使用**：烧录与串口各用独立工作线程，可边烧录边查看终端，两者互不阻塞。两者位于同级导航；使用 macOS ⌘1 / ⌘2 或 Windows Ctrl+1 / Ctrl+2 切换，运行中的任务和串口收发会继续。
 - **擦除芯片**：在主界面整片擦除 Flash，不烧录，执行前需确认。
@@ -38,10 +38,10 @@ macOS 上常见 USB 调试探针通常无需额外驱动。使用 Apple 芯片�
 
 Xcode 会解析 Sparkle 包依赖、编译 Rust 静态库、生成 UniFFI 绑定并链接应用。首次构建需要下载依赖。
 
-也可以从终端运行：
+也可以从终端构建：
 
 ```sh
-./script/build_and_run.sh
+./macos/build.sh
 ```
 
 ### Windows
@@ -51,61 +51,62 @@ Xcode 会解析 Sparkle 包依赖、编译 Rust 静态库、生成 UniFFI 绑定
 ## 架构
 
 ```text
-macos/
-  ChipDock/                SwiftUI 应用
-    App/                    应用入口与菜单
-    Views/                  原生界面
-    Stores/                 应用状态与操作流程
-    Services/               Rust 调用与 Sparkle 更新服务
-    Models/ Support/        数据模型与辅助功能
-    Generated/              UniFFI 生成的 Swift / C 绑定
-    Resources/              应用元数据、图标与许可证
-  ChipDockTests/           应用集成与更新回归测试
-  ChipDock.xcodeproj/      Xcode 工程与 Swift 包锁文件
-  project.yml               XcodeGen 工程定义
-windows/
-  ChipDock/                WinUI 3 应用
-    Views/ Stores/          原生界面与应用状态
-    Services/               Rust 调用、运行时引导、设置与 Velopack 更新
-    Generated/              Interoptopus 生成的 C# 绑定
-    Build/                  MSBuild 中的 Rust 构建、绑定生成与发布资源
-  Tests/                    更新验证与 Rust/C# 桥接测试
-  UpdateTool/               更新密钥生成、签名与发布校验
-  scripts/                  安装包构建与发布
-  ChipDock.sln             Visual Studio 解决方案
+assets/app-icons/             应用图标源文件
+data/                        USB 设备目录
+bindings/
+  generator/                 UniFFI 绑定生成器
+  csharp-generator/          Interoptopus 绑定生成器
+  generate-swift.sh           Swift/C 绑定生成入口
+  generated/                 本地产物，Git 忽略
 crates/
-  chipdock-core/           固件分析、目标连接、烧录、串口、内存与存储
-  chipdock-bindgen/        UniFFI 绑定生成工具
-  chipdock-csharp/         Windows 的 Interoptopus 导出层
-  chipdock-csharp-bindgen/ C# 绑定生成工具
-script/                     构建、运行、测试与发布工具
+  chipdock-core/             固件、探针、串口传输与存储原语
+  chipdock-service/          共享应用 API、硬件互斥、进度与串口工作线程
+  chipdock-ffi/              Swift UniFFI 导出与共享类型注册
+  chipdock-csharp/           Windows Interoptopus 导出层
+  chipdock-release-notes/    分平台发布公告
+macos/
+  ChipDock/Sources/ChipDock/ SwiftUI/AppKit 源码与资源
+  ChipDock/Tests/            集成与逻辑检查
+  ChipDock.xcodeproj/        Xcode 工程、依赖与 RustBindings 构建目标
+  Info.plist                 应用元数据
+  build.sh                   CLI 构建入口
+  build-bindings.sh          Xcode 调用的 Rust/UniFFI 构建步骤
+windows/
+  ChipDock/                  WinUI 源码、资源与 Build/MSBuild 目标
+  Tests/                     Rust/C# 桥接与更新检查
+  UpdateTool/                更新签名与发布校验
+  scripts/                   本机构建与打包入口
+  ChipDock.sln               Visual Studio 解决方案
+ci/                          分平台发布脚本与说明
+xtask/                       共享发布验证与 COS 发布逻辑
+Justfile                     平台命令别名
 ```
 
 Rust Core 提供类型化 API、结构化错误和进度事件。探针操作在专用线程上串行执行，串口调用使用另一条专用线程，异步接收由独立的 Tokio 运行时维持；串口不会等待烧录完成。串口传输、编码与 USB 设备库来自 `serial-port` 项目，通过 ChipDock 现有 UniFFI / Interoptopus 绑定提供给两端。
 
-修改 Rust API 后，Xcode 构建会重新生成绑定。依赖版本由 `Cargo.lock` 和 `Package.resolved` 固定。调整工程结构时，在 `macos/` 下运行 `xcodegen generate` 并同步生成的工程。
+项目整体按 BibCiTeX 的原生分层组织。生成绑定不提交 Git：Xcode 的 `RustBindings` 依赖在 DerivedData 中生成 Swift/C 绑定，MSBuild 在 `bindings/generated/csharp` 中生成 C# 绑定。干净检出后可直接构建，不需要预先执行生成脚本；详见 [bindings/README.md](bindings/README.md)。依赖版本由 `Cargo.lock` 和 `Package.resolved` 固定。
 
 ## 测试
 
 ```sh
 cargo fmt --all -- --check
-cargo clippy --locked -p chipdock-core -p chipdock-bindgen --all-targets -- -D warnings
-./script/test_backend.sh
-./script/test_updates.sh
-bash script/test_serial.sh
+cargo clippy --locked -p chipdock-core -p chipdock-service -p chipdock-ffi -p chipdock-bindgen --all-targets -- -D warnings
+./macos/ChipDock/Tests/run-interop-tests.sh
+./macos/ChipDock/Tests/run-update-tests.sh
+bash macos/ChipDock/Tests/run-serial-tests.sh
 cargo test --locked -p chipdock-release-notes
 xcodebuild -project macos/ChipDock.xcodeproj -scheme ChipDock \
   -configuration Debug -destination 'platform=macOS' \
-  -derivedDataPath .build/Xcode test
+  -derivedDataPath .build/Xcode build
 ```
 
-- `test_backend.sh` 运行 Rust Core 单元测试和独立的 Swift/UniFFI 集成测试，不启动应用或连接硬件。
-- `test_updates.sh` 验证更新包签名、文件长度、版本、下载地址，以及发布回退保护。
-- `test_serial.sh` 运行不启动界面的 Swift 逻辑检查，覆盖自动发送的停止与重启、设置兼容以及自定义波特率输入。
+- `run-interop-tests.sh` 运行 Rust Core 单元测试和独立的 Swift/UniFFI 集成测试，不启动应用或连接硬件。
+- `run-update-tests.sh` 验证更新包签名、文件长度、版本、下载地址，以及发布回退保护。
+- `run-serial-tests.sh` 运行不启动界面的 Swift 逻辑检查，覆盖自动发送的停止与重启、设置兼容以及自定义波特率输入。
 - `chipdock-release-notes` 的逻辑测试覆盖通用公告、平台筛选、Markdown 保留和错误标记拦截。
-- Xcode 测试覆盖应用集成、同级工具布局、烧录工作线程阻塞时的串口轮询、Sparkle 配置和硬件操作期间的重启保护。
+- Xcode 构建验证原生应用与生成绑定的编译和链接；GUI 验收由人工进行。
 
-测试按平台划分，均不访问硬件：`Rust` 工作流在 Linux 上检查格式并测试与平台无关的 Rust Core；`macOS` 工作流在 Apple Silicon 和 Intel 上测试 Rust Core、UniFFI 桥接与应用，并保存 Xcode 测试报告；`Windows` 工作流在 x64 与 ARM64 上测试 Rust Core、Interoptopus 桥接与应用。Windows 的测试与 CI 见 [windows/README.md](windows/README.md#测试)。
+测试按平台划分，均不访问硬件：`Rust` 工作流在 Linux 上检查格式并测试与平台无关的 Rust Core；`macOS` 工作流在 Apple Silicon 和 Intel 上构建应用并测试 Rust 服务、UniFFI 桥接与非 UI 逻辑；`Windows` 工作流在 x64 与 ARM64 上测试 Rust Core、Interoptopus 桥接与应用。Windows 的测试与 CI 见 [windows/README.md](windows/README.md#测试)。
 
 ## 自动更新
 
@@ -123,7 +124,7 @@ Sparkle 验证 Ed25519 签名后安装更新并重新启动应用。探针操作
 
 ## 发布
 
-1. 使用尚未发布的新版本号，同步 `Cargo.toml`、`macos/project.yml` 和 `windows/ChipDock/ChipDock.csproj` 中的版本，在 `macos/` 下运行 `xcodegen generate`。不要覆盖身份切换前已发布的安装包。
+1. 使用尚未发布的新版本号，同步 `Cargo.toml`、`macos/ChipDock.xcodeproj/project.pbxproj` 的 `MARKETING_VERSION` 和 `windows/ChipDock/ChipDock.csproj` 中的版本。不要覆盖身份切换前已发布的安装包。
 2. GitHub 仓库的 `release` 环境需要 `SPARKLE_PRIVATE_ED_KEY`、`WINDOWS_UPDATE_PRIVATE_KEY`、`COS_SECRET_ID` 和 `COS_SECRET_KEY` secret。前两项对应工程内的更新公钥；后两项可复用 BibCiTeX 的 COS 发布子账号。
 3. 创建与版本一致的标签，例如 `v0.1.0`，并发布 GitHub Release。
 
@@ -136,7 +137,7 @@ CI 通过全部检查后，构建 Apple Silicon + Intel universal 应用，生�
 本机已构建 Release 应用时，可直接打包并验证：
 
 ```sh
-./script/package_release.sh
+./ci/release-macos.sh
 ```
 
 打包产物位于 `.build/ReleaseAssets/`。`--publish` 模式由 CI 使用。
@@ -166,7 +167,7 @@ cargo test --locked -p xtask
 cargo run --locked -p xtask -- verify-release --tag "v<版本号>"
 ```
 
-macOS 的回退策略可在 Xcode 已解析 Sparkle 依赖后通过 `bash script/test_update_mirrors.sh` 验证；可移植 C# 更新逻辑使用 `dotnet run --project windows/Tests/ChipDock.Tests.csproj -- --updates-only`。这些检查不运行应用或访问硬件。
+macOS 的回退策略可在 Xcode 已解析 Sparkle 依赖后通过 `bash macos/ChipDock/Tests/run-update-mirror-tests.sh` 验证；可移植 C# 更新逻辑使用 `dotnet run --project windows/Tests/ChipDock.Tests.csproj -- --updates-only`。这些检查不运行应用或访问硬件。
 
 ### 分平台更新公告
 
@@ -207,4 +208,4 @@ cargo run --locked -p chipdock-release-notes -- windows ReleaseNotes.md .build/n
 
 本项目采用 [MIT](LICENSE-MIT) 或 [Apache-2.0](LICENSE-APACHE) 双许可证。
 
-第三方依赖说明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+第三方依赖说明见 [NOTICE](NOTICE)。

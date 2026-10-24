@@ -35,12 +35,12 @@ pub struct UpdateKeys {
 
 impl UpdateKeys {
     pub fn from_project() -> Result<Self> {
-        let sparkle = include_str!("../../macos/project.yml")
+        let sparkle = include_str!("../../macos/ChipDock.xcodeproj/project.pbxproj")
             .lines()
             .find_map(|line| {
                 line.trim()
-                    .strip_prefix("SPARKLE_PUBLIC_ED_KEY:")
-                    .map(|key| key.trim().trim_matches(['\'', '"']).to_owned())
+                    .strip_prefix("SPARKLE_PUBLIC_ED_KEY = ")
+                    .map(|key| key.trim_end_matches(';').trim_matches('"').to_owned())
             })
             .ok_or("Missing Sparkle public key")?;
         let windows = parse_xml(include_str!("../../windows/ChipDock/ChipDock.csproj"))?

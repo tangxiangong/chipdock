@@ -1,7 +1,8 @@
 //! Interoptopus owns the ABI, wire encoding and managed memory wrappers.
 //! Prefix exports so they cannot collide with imported Windows/Winsock symbols.
 use super::BridgeError;
-use chipdock_core::serial::{PollBatch, service, types::*};
+use chipdock_core::serial::{PollBatch, types::*};
+use chipdock_service::serial as service;
 use interoptopus::{
     ffi,
     lang::types::{TypeInfo, WireIO},

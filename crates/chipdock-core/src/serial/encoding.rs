@@ -5,7 +5,7 @@ use serde::Serialize;
 use super::types::SendFormat;
 
 #[cfg_attr(feature = "csharp", interoptopus::ffi)]
-#[derive(Clone, Debug, Serialize, uniffi::Record)]
+#[derive(Clone, Debug, Serialize)]
 pub struct DecodedText {
     pub ascii: String,
     pub gbk: String,

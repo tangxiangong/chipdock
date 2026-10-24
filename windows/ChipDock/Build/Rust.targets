@@ -10,14 +10,14 @@
     <RustProfile Condition="'$(RustProfile)' == ''">debug</RustProfile>
     <RustProfileArgument Condition="'$(Configuration)' == 'Release'">--release</RustProfileArgument>
     <RustLibrary Condition="'$(RustLibrary)' == ''">$(RepositoryRoot)/target/$(RustTarget)/$(RustProfile)/chipdock_csharp.dll</RustLibrary>
-    <GeneratedBindingsDirectory Condition="'$(GeneratedBindingsDirectory)' == ''">$(MSBuildProjectDirectory)/Generated</GeneratedBindingsDirectory>
+    <GeneratedBindingsDirectory Condition="'$(GeneratedBindingsDirectory)' == ''">$(RepositoryRoot)/bindings/generated/csharp</GeneratedBindingsDirectory>
   </PropertyGroup>
   <ItemGroup>
     <Content Include="$(RustLibrary)" Link="chipdock_csharp.dll" CopyToOutputDirectory="PreserveNewest" />
     <Compile Remove="$(GeneratedBindingsDirectory)/**" />
-    <_RustBindingInputs Include="$(RepositoryRoot)/crates/**/*.rs;$(RepositoryRoot)/crates/**/Cargo.toml;$(RepositoryRoot)/Cargo.toml;$(RepositoryRoot)/Cargo.lock;$(RepositoryRoot)/usb-device.json" Exclude="$(RepositoryRoot)/**/target/**" />
+    <_RustBindingInputs Include="$(RepositoryRoot)/crates/**/*.rs;$(RepositoryRoot)/crates/**/Cargo.toml;$(RepositoryRoot)/bindings/csharp-generator/**/*.rs;$(RepositoryRoot)/bindings/csharp-generator/Cargo.toml;$(RepositoryRoot)/Cargo.toml;$(RepositoryRoot)/Cargo.lock;$(RepositoryRoot)/data/usb-device.json" Exclude="$(RepositoryRoot)/**/target/**" />
     <UpToDateCheckInput Include="@(_RustBindingInputs)" />
-    <!-- IntelliSense consumes the checked-in bindings, but never starts Cargo. -->
+    <!-- IntelliSense consumes bindings from the last build, but never starts Cargo. -->
     <Compile Include="$(GeneratedBindingsDirectory)/*.cs" Link="Generated/%(Filename)%(Extension)" Condition="'$(DesignTimeBuild)' == 'true'" />
   </ItemGroup>
 

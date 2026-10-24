@@ -6,7 +6,6 @@ use uuid::Uuid;
 #[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-#[derive(uniffi::Enum)]
 pub enum FirmwareFormat {
     /// ELF 可执行文件，地址信息来自文件内容。
     Elf,
@@ -20,7 +19,6 @@ pub enum FirmwareFormat {
 #[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[derive(uniffi::Record)]
 pub struct FirmwareInput {
     /// 固件文件的本地路径。
     pub path: String,
@@ -34,7 +32,6 @@ pub struct FirmwareInput {
 #[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[derive(uniffi::Record)]
 pub struct FirmwareUsageSegment {
     /// 起始写入地址。
     pub start: u64,
@@ -48,7 +45,6 @@ pub struct FirmwareUsageSegment {
 #[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[derive(uniffi::Record)]
 pub struct FirmwareUsage {
     /// 解析采用的固件格式。
     pub format: FirmwareFormat,
@@ -66,7 +62,7 @@ pub struct FirmwareUsage {
 
 /// 固件文件起始地址处的有界数据预览，不访问目标设备。
 #[cfg_attr(feature = "csharp", interoptopus::ffi)]
-#[derive(Debug, Clone, uniffi::Record)]
+#[derive(Debug, Clone)]
 pub struct FirmwarePreview {
     /// 与预览对应的固件占用信息。
     pub usage: FirmwareUsage,
@@ -80,7 +76,6 @@ pub struct FirmwarePreview {
 #[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[derive(uniffi::Record)]
 pub struct ProbeSummary {
     /// probe-rs 可解析的探针选择器字符串。
     pub identifier: String,
@@ -98,7 +93,6 @@ pub struct ProbeSummary {
 #[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[derive(uniffi::Record)]
 pub struct TargetSelection {
     /// 目标芯片型号；为空时尝试自动识别。
     pub chip: Option<String>,
@@ -114,7 +108,6 @@ pub struct TargetSelection {
 #[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-#[derive(uniffi::Enum)]
 pub enum WireProtocol {
     /// Serial Wire Debug。
     Swd,
@@ -126,7 +119,6 @@ pub enum WireProtocol {
 #[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[derive(uniffi::Record)]
 pub struct FlashOptions {
     /// 写入后逐字节校验。
     pub verify: bool,
@@ -144,7 +136,6 @@ pub struct FlashOptions {
 #[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[derive(uniffi::Record)]
 pub struct FlashRequest {
     /// 待烧录固件。
     pub firmware: FirmwareInput,
@@ -160,7 +151,6 @@ pub struct FlashRequest {
 #[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[derive(uniffi::Record)]
 pub struct EraseRequest {
     /// 选中的探针；为空时要求当前只连接一个探针。
     pub probe: Option<String>,
@@ -172,7 +162,6 @@ pub struct EraseRequest {
 #[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[derive(uniffi::Record)]
 pub struct ConnectRequest {
     /// 选中的探针；为空时要求当前只连接一个探针。
     pub probe: Option<String>,
@@ -184,7 +173,6 @@ pub struct ConnectRequest {
 #[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[derive(uniffi::Record)]
 pub struct TargetInformation {
     /// 从调试签名识别出的设备型号或系列。
     pub device_type: String,
@@ -202,7 +190,6 @@ pub struct TargetInformation {
 #[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[derive(uniffi::Record)]
 pub struct ConnectionInfo {
     /// 实际使用的探针选择器字符串。
     pub probe: String,
@@ -222,7 +209,6 @@ pub struct ConnectionInfo {
 #[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[derive(uniffi::Record)]
 pub struct TargetCandidate {
     /// probe-rs 可接收的目标名称。
     pub name: String,
@@ -234,7 +220,6 @@ pub struct TargetCandidate {
 #[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[derive(uniffi::Record)]
 pub struct MemoryRequest {
     /// 选中的探针；为空时要求当前只连接一个探针。
     pub probe: Option<String>,
@@ -250,7 +235,6 @@ pub struct MemoryRequest {
 #[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[derive(uniffi::Record)]
 pub struct MemoryReadResult {
     /// 实际读取起始地址。
     pub address: u64,
@@ -264,7 +248,6 @@ pub struct MemoryReadResult {
 #[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-#[derive(uniffi::Enum)]
 pub enum MemoryRegionKind {
     /// 非易失存储，通常是 Flash。
     Nvm,
@@ -278,7 +261,6 @@ pub enum MemoryRegionKind {
 #[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[derive(uniffi::Record)]
 pub struct MemoryAccessInfo {
     /// 是否可读。
     pub read: bool,
@@ -294,7 +276,6 @@ pub struct MemoryAccessInfo {
 #[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[derive(uniffi::Record)]
 pub struct MemoryRegionLayout {
     /// 区域名称。
     pub name: Option<String>,
@@ -323,7 +304,6 @@ pub struct JobId(pub Uuid);
 #[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-#[derive(uniffi::Enum)]
 pub enum JobKind {
     /// 固件烧录任务。
     Flash,
@@ -335,7 +315,6 @@ pub enum JobKind {
 #[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-#[derive(uniffi::Enum)]
 pub enum JobStage {
     /// 任务已创建，等待执行。
     Queued,

@@ -14,7 +14,6 @@ use tokio_serial::{
 
 mod checksum;
 pub mod encoding;
-pub mod service;
 pub mod types;
 mod usb_ids;
 
@@ -32,7 +31,6 @@ const MAX_BUFFERED_BYTES: usize = 8 * 1024 * 1024;
 #[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-#[derive(uniffi::Record)]
 pub struct PollBatch {
     pub status: SerialStatus,
     pub frames: Vec<SerialFrameEvent>,
@@ -42,7 +40,6 @@ pub struct PollBatch {
 #[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Clone, Copy, Debug, Serialize)]
 #[serde(rename_all = "lowercase")]
-#[derive(uniffi::Enum)]
 pub enum Direction {
     Receive,
     Send,
@@ -51,7 +48,6 @@ pub enum Direction {
 #[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-#[derive(uniffi::Record)]
 pub struct SerialFrameEvent {
     pub direction: Direction,
     pub bytes: Vec<u8>,

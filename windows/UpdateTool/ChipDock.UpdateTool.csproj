@@ -12,6 +12,6 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Velopack" Version="1.2.161" />
-    <Compile Include="../ChipDock/Services/UpdateFeed.cs" Link="UpdateFeed.cs" />
+    <Compile Include="../ChipDock/UpdateFeed.cs" Link="UpdateFeed.cs" />
   </ItemGroup>
 </Project>

@@ -10,6 +10,7 @@ publish = false
 [dependencies]
 chrono = "0.4"
 chipdock-core = { workspace = true, features = ["csharp"] }
+chipdock-service.workspace = true
 interoptopus.workspace = true
 uuid = "1"
 

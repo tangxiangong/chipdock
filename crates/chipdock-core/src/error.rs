@@ -11,7 +11,6 @@ pub type Result<T> = std::result::Result<T, AppError>;
 #[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Debug, Clone, Copy, Serialize)]
 #[serde(rename_all = "snake_case")]
-#[derive(uniffi::Enum)]
 pub enum ErrorCode {
     /// 未找到可用探针。
     ProbeNotFound,
@@ -39,7 +38,6 @@ pub enum ErrorCode {
 #[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-#[derive(uniffi::Record)]
 pub struct ErrorResponse {
     /// 稳定错误码，供前端分支处理。
     pub code: ErrorCode,

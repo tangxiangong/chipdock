@@ -36,38 +36,38 @@ jobs:
       - uses: swatinem/rust-cache@v2
       - name: Check shell scripts
         run: |
-          for SCRIPT_FILE in script/*.sh; do
+          for SCRIPT_FILE in bindings/*.sh macos/*.sh macos/ChipDock/Tests/*.sh ci/*.sh; do
             bash -n "$SCRIPT_FILE"
           done
       - name: Lint Rust Core and the UniFFI bridge
-        run: cargo clippy --locked -p chipdock-core -p chipdock-bindgen --all-targets -- -D warnings
-      - name: Test Rust Core and Swift/UniFFI backend without hardware
-        run: ./script/test_backend.sh
-      - name: Test update signature and metadata validation
-        run: ./script/test_updates.sh
-      - name: Test native app and update checking
+        run: cargo clippy --locked -p chipdock-core -p chipdock-service -p chipdock-ffi -p chipdock-bindgen --all-targets -- -D warnings
+      - name: Require a checkout without generated bindings
+        run: |
+          test ! -e bindings/generated/swift/ChipDockCore.swift
+          test -z "$(git ls-files bindings/generated)"
+      - name: Build native app from the clean checkout
         run: |
           xcodebuild -project macos/ChipDock.xcodeproj -scheme ChipDock \
             -configuration Debug -destination 'platform=macOS' \
             -derivedDataPath .build/Xcode -clonedSourcePackagesDirPath .build/SourcePackages \
-            -resultBundlePath .build/TestResults/ChipDock.xcresult SWIFT_TREAT_WARNINGS_AS_ERRORS=YES test
-      - name: Test serial send and macOS interaction logic
-        env:
-          CHIPDOCK_BRIDGE_LIBRARY: ${{ github.workspace }}/target/debug/libchipdock_core.a
+            SWIFT_TREAT_WARNINGS_AS_ERRORS=YES build
+      - name: Test Rust service and Swift/UniFFI backend without hardware
+        run: bash macos/ChipDock/Tests/run-interop-tests.sh
+      - name: Test update signature and metadata validation
+        run: bash macos/ChipDock/Tests/run-update-tests.sh
+      - name: Test serial send and update mirror logic
         run: |
-          bash script/test_serial.sh
-          bash script/test_macos_interactions.sh
-          bash script/test_update_mirrors.sh
-      - name: Verify generated bindings are current
-        run: git diff --exit-code -- macos/ChipDock/Generated
-      - name: Upload Xcode test results
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: xcode-test-results-${{ matrix.arch }}
-          path: .build/TestResults/ChipDock.xcresult
-          if-no-files-found: ignore
-          include-hidden-files: true
+          bash macos/ChipDock/Tests/run-serial-tests.sh
+          bash macos/ChipDock/Tests/run-update-mirror-tests.sh
+      - name: Verify generated bindings are untracked build outputs
+        run: |
+          test -s .build/Xcode/Build/Products/ChipDockBindings/Debug/ChipDockCore.swift
+          test -s .build/Xcode/Build/Products/ChipDockBindings/Debug/include/ChipDockCoreFFI.h
+          test -s .build/Xcode/Build/Products/ChipDockBindings/Debug/include/module.modulemap
+          test -s .build/Xcode/Build/Products/ChipDockBindings/Debug/libchipdock_ffi.a
+          test -z "$(git ls-files bindings/generated)"
+          git check-ignore bindings/generated/swift/ChipDockCore.swift
+          git diff --exit-code
 
   release:
     if: github.event_name == 'release' && !github.event.release.prerelease && startsWith(github.event.release.tag_name, 'v')
@@ -117,7 +117,7 @@ jobs:
       - name: Sign, verify and publish Sparkle update
         run: |
           gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json body --jq .body > .build/ReleaseNotes.md
-          ./script/package_release.sh --publish
+          ./ci/release-macos.sh --publish
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}

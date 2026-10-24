@@ -1,0 +1,5 @@
+# Keep Just's platform-independent formatter stable on Windows checkouts.
+Justfile text eol=lf
+
+# Device catalog data is not application source.
+data/** linguist-vendored

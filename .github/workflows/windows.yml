@@ -57,17 +57,23 @@ jobs:
           $App = ([xml](Get-Content -Raw windows/ChipDock/ChipDock.csproj)).SelectSingleNode('//Version').InnerText
           if ($Core -ne $App) { throw "ChipDock.csproj version $App does not match chipdock-core $Core" }
       - name: Lint Rust Core and the Interoptopus bridge
-        run: cargo clippy --locked -p chipdock-core -p chipdock-csharp -p chipdock-csharp-bindgen --all-targets --all-features -- -D warnings
+        run: cargo clippy --locked -p chipdock-core -p chipdock-service -p chipdock-csharp -p chipdock-csharp-bindgen --all-targets --all-features -- -D warnings
       - name: Test Rust Core and the C# bridge exports without hardware
-        run: cargo test --locked -p chipdock-core -p chipdock-csharp --all-targets --all-features
-      - name: Generate C# bindings and compile WinUI
-        run: dotnet build windows/ChipDock.sln -c Debug -p:Platform=${{ matrix.platform }}
-      - name: Verify generated bindings are current
-        # Regenerate explicitly: a restored Cargo cache can leave MSBuild's incremental check satisfied.
+        run: cargo test --locked -p chipdock-core -p chipdock-service -p chipdock-csharp --all-targets --all-features
+      - name: Require a checkout without generated bindings
         shell: bash
         run: |
-          cargo run --locked -p chipdock-csharp-bindgen -- windows/ChipDock/Generated
-          git diff --exit-code -- windows/ChipDock/Generated
+          test ! -e bindings/generated/csharp/Interop.cs
+          test -z "$(git ls-files bindings/generated)"
+      - name: Generate C# bindings and compile WinUI
+        run: dotnet build windows/ChipDock.sln -c Debug -p:Platform=${{ matrix.platform }}
+      - name: Verify generated bindings are untracked build outputs
+        shell: bash
+        run: |
+          test -s bindings/generated/csharp/Interop.cs
+          test -z "$(git ls-files bindings/generated)"
+          git check-ignore bindings/generated/csharp/Interop.cs
+          git diff --exit-code
       - name: Test update verification and the Rust/C# bridge
         run: dotnet run --project windows/Tests/ChipDock.Tests.csproj -c Debug -- target/${{ matrix.target }}/debug/chipdock_csharp.dll
       - name: Compile the release update tool
@@ -161,7 +167,7 @@ jobs:
         run: |
           Rename-Item dist/release-windows-x64 windows-x64
           Rename-Item dist/release-windows-arm64 windows-arm64
-          ./windows/scripts/publish-release.ps1 -Version $env:RELEASE_TAG.Substring(1) -AssetsDirectory dist
+          ./ci/release-windows.ps1 -Version $env:RELEASE_TAG.Substring(1) -AssetsDirectory dist
       - name: Mirror verified Windows release to COS
         env:
           GH_TOKEN: ${{ github.token }}

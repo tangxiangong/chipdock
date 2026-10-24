@@ -6,52 +6,75 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXAggregateTarget section */
+		BA93DCB1F3F152587AF6DAE1 /* RustBindings */ = {
+			isa = PBXAggregateTarget;
+			buildConfigurationList = D768D29E868585DFCE0398D1 /* Build configuration list for PBXAggregateTarget "RustBindings" */;
+			buildPhases = (
+				5B2D3744AE0C63D7ED7FAFA7 /* Build Rust and generate Swift bindings */,
+			);
+			dependencies = (
+			);
+			name = RustBindings;
+			packageProductDependencies = (
+			);
+			productName = RustBindings;
+		};
+/* End PBXAggregateTarget section */
+
 /* Begin PBXBuildFile section */
-		01D2410B219A82E4A725C497 /* SerialModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4666DE621B5702464C0A0FF6 /* SerialModels.swift */; };
-		06540A9C226ADDE4882D9B37 /* SerialBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB5BCDDE83C8F00D7492B6C5 /* SerialBackend.swift */; };
-		0A7D034B86BCB9299FA4D450 /* SerialStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F852BAFB538C3B78C2E38D6 /* SerialStore.swift */; };
-		0EE49919D5371D662C5A3A70 /* WorkbenchOperations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51A3A56738941F0E42BAE7C6 /* WorkbenchOperations.swift */; };
-		140B7392531778BB352D33DB /* SaveProfileSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC82A8563883BC2DEE74AE53 /* SaveProfileSheet.swift */; };
-		15376F70D7F9334F2C192831 /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45F1436DAE39C935D3FF9D20 /* Components.swift */; };
-		2A9500A5D7A187FB1C6FCD15 /* ChipDockCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 293228E64BE6AB646094449C /* ChipDockCore.swift */; };
-		301B00981788B8AFF00F6D83 /* RustService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E869DE22F8EEC687CDD070B /* RustService.swift */; };
-		56751F89119AFF9ED68DF82A /* ToolkitView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 675B0F65C15A97CE187050A6 /* ToolkitView.swift */; };
-		5B26CE6778EAF7E1953070A8 /* Sparkle.txt in Resources */ = {isa = PBXBuildFile; fileRef = 46B64CCFA9746C7BCCB812F2 /* Sparkle.txt */; };
+		098F2D36F11F4558A3202A83 /* CoreIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BB1FFBB84602E6802B54AC2 /* CoreIntegrationTests.swift */; };
+		0F78A68546E4F3610E2FF0FA /* ToolkitView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 613CC72B75B3A2FED7A41E11 /* ToolkitView.swift */; };
+		122CFA785340A213EAF4C103 /* RustService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72CA28131787F327A5FB96A6 /* RustService.swift */; };
+		161DA3BB72447F392A84ABD5 /* ChipDockApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94449F63DF5D33E57D5B7FD2 /* ChipDockApp.swift */; };
+		17204B1596E6614DE85C176C /* WorkbenchOperations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C753726F36E3CAF60FFE76F /* WorkbenchOperations.swift */; };
+		1B7E1F3C9526A4DB2CBA7D6B /* WorkbenchCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2170C566ED701E6AB5B2A961 /* WorkbenchCommands.swift */; };
+		2DB0892CFC2E3F3551601ABF /* SerialBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9933D6ABA1F068AB869FFD5E /* SerialBackend.swift */; };
+		3AD5E2403D8A29164DF964EA /* SerialView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 377ECC06F7334DD6EA1B9C9A /* SerialView.swift */; };
+		4DC7C147972F1435D3801DCB /* UpdateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D649DC1691C57667AC7C7E0 /* UpdateTests.swift */; };
+		5B10A08161C4B5F39D0C6970 /* SaveProfileSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75AFC1F643B6109060E3B9C6 /* SaveProfileSheet.swift */; };
+		5C75BF8C794B09E549275560 /* FlashView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 745CA52B284E6E963394D3AD /* FlashView.swift */; };
+		5D2CAAFEDFE98AE40F089DEE /* SerialStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B1BC07E33F954D09FE547EA /* SerialStore.swift */; };
 		5FCA3086FB009B44F4828CB3 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 4F07CFCC191CFDD73E81149E /* Sparkle */; };
-		6D7BD6C5FE49F484BB999A25 /* WorkbenchPanels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85C7CEE80E9B0F86F57B9B30 /* WorkbenchPanels.swift */; };
-		7028EB0EC0A2A78FE74E034C /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 912CA876CAB236D34E3E2351 /* ContentView.swift */; };
-		7588BB56234FB6BBBF4149A2 /* ChipDock.icon in Resources */ = {isa = PBXBuildFile; fileRef = 4E9484289CC041F40AF4408B /* ChipDock.icon */; };
-		7B4BB74A68EBB08D166778BD /* SerialView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C075EE783590375CDB515E9 /* SerialView.swift */; };
-		8AE7EFA6A4825AD42494E22F /* ToolkitState.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0EFE672FC594DE70BE72DD6 /* ToolkitState.swift */; };
-		8C8A570D5ACB886021F62946 /* CoreIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB2A7428D56EC90E56AD81A0 /* CoreIntegrationTests.swift */; };
-		8D1D499A19ADD56DF394A820 /* SerialComposerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31B104767E928BCD2CFD442A /* SerialComposerView.swift */; };
-		8DD02F8D7B4B35CCE9B5D02C /* TargetConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7ED939C0D19DEEE9DFF1A2FF /* TargetConfiguration.swift */; };
-		8E650E48EEDA5B5887D16F41 /* SerialTerminalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34DE6E8E3A44BAD8215B207B /* SerialTerminalView.swift */; };
-		92FC54CB2CB82AABEC673F1C /* SerialIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 075CC88D3E44C72CB4BF1511 /* SerialIntegrationTests.swift */; };
-		9C4C492FE4093F425D48154B /* UpdateService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2E87475B6FFEC18430225F8 /* UpdateService.swift */; };
-		9DDFE9DFF35C013BD5A527C6 /* WindowLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EA50036D727BE8C4BF0225E /* WindowLayoutTests.swift */; };
-		A899255E6E3B3A1B62EC8ADC /* SerialConnectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA7C377B6EA757CA6A2D99EA /* SerialConnectionView.swift */; };
-		A95D488854BA43E077137F31 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDF174A247AC8A639C4174E5 /* SettingsView.swift */; };
-		AA65BCFAE355FAF63E0E459D /* Formatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B73FB3E8332C9397DD28EA8 /* Formatting.swift */; };
-		AB9CC247E714CEDF4E72DAEC /* LogsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17D7CDC7BD1D20734BF6D71C /* LogsView.swift */; };
-		B0104A1DB0373443A97C5A5D /* MemoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000491E55ECB8E7442F209 /* MemoryView.swift */; };
-		B7FA950AC427E87EC9FDF612 /* SerialAutoSender.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAA18EF3F8196C9F3C037CAF /* SerialAutoSender.swift */; };
-		BD63A5D07234B550A4F9D4CA /* ChipDockApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D88E375C755A5928122815F9 /* ChipDockApp.swift */; };
-		C65A916BB581FB9351C20374 /* ExportDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 326EAB73B96BBCF6CD831CC0 /* ExportDocument.swift */; };
-		C6848DAD9660C66656B773B3 /* WorkbenchStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2030C8D28EBF79E7E029B727 /* WorkbenchStore.swift */; };
-		CCD8AA68E67D35C0607C9EC6 /* TargetSetupSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFD61FCCA0ECC683B074494D /* TargetSetupSheet.swift */; };
-		CE6CC85E9F8D49C9712D51F0 /* TerminalTableState.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2EAED6BB9AD6ED89ABF69E2 /* TerminalTableState.swift */; };
+		60578E8D7AD3302E737EB94C /* SerialTerminalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 577F22769BF346972C652992 /* SerialTerminalView.swift */; };
+		6B787C81AC7EB993FCCE576C /* WorkbenchPanels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F763DBD61FA6FB45EFCCABF /* WorkbenchPanels.swift */; };
+		78E8AB6253EF3720FD0398CA /* ExportDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0C733375850D5038E764B5C /* ExportDocument.swift */; };
+		7A1A1DCA77BBC069BC1913DD /* SerialModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3526130316D6A6B88A3AD883 /* SerialModels.swift */; };
+		7CF2F6CC93A2FA1E5B2E3F2A /* LogsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81B03BD0A7D813C4A52F9708 /* LogsView.swift */; };
+		7F904FFAF21A003A61CC1CB1 /* ChipDock.icon in Resources */ = {isa = PBXBuildFile; fileRef = 0EBD0275FF88FD1266BA3A12 /* ChipDock.icon */; };
+		81B997C8669C9E86028D59E9 /* SerialAutoSender.swift in Sources */ = {isa = PBXBuildFile; fileRef = F675B56F6651B43822D59D68 /* SerialAutoSender.swift */; };
+		840E39FCB55E7005FD081F65 /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FEF79C4AA1E9F15775A5934 /* Components.swift */; };
+		8BF7E35708955B5D553BC478 /* TargetConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0EAB345B22F02B45783BE89 /* TargetConfiguration.swift */; };
+		93B6DCCF0CC16FA9018FF044 /* FirmwareDataView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8155FA872DE4EC7D549465DD /* FirmwareDataView.swift */; };
+		999EFAF5545237B19A088E57 /* SerialIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A885A7324341C7AF3AA9C5E /* SerialIntegrationTests.swift */; };
+		A46057E8328925E07F02EF29 /* SerialComposerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B656F6AE0DF5AC85F2FEBD8 /* SerialComposerView.swift */; };
+		AA815EC6513FE6817C04637B /* SerialConnectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7CF0E6DBACF59D6959CFB50 /* SerialConnectionView.swift */; };
+		AA9CA5D7FEE3126821BC90E6 /* ChipPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09AC92C9BF7B7C597002A860 /* ChipPicker.swift */; };
+		B73628EC438A1D9BD59BE58C /* ChipDockCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E126A6DF16F9F3F86A3B2B50 /* ChipDockCore.swift */; };
+		BB52E874039B440B109C7525 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A17A9B9BFB6BB039C8E5963 /* SettingsView.swift */; };
+		BD2C26F5BAF7A96A5024C5BD /* TargetSetupSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95358FA846D318091DE75239 /* TargetSetupSheet.swift */; };
+		C2C955C5B250240787491CB6 /* TerminalTableState.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7CC07CD9A2567BB2B3C43D8 /* TerminalTableState.swift */; };
+		CDDD955438774E5820A6C32B /* WindowLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42DC12A36664BFA4777BD220 /* WindowLayoutTests.swift */; };
+		D2453896E0ADF63CBF22CD28 /* WorkbenchStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8FCE66F9CB69FAED425B222 /* WorkbenchStore.swift */; };
 		D374DC085BBF7DA26BB2BAAB /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 63492589CE39A90E943D7EDF /* Sparkle */; };
-		D431599DBA97108AFA63003F /* FlashView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAFB9AB1DD670FA7A2457665 /* FlashView.swift */; };
-		D805993623D828B0FB2D4AF7 /* WorkbenchCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2060FF2F711287D27FE683CB /* WorkbenchCommands.swift */; };
-		E2468F01AE1819EBE2CB2150 /* FirmwareDataView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BF8B77779E93689270FDDB2 /* FirmwareDataView.swift */; };
-		E3A715916A6D95635D499C09 /* FirmwareLayoutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F62F3478286499C5F5F8BF8F /* FirmwareLayoutView.swift */; };
-		E533F29967B565A7E301152F /* WorkspaceModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EC9EF1E2BCDDAD0F2C7D658 /* WorkspaceModels.swift */; };
-		EF67EEDC02F42632E0F7CA7C /* UpdateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19FD81776014C0DA90BEA8DD /* UpdateTests.swift */; };
-		FB9BFCB1351C6ED298CDA737 /* ChipPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5068AA0C98AB9930DAB52A3 /* ChipPicker.swift */; };
+		D7A1726C899FD5517DE8230E /* FirmwareLayoutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 413DF3156BB724615264C503 /* FirmwareLayoutView.swift */; };
+		DD14C17315D42DC7E573B8AF /* Sparkle.txt in Resources */ = {isa = PBXBuildFile; fileRef = C14FA2055C49F595EDCCE72A /* Sparkle.txt */; };
+		ED6EBD5D3EBD773E0559C229 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 490552A48FB0D61BB84EA806 /* ContentView.swift */; };
+		EDFA5BB0D5E8F48CE36E2899 /* UpdateService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FBA6FBA8DA1D1DA3BF05D08 /* UpdateService.swift */; };
+		EE834D6A775F53E1C85429CB /* ToolkitState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C9531E87EBABF274800061E /* ToolkitState.swift */; };
+		F41DECEFF71522D2E32C9FE3 /* MemoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48EC7E04C963D892D94D620D /* MemoryView.swift */; };
+		F7DB3EBA611D94EEE293B6B7 /* WorkspaceModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = C30B8A697E62EE1F195A210B /* WorkspaceModels.swift */; };
+		FD4152CB3EA69B81A06D887B /* Formatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65BB4AB28F17B74E9A014852 /* Formatting.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		C226217E2DED1F1A6E00DDA8 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D89A6A40C25CAC33DAFB81EE /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = BA93DCB1F3F152587AF6DAE1;
+			remoteInfo = RustBindings;
+		};
 		E0E73532633AC9E4A269BDAF /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = D89A6A40C25CAC33DAFB81EE /* Project object */;
@@ -62,48 +85,48 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		075CC88D3E44C72CB4BF1511 /* SerialIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SerialIntegrationTests.swift; sourceTree = "<group>"; };
-		0E869DE22F8EEC687CDD070B /* RustService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RustService.swift; sourceTree = "<group>"; };
-		0EA50036D727BE8C4BF0225E /* WindowLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowLayoutTests.swift; sourceTree = "<group>"; };
-		17D7CDC7BD1D20734BF6D71C /* LogsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogsView.swift; sourceTree = "<group>"; };
-		19FD81776014C0DA90BEA8DD /* UpdateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateTests.swift; sourceTree = "<group>"; };
-		2030C8D28EBF79E7E029B727 /* WorkbenchStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkbenchStore.swift; sourceTree = "<group>"; };
-		2060FF2F711287D27FE683CB /* WorkbenchCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkbenchCommands.swift; sourceTree = "<group>"; };
-		293228E64BE6AB646094449C /* ChipDockCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChipDockCore.swift; sourceTree = "<group>"; };
-		31B104767E928BCD2CFD442A /* SerialComposerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SerialComposerView.swift; sourceTree = "<group>"; };
-		326EAB73B96BBCF6CD831CC0 /* ExportDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportDocument.swift; sourceTree = "<group>"; };
-		34DE6E8E3A44BAD8215B207B /* SerialTerminalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SerialTerminalView.swift; sourceTree = "<group>"; };
-		45F1436DAE39C935D3FF9D20 /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
-		4666DE621B5702464C0A0FF6 /* SerialModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SerialModels.swift; sourceTree = "<group>"; };
-		46B64CCFA9746C7BCCB812F2 /* Sparkle.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = Sparkle.txt; sourceTree = "<group>"; };
-		4C075EE783590375CDB515E9 /* SerialView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SerialView.swift; sourceTree = "<group>"; };
-		4E9484289CC041F40AF4408B /* ChipDock.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = ChipDock.icon; sourceTree = "<group>"; };
-		4F852BAFB538C3B78C2E38D6 /* SerialStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SerialStore.swift; sourceTree = "<group>"; };
-		51A3A56738941F0E42BAE7C6 /* WorkbenchOperations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkbenchOperations.swift; sourceTree = "<group>"; };
+		09AC92C9BF7B7C597002A860 /* ChipPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChipPicker.swift; sourceTree = "<group>"; };
+		0EBD0275FF88FD1266BA3A12 /* ChipDock.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = ChipDock.icon; sourceTree = "<group>"; };
+		0F763DBD61FA6FB45EFCCABF /* WorkbenchPanels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkbenchPanels.swift; sourceTree = "<group>"; };
+		2170C566ED701E6AB5B2A961 /* WorkbenchCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkbenchCommands.swift; sourceTree = "<group>"; };
+		2B1BC07E33F954D09FE547EA /* SerialStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SerialStore.swift; sourceTree = "<group>"; };
+		3526130316D6A6B88A3AD883 /* SerialModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SerialModels.swift; sourceTree = "<group>"; };
+		377ECC06F7334DD6EA1B9C9A /* SerialView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SerialView.swift; sourceTree = "<group>"; };
+		3B656F6AE0DF5AC85F2FEBD8 /* SerialComposerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SerialComposerView.swift; sourceTree = "<group>"; };
+		3C9531E87EBABF274800061E /* ToolkitState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolkitState.swift; sourceTree = "<group>"; };
+		3D649DC1691C57667AC7C7E0 /* UpdateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateTests.swift; sourceTree = "<group>"; };
+		413DF3156BB724615264C503 /* FirmwareLayoutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirmwareLayoutView.swift; sourceTree = "<group>"; };
+		42DC12A36664BFA4777BD220 /* WindowLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowLayoutTests.swift; sourceTree = "<group>"; };
+		48EC7E04C963D892D94D620D /* MemoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryView.swift; sourceTree = "<group>"; };
+		490552A48FB0D61BB84EA806 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		4FEF79C4AA1E9F15775A5934 /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
+		577F22769BF346972C652992 /* SerialTerminalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SerialTerminalView.swift; sourceTree = "<group>"; };
 		6122B0E0F02540A881250AFF /* ChipDockTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ChipDockTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		675B0F65C15A97CE187050A6 /* ToolkitView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolkitView.swift; sourceTree = "<group>"; };
-		6B73FB3E8332C9397DD28EA8 /* Formatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Formatting.swift; sourceTree = "<group>"; };
-		7BF8B77779E93689270FDDB2 /* FirmwareDataView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirmwareDataView.swift; sourceTree = "<group>"; };
-		7ED939C0D19DEEE9DFF1A2FF /* TargetConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TargetConfiguration.swift; sourceTree = "<group>"; };
-		85C7CEE80E9B0F86F57B9B30 /* WorkbenchPanels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkbenchPanels.swift; sourceTree = "<group>"; };
-		8EC9EF1E2BCDDAD0F2C7D658 /* WorkspaceModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceModels.swift; sourceTree = "<group>"; };
-		912CA876CAB236D34E3E2351 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
-		A0000491E55ECB8E7442F209 /* MemoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryView.swift; sourceTree = "<group>"; };
-		BAA18EF3F8196C9F3C037CAF /* SerialAutoSender.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SerialAutoSender.swift; sourceTree = "<group>"; };
-		BAFB9AB1DD670FA7A2457665 /* FlashView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlashView.swift; sourceTree = "<group>"; };
-		BB2A7428D56EC90E56AD81A0 /* CoreIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreIntegrationTests.swift; sourceTree = "<group>"; };
-		BFD61FCCA0ECC683B074494D /* TargetSetupSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TargetSetupSheet.swift; sourceTree = "<group>"; };
-		C5068AA0C98AB9930DAB52A3 /* ChipPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChipPicker.swift; sourceTree = "<group>"; };
-		CA7C377B6EA757CA6A2D99EA /* SerialConnectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SerialConnectionView.swift; sourceTree = "<group>"; };
-		D2E87475B6FFEC18430225F8 /* UpdateService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateService.swift; sourceTree = "<group>"; };
-		D2EAED6BB9AD6ED89ABF69E2 /* TerminalTableState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalTableState.swift; sourceTree = "<group>"; };
-		D88E375C755A5928122815F9 /* ChipDockApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChipDockApp.swift; sourceTree = "<group>"; };
-		DB5BCDDE83C8F00D7492B6C5 /* SerialBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SerialBackend.swift; sourceTree = "<group>"; };
-		E0EFE672FC594DE70BE72DD6 /* ToolkitState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolkitState.swift; sourceTree = "<group>"; };
+		613CC72B75B3A2FED7A41E11 /* ToolkitView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolkitView.swift; sourceTree = "<group>"; };
+		65BB4AB28F17B74E9A014852 /* Formatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Formatting.swift; sourceTree = "<group>"; };
+		72CA28131787F327A5FB96A6 /* RustService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RustService.swift; sourceTree = "<group>"; };
+		745CA52B284E6E963394D3AD /* FlashView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlashView.swift; sourceTree = "<group>"; };
+		75AFC1F643B6109060E3B9C6 /* SaveProfileSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveProfileSheet.swift; sourceTree = "<group>"; };
+		7A17A9B9BFB6BB039C8E5963 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		8155FA872DE4EC7D549465DD /* FirmwareDataView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirmwareDataView.swift; sourceTree = "<group>"; };
+		81B03BD0A7D813C4A52F9708 /* LogsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogsView.swift; sourceTree = "<group>"; };
+		8A885A7324341C7AF3AA9C5E /* SerialIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SerialIntegrationTests.swift; sourceTree = "<group>"; };
+		8C753726F36E3CAF60FFE76F /* WorkbenchOperations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkbenchOperations.swift; sourceTree = "<group>"; };
+		94449F63DF5D33E57D5B7FD2 /* ChipDockApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChipDockApp.swift; sourceTree = "<group>"; };
+		95358FA846D318091DE75239 /* TargetSetupSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TargetSetupSheet.swift; sourceTree = "<group>"; };
+		9933D6ABA1F068AB869FFD5E /* SerialBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SerialBackend.swift; sourceTree = "<group>"; };
+		9BB1FFBB84602E6802B54AC2 /* CoreIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreIntegrationTests.swift; sourceTree = "<group>"; };
+		9FBA6FBA8DA1D1DA3BF05D08 /* UpdateService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateService.swift; sourceTree = "<group>"; };
+		B0C733375850D5038E764B5C /* ExportDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportDocument.swift; sourceTree = "<group>"; };
+		C14FA2055C49F595EDCCE72A /* Sparkle.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = Sparkle.txt; sourceTree = "<group>"; };
+		C30B8A697E62EE1F195A210B /* WorkspaceModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceModels.swift; sourceTree = "<group>"; };
+		D0EAB345B22F02B45783BE89 /* TargetConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TargetConfiguration.swift; sourceTree = "<group>"; };
+		D7CC07CD9A2567BB2B3C43D8 /* TerminalTableState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalTableState.swift; sourceTree = "<group>"; };
+		E126A6DF16F9F3F86A3B2B50 /* ChipDockCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChipDockCore.swift; sourceTree = CHIPDOCK_BINDINGS_DIR; };
 		E17F7EDA72AD6856663FC614 /* ChipDock.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ChipDock.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		EDF174A247AC8A639C4174E5 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
-		F62F3478286499C5F5F8BF8F /* FirmwareLayoutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirmwareLayoutView.swift; sourceTree = "<group>"; };
-		FC82A8563883BC2DEE74AE53 /* SaveProfileSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveProfileSheet.swift; sourceTree = "<group>"; };
+		E8FCE66F9CB69FAED425B222 /* WorkbenchStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkbenchStore.swift; sourceTree = "<group>"; };
+		F675B56F6651B43822D59D68 /* SerialAutoSender.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SerialAutoSender.swift; sourceTree = "<group>"; };
+		F7CF0E6DBACF59D6959CFB50 /* SerialConnectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SerialConnectionView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -126,147 +149,132 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		147EA765D4BBEF9ED30E759B /* Services */ = {
+		0E3C5C6C65851E36B4D74EB5 /* assets */ = {
 			isa = PBXGroup;
 			children = (
-				0E869DE22F8EEC687CDD070B /* RustService.swift */,
-				DB5BCDDE83C8F00D7492B6C5 /* SerialBackend.swift */,
-				D2E87475B6FFEC18430225F8 /* UpdateService.swift */,
+				6D29271F446E7F9C5E7E45C2 /* app-icons */,
 			);
-			path = Services;
+			path = assets;
 			sourceTree = "<group>";
 		};
-		25335344D228841BF60C558A /* Support */ = {
+		1BB6CA35EEDBF86DEC2E70A9 /* chipdock */ = {
 			isa = PBXGroup;
 			children = (
-				326EAB73B96BBCF6CD831CC0 /* ExportDocument.swift */,
-				6B73FB3E8332C9397DD28EA8 /* Formatting.swift */,
-				85C7CEE80E9B0F86F57B9B30 /* WorkbenchPanels.swift */,
+				0E3C5C6C65851E36B4D74EB5 /* assets */,
 			);
-			path = Support;
+			name = chipdock;
+			path = ..;
+			sourceTree = "<group>";
+		};
+		22E99A7A6981D4C04D4E78CB /* Licenses */ = {
+			isa = PBXGroup;
+			children = (
+				C14FA2055C49F595EDCCE72A /* Sparkle.txt */,
+			);
+			path = Licenses;
 			sourceTree = "<group>";
 		};
 		2E926BBA56702A6F25AF1BB5 /* ChipDock */ = {
 			isa = PBXGroup;
 			children = (
-				4F657BA165F7AF032C7F239F /* App */,
-				75A60D8C2813DC1CF525FDED /* Generated */,
-				46445AE1CB9E641475502CA0 /* Models */,
-				621A1C6B6CD36A6626636DF2 /* Resources */,
-				147EA765D4BBEF9ED30E759B /* Services */,
-				DAFC62B32934FFDA27ED1E0E /* Stores */,
-				25335344D228841BF60C558A /* Support */,
-				B8C2527D365BB01BAF971D40 /* Views */,
+				42848619B5DEB413CA293762 /* Sources */,
+				6E552ED8CDC966BB196ED0F9 /* Tests */,
 			);
 			path = ChipDock;
 			sourceTree = "<group>";
 		};
-		3996730E255BBD09910895DF /* Serial */ = {
+		42848619B5DEB413CA293762 /* Sources */ = {
 			isa = PBXGroup;
 			children = (
-				31B104767E928BCD2CFD442A /* SerialComposerView.swift */,
-				CA7C377B6EA757CA6A2D99EA /* SerialConnectionView.swift */,
-				34DE6E8E3A44BAD8215B207B /* SerialTerminalView.swift */,
-				4C075EE783590375CDB515E9 /* SerialView.swift */,
+				E99391687EC6C91006765C06 /* ChipDock */,
 			);
-			path = Serial;
+			path = Sources;
 			sourceTree = "<group>";
 		};
-		42976E38B9E2B203DC06D42B /* Licenses */ = {
+		6D29271F446E7F9C5E7E45C2 /* app-icons */ = {
 			isa = PBXGroup;
 			children = (
-				46B64CCFA9746C7BCCB812F2 /* Sparkle.txt */,
+				0EBD0275FF88FD1266BA3A12 /* ChipDock.icon */,
 			);
-			path = Licenses;
+			path = "app-icons";
 			sourceTree = "<group>";
 		};
-		46445AE1CB9E641475502CA0 /* Models */ = {
+		6E552ED8CDC966BB196ED0F9 /* Tests */ = {
 			isa = PBXGroup;
 			children = (
-				4666DE621B5702464C0A0FF6 /* SerialModels.swift */,
-				7ED939C0D19DEEE9DFF1A2FF /* TargetConfiguration.swift */,
-				D2EAED6BB9AD6ED89ABF69E2 /* TerminalTableState.swift */,
-				E0EFE672FC594DE70BE72DD6 /* ToolkitState.swift */,
-				8EC9EF1E2BCDDAD0F2C7D658 /* WorkspaceModels.swift */,
+				9BB1FFBB84602E6802B54AC2 /* CoreIntegrationTests.swift */,
+				8A885A7324341C7AF3AA9C5E /* SerialIntegrationTests.swift */,
+				3D649DC1691C57667AC7C7E0 /* UpdateTests.swift */,
+				42DC12A36664BFA4777BD220 /* WindowLayoutTests.swift */,
 			);
-			path = Models;
+			path = Tests;
 			sourceTree = "<group>";
 		};
-		4F657BA165F7AF032C7F239F /* App */ = {
+		A1D916B002C586D47BD30638 /* Generated */ = {
 			isa = PBXGroup;
 			children = (
-				D88E375C755A5928122815F9 /* ChipDockApp.swift */,
-				2060FF2F711287D27FE683CB /* WorkbenchCommands.swift */,
+				E126A6DF16F9F3F86A3B2B50 /* ChipDockCore.swift */,
 			);
-			path = App;
-			sourceTree = "<group>";
-		};
-		621A1C6B6CD36A6626636DF2 /* Resources */ = {
-			isa = PBXGroup;
-			children = (
-				4E9484289CC041F40AF4408B /* ChipDock.icon */,
-				42976E38B9E2B203DC06D42B /* Licenses */,
-			);
-			path = Resources;
-			sourceTree = "<group>";
-		};
-		75A60D8C2813DC1CF525FDED /* Generated */ = {
-			isa = PBXGroup;
-			children = (
-				293228E64BE6AB646094449C /* ChipDockCore.swift */,
-			);
-			path = Generated;
+			name = Generated;
 			sourceTree = "<group>";
 		};
 		B648D1D7B6F356F12F921765 = {
 			isa = PBXGroup;
 			children = (
 				2E926BBA56702A6F25AF1BB5 /* ChipDock */,
-				EF17AA65D1FD5F277F628BF9 /* ChipDockTests */,
+				1BB6CA35EEDBF86DEC2E70A9 /* chipdock */,
+				A1D916B002C586D47BD30638 /* Generated */,
 				F2F03C5C168FF5760E3BA880 /* Products */,
 			);
 			sourceTree = "<group>";
 		};
-		B8C2527D365BB01BAF971D40 /* Views */ = {
+		DE76A96A26ACEB7025F225F9 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
-				C5068AA0C98AB9930DAB52A3 /* ChipPicker.swift */,
-				45F1436DAE39C935D3FF9D20 /* Components.swift */,
-				912CA876CAB236D34E3E2351 /* ContentView.swift */,
-				7BF8B77779E93689270FDDB2 /* FirmwareDataView.swift */,
-				F62F3478286499C5F5F8BF8F /* FirmwareLayoutView.swift */,
-				BAFB9AB1DD670FA7A2457665 /* FlashView.swift */,
-				17D7CDC7BD1D20734BF6D71C /* LogsView.swift */,
-				A0000491E55ECB8E7442F209 /* MemoryView.swift */,
-				FC82A8563883BC2DEE74AE53 /* SaveProfileSheet.swift */,
-				EDF174A247AC8A639C4174E5 /* SettingsView.swift */,
-				BFD61FCCA0ECC683B074494D /* TargetSetupSheet.swift */,
-				675B0F65C15A97CE187050A6 /* ToolkitView.swift */,
-				3996730E255BBD09910895DF /* Serial */,
+				22E99A7A6981D4C04D4E78CB /* Licenses */,
 			);
-			path = Views;
+			path = Resources;
 			sourceTree = "<group>";
 		};
-		DAFC62B32934FFDA27ED1E0E /* Stores */ = {
+		E99391687EC6C91006765C06 /* ChipDock */ = {
 			isa = PBXGroup;
 			children = (
-				BAA18EF3F8196C9F3C037CAF /* SerialAutoSender.swift */,
-				4F852BAFB538C3B78C2E38D6 /* SerialStore.swift */,
-				51A3A56738941F0E42BAE7C6 /* WorkbenchOperations.swift */,
-				2030C8D28EBF79E7E029B727 /* WorkbenchStore.swift */,
+				94449F63DF5D33E57D5B7FD2 /* ChipDockApp.swift */,
+				09AC92C9BF7B7C597002A860 /* ChipPicker.swift */,
+				4FEF79C4AA1E9F15775A5934 /* Components.swift */,
+				490552A48FB0D61BB84EA806 /* ContentView.swift */,
+				B0C733375850D5038E764B5C /* ExportDocument.swift */,
+				8155FA872DE4EC7D549465DD /* FirmwareDataView.swift */,
+				413DF3156BB724615264C503 /* FirmwareLayoutView.swift */,
+				745CA52B284E6E963394D3AD /* FlashView.swift */,
+				65BB4AB28F17B74E9A014852 /* Formatting.swift */,
+				81B03BD0A7D813C4A52F9708 /* LogsView.swift */,
+				48EC7E04C963D892D94D620D /* MemoryView.swift */,
+				72CA28131787F327A5FB96A6 /* RustService.swift */,
+				75AFC1F643B6109060E3B9C6 /* SaveProfileSheet.swift */,
+				F675B56F6651B43822D59D68 /* SerialAutoSender.swift */,
+				9933D6ABA1F068AB869FFD5E /* SerialBackend.swift */,
+				3B656F6AE0DF5AC85F2FEBD8 /* SerialComposerView.swift */,
+				F7CF0E6DBACF59D6959CFB50 /* SerialConnectionView.swift */,
+				3526130316D6A6B88A3AD883 /* SerialModels.swift */,
+				2B1BC07E33F954D09FE547EA /* SerialStore.swift */,
+				577F22769BF346972C652992 /* SerialTerminalView.swift */,
+				377ECC06F7334DD6EA1B9C9A /* SerialView.swift */,
+				7A17A9B9BFB6BB039C8E5963 /* SettingsView.swift */,
+				D0EAB345B22F02B45783BE89 /* TargetConfiguration.swift */,
+				95358FA846D318091DE75239 /* TargetSetupSheet.swift */,
+				D7CC07CD9A2567BB2B3C43D8 /* TerminalTableState.swift */,
+				3C9531E87EBABF274800061E /* ToolkitState.swift */,
+				613CC72B75B3A2FED7A41E11 /* ToolkitView.swift */,
+				9FBA6FBA8DA1D1DA3BF05D08 /* UpdateService.swift */,
+				2170C566ED701E6AB5B2A961 /* WorkbenchCommands.swift */,
+				8C753726F36E3CAF60FFE76F /* WorkbenchOperations.swift */,
+				0F763DBD61FA6FB45EFCCABF /* WorkbenchPanels.swift */,
+				E8FCE66F9CB69FAED425B222 /* WorkbenchStore.swift */,
+				C30B8A697E62EE1F195A210B /* WorkspaceModels.swift */,
+				DE76A96A26ACEB7025F225F9 /* Resources */,
 			);
-			path = Stores;
-			sourceTree = "<group>";
-		};
-		EF17AA65D1FD5F277F628BF9 /* ChipDockTests */ = {
-			isa = PBXGroup;
-			children = (
-				BB2A7428D56EC90E56AD81A0 /* CoreIntegrationTests.swift */,
-				075CC88D3E44C72CB4BF1511 /* SerialIntegrationTests.swift */,
-				19FD81776014C0DA90BEA8DD /* UpdateTests.swift */,
-				0EA50036D727BE8C4BF0225E /* WindowLayoutTests.swift */,
-			);
-			path = ChipDockTests;
+			path = ChipDock;
 			sourceTree = "<group>";
 		};
 		F2F03C5C168FF5760E3BA880 /* Products */ = {
@@ -305,7 +313,6 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 2489F01526961B2674DB2ED1 /* Build configuration list for PBXNativeTarget "ChipDock" */;
 			buildPhases = (
-				2F39922CAB8670F5413DC94F /* Build Rust Core and generate UniFFI bindings */,
 				A67E17B2E745A821AC26750F /* Sources */,
 				48D5448F8519F3D4F0D4DD33 /* Resources */,
 				5D7AF752C1023B88D754B268 /* Frameworks */,
@@ -313,6 +320,7 @@
 			buildRules = (
 			);
 			dependencies = (
+				DD5D317B05DCDDE7C3A6E507 /* PBXTargetDependency */,
 			);
 			name = ChipDock;
 			packageProductDependencies = (
@@ -331,6 +339,9 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 2600;
 				TargetAttributes = {
+					BA93DCB1F3F152587AF6DAE1 = {
+						ProvisioningStyle = Manual;
+					};
 					D042F6FA148808E69A857BBD = {
 						ProvisioningStyle = Manual;
 					};
@@ -358,6 +369,7 @@
 			targets = (
 				F663582F515ECB3BC5FE32DF /* ChipDock */,
 				D042F6FA148808E69A857BBD /* ChipDockTests */,
+				BA93DCB1F3F152587AF6DAE1 /* RustBindings */,
 			);
 		};
 /* End PBXProject section */
@@ -367,33 +379,42 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				7588BB56234FB6BBBF4149A2 /* ChipDock.icon in Resources */,
-				5B26CE6778EAF7E1953070A8 /* Sparkle.txt in Resources */,
+				7F904FFAF21A003A61CC1CB1 /* ChipDock.icon in Resources */,
+				DD14C17315D42DC7E573B8AF /* Sparkle.txt in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		2F39922CAB8670F5413DC94F /* Build Rust Core and generate UniFFI bindings */ = {
+		5B2D3744AE0C63D7ED7FAFA7 /* Build Rust and generate Swift bindings */ = {
 			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
+			dependencyFile = "$(CHIPDOCK_BINDINGS_DIR)/rust-bindings.d";
 			files = (
 			);
 			inputFileListPaths = (
 			);
 			inputPaths = (
+				"$(SRCROOT)/../Cargo.toml",
+				"$(SRCROOT)/../Cargo.lock",
+				"$(SRCROOT)/../data/usb-device.json",
+				"$(SRCROOT)/build-bindings.sh",
+				"$(SRCROOT)/../bindings/generate-swift.sh",
 			);
-			name = "Build Rust Core and generate UniFFI bindings";
+			name = "Build Rust and generate Swift bindings";
 			outputFileListPaths = (
 			);
 			outputPaths = (
-				"$(BUILT_PRODUCTS_DIR)/libchipdock_core.a",
+				"$(CHIPDOCK_BINDINGS_DIR)/ChipDockCore.swift",
+				"$(CHIPDOCK_BINDINGS_DIR)/include/ChipDockCoreFFI.h",
+				"$(CHIPDOCK_BINDINGS_DIR)/include/module.modulemap",
+				"$(CHIPDOCK_BINDINGS_DIR)/libchipdock_ffi.a",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "\"${SRCROOT}/../script/build_rust.sh\"";
+			shellScript = "\"${SRCROOT}/build-bindings.sh\"";
+			showEnvVarsInLog = 0;
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -402,40 +423,40 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				BD63A5D07234B550A4F9D4CA /* ChipDockApp.swift in Sources */,
-				2A9500A5D7A187FB1C6FCD15 /* ChipDockCore.swift in Sources */,
-				FB9BFCB1351C6ED298CDA737 /* ChipPicker.swift in Sources */,
-				15376F70D7F9334F2C192831 /* Components.swift in Sources */,
-				7028EB0EC0A2A78FE74E034C /* ContentView.swift in Sources */,
-				C65A916BB581FB9351C20374 /* ExportDocument.swift in Sources */,
-				E2468F01AE1819EBE2CB2150 /* FirmwareDataView.swift in Sources */,
-				E3A715916A6D95635D499C09 /* FirmwareLayoutView.swift in Sources */,
-				D431599DBA97108AFA63003F /* FlashView.swift in Sources */,
-				AA65BCFAE355FAF63E0E459D /* Formatting.swift in Sources */,
-				AB9CC247E714CEDF4E72DAEC /* LogsView.swift in Sources */,
-				B0104A1DB0373443A97C5A5D /* MemoryView.swift in Sources */,
-				301B00981788B8AFF00F6D83 /* RustService.swift in Sources */,
-				140B7392531778BB352D33DB /* SaveProfileSheet.swift in Sources */,
-				B7FA950AC427E87EC9FDF612 /* SerialAutoSender.swift in Sources */,
-				06540A9C226ADDE4882D9B37 /* SerialBackend.swift in Sources */,
-				8D1D499A19ADD56DF394A820 /* SerialComposerView.swift in Sources */,
-				A899255E6E3B3A1B62EC8ADC /* SerialConnectionView.swift in Sources */,
-				01D2410B219A82E4A725C497 /* SerialModels.swift in Sources */,
-				0A7D034B86BCB9299FA4D450 /* SerialStore.swift in Sources */,
-				8E650E48EEDA5B5887D16F41 /* SerialTerminalView.swift in Sources */,
-				7B4BB74A68EBB08D166778BD /* SerialView.swift in Sources */,
-				A95D488854BA43E077137F31 /* SettingsView.swift in Sources */,
-				8DD02F8D7B4B35CCE9B5D02C /* TargetConfiguration.swift in Sources */,
-				CCD8AA68E67D35C0607C9EC6 /* TargetSetupSheet.swift in Sources */,
-				CE6CC85E9F8D49C9712D51F0 /* TerminalTableState.swift in Sources */,
-				8AE7EFA6A4825AD42494E22F /* ToolkitState.swift in Sources */,
-				56751F89119AFF9ED68DF82A /* ToolkitView.swift in Sources */,
-				9C4C492FE4093F425D48154B /* UpdateService.swift in Sources */,
-				D805993623D828B0FB2D4AF7 /* WorkbenchCommands.swift in Sources */,
-				0EE49919D5371D662C5A3A70 /* WorkbenchOperations.swift in Sources */,
-				6D7BD6C5FE49F484BB999A25 /* WorkbenchPanels.swift in Sources */,
-				C6848DAD9660C66656B773B3 /* WorkbenchStore.swift in Sources */,
-				E533F29967B565A7E301152F /* WorkspaceModels.swift in Sources */,
+				161DA3BB72447F392A84ABD5 /* ChipDockApp.swift in Sources */,
+				B73628EC438A1D9BD59BE58C /* ChipDockCore.swift in Sources */,
+				AA9CA5D7FEE3126821BC90E6 /* ChipPicker.swift in Sources */,
+				840E39FCB55E7005FD081F65 /* Components.swift in Sources */,
+				ED6EBD5D3EBD773E0559C229 /* ContentView.swift in Sources */,
+				78E8AB6253EF3720FD0398CA /* ExportDocument.swift in Sources */,
+				93B6DCCF0CC16FA9018FF044 /* FirmwareDataView.swift in Sources */,
+				D7A1726C899FD5517DE8230E /* FirmwareLayoutView.swift in Sources */,
+				5C75BF8C794B09E549275560 /* FlashView.swift in Sources */,
+				FD4152CB3EA69B81A06D887B /* Formatting.swift in Sources */,
+				7CF2F6CC93A2FA1E5B2E3F2A /* LogsView.swift in Sources */,
+				F41DECEFF71522D2E32C9FE3 /* MemoryView.swift in Sources */,
+				122CFA785340A213EAF4C103 /* RustService.swift in Sources */,
+				5B10A08161C4B5F39D0C6970 /* SaveProfileSheet.swift in Sources */,
+				81B997C8669C9E86028D59E9 /* SerialAutoSender.swift in Sources */,
+				2DB0892CFC2E3F3551601ABF /* SerialBackend.swift in Sources */,
+				A46057E8328925E07F02EF29 /* SerialComposerView.swift in Sources */,
+				AA815EC6513FE6817C04637B /* SerialConnectionView.swift in Sources */,
+				7A1A1DCA77BBC069BC1913DD /* SerialModels.swift in Sources */,
+				5D2CAAFEDFE98AE40F089DEE /* SerialStore.swift in Sources */,
+				60578E8D7AD3302E737EB94C /* SerialTerminalView.swift in Sources */,
+				3AD5E2403D8A29164DF964EA /* SerialView.swift in Sources */,
+				BB52E874039B440B109C7525 /* SettingsView.swift in Sources */,
+				8BF7E35708955B5D553BC478 /* TargetConfiguration.swift in Sources */,
+				BD2C26F5BAF7A96A5024C5BD /* TargetSetupSheet.swift in Sources */,
+				C2C955C5B250240787491CB6 /* TerminalTableState.swift in Sources */,
+				EE834D6A775F53E1C85429CB /* ToolkitState.swift in Sources */,
+				0F78A68546E4F3610E2FF0FA /* ToolkitView.swift in Sources */,
+				EDFA5BB0D5E8F48CE36E2899 /* UpdateService.swift in Sources */,
+				1B7E1F3C9526A4DB2CBA7D6B /* WorkbenchCommands.swift in Sources */,
+				17204B1596E6614DE85C176C /* WorkbenchOperations.swift in Sources */,
+				6B787C81AC7EB993FCCE576C /* WorkbenchPanels.swift in Sources */,
+				D2453896E0ADF63CBF22CD28 /* WorkbenchStore.swift in Sources */,
+				F7DB3EBA611D94EEE293B6B7 /* WorkspaceModels.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -443,16 +464,21 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				8C8A570D5ACB886021F62946 /* CoreIntegrationTests.swift in Sources */,
-				92FC54CB2CB82AABEC673F1C /* SerialIntegrationTests.swift in Sources */,
-				EF67EEDC02F42632E0F7CA7C /* UpdateTests.swift in Sources */,
-				9DDFE9DFF35C013BD5A527C6 /* WindowLayoutTests.swift in Sources */,
+				098F2D36F11F4558A3202A83 /* CoreIntegrationTests.swift in Sources */,
+				999EFAF5545237B19A088E57 /* SerialIntegrationTests.swift in Sources */,
+				4DC7C147972F1435D3801DCB /* UpdateTests.swift in Sources */,
+				CDDD955438774E5820A6C32B /* WindowLayoutTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		DD5D317B05DCDDE7C3A6E507 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = BA93DCB1F3F152587AF6DAE1 /* RustBindings */;
+			targetProxy = C226217E2DED1F1A6E00DDA8 /* PBXContainerItemProxy */;
+		};
 		E12A88D41F60013851C35738 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = F663582F515ECB3BC5FE32DF /* ChipDock */;
@@ -465,6 +491,8 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				CHIPDOCK_BINDINGS_DIR = "$(BUILD_DIR)/ChipDockBindings/$(CONFIGURATION)";
+				CHIPDOCK_RUST_TARGET_DIR = "$(PROJECT_TEMP_DIR)/RustTarget";
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
@@ -497,7 +525,7 @@
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Manual;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = YES;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
@@ -511,6 +539,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
+				HEADER_SEARCH_PATHS = "$(inherited) $(CHIPDOCK_BINDINGS_DIR)/include";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 0.2.2;
 				MTL_ENABLE_DEBUG_INFO = NO;
@@ -520,11 +549,28 @@
 				SPARKLE_PUBLIC_ED_KEY = "NgorrvaZPObmbOUEmKbbCvPbPqcD+kcw7E2NRTfxlKI=";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_INCLUDE_PATHS = "$(inherited) $(CHIPDOCK_BINDINGS_DIR)/include";
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_VERSION = 6.0;
 			};
 			name = Release;
+		};
+		2F6F14AA93B0808E35D1D7E2 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				SDKROOT = macosx;
+				SUPPORTED_PLATFORMS = macosx;
+			};
+			name = Release;
+		};
+		44CFBF423801E7AC283BFF0E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				SDKROOT = macosx;
+				SUPPORTED_PLATFORMS = macosx;
+			};
+			name = Debug;
 		};
 		8EDD597C2257CBF611CE6336 /* Debug */ = {
 			isa = XCBuildConfiguration;
@@ -532,7 +578,6 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				COMBINE_HIDPI_IMAGES = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				HEADER_SEARCH_PATHS = "$(inherited) $(SRCROOT)/ChipDock/Generated";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -540,7 +585,6 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.xiaoyu.chipdock.tests;
 				SDKROOT = macosx;
-				SWIFT_INCLUDE_PATHS = "$(inherited) $(SRCROOT)/ChipDock/Generated";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ChipDock.app/Contents/MacOS/ChipDock";
 			};
 			name = Debug;
@@ -551,7 +595,6 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				COMBINE_HIDPI_IMAGES = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				HEADER_SEARCH_PATHS = "$(inherited) $(SRCROOT)/ChipDock/Generated";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -559,7 +602,6 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.xiaoyu.chipdock.tests;
 				SDKROOT = macosx;
-				SWIFT_INCLUDE_PATHS = "$(inherited) $(SRCROOT)/ChipDock/Generated";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ChipDock.app/Contents/MacOS/ChipDock";
 			};
 			name = Release;
@@ -568,6 +610,8 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				CHIPDOCK_BINDINGS_DIR = "$(BUILD_DIR)/ChipDockBindings/$(CONFIGURATION)";
+				CHIPDOCK_RUST_TARGET_DIR = "$(PROJECT_TEMP_DIR)/RustTarget";
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
@@ -600,7 +644,7 @@
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Manual;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = YES;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -620,6 +664,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
+				HEADER_SEARCH_PATHS = "$(inherited) $(CHIPDOCK_BINDINGS_DIR)/include";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 0.2.2;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
@@ -630,6 +675,7 @@
 				SPARKLE_PUBLIC_ED_KEY = "NgorrvaZPObmbOUEmKbbCvPbPqcD+kcw7E2NRTfxlKI=";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_INCLUDE_PATHS = "$(inherited) $(CHIPDOCK_BINDINGS_DIR)/include";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_VERSION = 6.0;
@@ -644,19 +690,17 @@
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
-				HEADER_SEARCH_PATHS = "$(inherited) $(SRCROOT)/ChipDock/Generated";
-				INFOPLIST_FILE = ChipDock/Resources/Info.plist;
+				INFOPLIST_FILE = Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				LIBRARY_SEARCH_PATHS = "$(inherited) $(BUILT_PRODUCTS_DIR)";
-				OTHER_LDFLAGS = "$(inherited) -lchipdock_core -framework IOKit -framework CoreFoundation -framework Security -framework SystemConfiguration -liconv -lresolv -lc++";
+				LIBRARY_SEARCH_PATHS = "$(inherited) $(CHIPDOCK_BINDINGS_DIR)";
+				OTHER_LDFLAGS = "$(inherited) -lchipdock_ffi -framework IOKit -framework CoreFoundation -framework Security -framework SystemConfiguration -liconv -lresolv -lc++";
 				PRODUCT_BUNDLE_IDENTIFIER = com.xiaoyu.chipdock;
 				PRODUCT_MODULE_NAME = ChipDock;
 				PRODUCT_NAME = ChipDock;
 				SDKROOT = macosx;
-				SWIFT_INCLUDE_PATHS = "$(inherited) $(SRCROOT)/ChipDock/Generated";
 			};
 			name = Release;
 		};
@@ -668,19 +712,17 @@
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = NO;
 				GENERATE_INFOPLIST_FILE = NO;
-				HEADER_SEARCH_PATHS = "$(inherited) $(SRCROOT)/ChipDock/Generated";
-				INFOPLIST_FILE = ChipDock/Resources/Info.plist;
+				INFOPLIST_FILE = Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				LIBRARY_SEARCH_PATHS = "$(inherited) $(BUILT_PRODUCTS_DIR)";
-				OTHER_LDFLAGS = "$(inherited) -lchipdock_core -framework IOKit -framework CoreFoundation -framework Security -framework SystemConfiguration -liconv -lresolv -lc++";
+				LIBRARY_SEARCH_PATHS = "$(inherited) $(CHIPDOCK_BINDINGS_DIR)";
+				OTHER_LDFLAGS = "$(inherited) -lchipdock_ffi -framework IOKit -framework CoreFoundation -framework Security -framework SystemConfiguration -liconv -lresolv -lc++";
 				PRODUCT_BUNDLE_IDENTIFIER = com.xiaoyu.chipdock;
 				PRODUCT_MODULE_NAME = ChipDock;
 				PRODUCT_NAME = ChipDock;
 				SDKROOT = macosx;
-				SWIFT_INCLUDE_PATHS = "$(inherited) $(SRCROOT)/ChipDock/Generated";
 			};
 			name = Debug;
 		};
@@ -710,6 +752,15 @@
 			buildConfigurations = (
 				8EDD597C2257CBF611CE6336 /* Debug */,
 				F0A34F0698E40603F92D66BA /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		D768D29E868585DFCE0398D1 /* Build configuration list for PBXAggregateTarget "RustBindings" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				44CFBF423801E7AC283BFF0E /* Debug */,
+				2F6F14AA93B0808E35D1D7E2 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

@@ -4,10 +4,13 @@
 mod serial;
 
 use chipdock_core::{
-    api::{ChipDockCore, CoreError, ProgressEvent},
     error::{AppError, ErrorResponse},
     models::*,
     services::storage::{self, StoragePaths},
+};
+use chipdock_service::{
+    api::ChipDockCore,
+    records::{CoreError, ProgressEvent},
 };
 use chrono::{DateTime, Utc};
 use interoptopus::inventory::RustInventory;
@@ -645,7 +648,7 @@ mod tests {
             stage: JobStage::Completed,
             progress: Some(1.0),
             message: "完成".into(),
-            at: chipdock_core::timestamp::AppTimestamp::from(0.25),
+            at: chipdock_service::timestamp::AppTimestamp::from(0.25),
         };
         assert_eq!(ProgressRecord::from(event).at_ms, 978_307_200_250);
     }

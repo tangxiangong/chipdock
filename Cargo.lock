@@ -377,7 +377,6 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-serial",
- "uniffi",
  "uuid",
 ]
 
@@ -386,6 +385,7 @@ name = "chipdock-csharp"
 version = "0.2.2"
 dependencies = [
  "chipdock-core",
+ "chipdock-service",
  "chrono",
  "interoptopus",
  "tempfile",
@@ -401,11 +401,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "chipdock-ffi"
+version = "0.2.2"
+dependencies = [
+ "chipdock-core",
+ "chipdock-service",
+ "uniffi",
+]
+
+[[package]]
 name = "chipdock-release-notes"
 version = "0.2.2"
 dependencies = [
  "anyhow",
  "tempfile",
+]
+
+[[package]]
+name = "chipdock-service"
+version = "0.2.2"
+dependencies = [
+ "anyhow",
+ "chipdock-core",
+ "chrono",
+ "thiserror",
+ "tokio",
+ "uuid",
 ]
 
 [[package]]

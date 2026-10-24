@@ -1,0 +1,16 @@
+[package]
+name = "chipdock-ffi"
+description = "Swift UniFFI bindings for ChipDock"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+chipdock-core.workspace = true
+chipdock-service.workspace = true
+uniffi.workspace = true
+
+[lib]
+crate-type = ["lib", "cdylib", "staticlib"]

@@ -4,7 +4,6 @@ use serde::{Deserialize, Serialize};
 #[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
-#[derive(uniffi::Enum)]
 pub enum Parity {
     #[default]
     None,
@@ -15,7 +14,6 @@ pub enum Parity {
 #[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
-#[derive(uniffi::Enum)]
 pub enum FlowControl {
     #[default]
     None,
@@ -26,7 +24,6 @@ pub enum FlowControl {
 #[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
-#[derive(uniffi::Record)]
 pub struct SerialConfig {
     pub baud_rate: u32,
     pub data_bits: u8,
@@ -65,7 +62,6 @@ impl Default for SerialConfig {
 #[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-#[derive(uniffi::Record)]
 pub struct PortInfo {
     pub path: String,
     pub display_name: String,
@@ -78,7 +74,6 @@ pub struct PortInfo {
 #[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-#[derive(uniffi::Record)]
 pub struct SerialStatus {
     pub connected: bool,
     pub path: Option<String>,
@@ -92,7 +87,6 @@ pub struct SerialStatus {
 #[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Clone, Copy, Debug, Deserialize)]
 #[serde(rename_all = "lowercase")]
-#[derive(uniffi::Enum)]
 pub enum SendFormat {
     Hex,
     Ascii,
@@ -102,7 +96,7 @@ pub enum SendFormat {
 }
 
 #[cfg_attr(feature = "csharp", interoptopus::ffi)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Enum)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ChecksumAlgorithm {
     None,
     Sum8,
@@ -115,7 +109,6 @@ pub enum ChecksumAlgorithm {
 #[cfg_attr(feature = "csharp", interoptopus::ffi)]
 #[derive(Clone, Copy, Debug, Deserialize)]
 #[serde(rename_all = "lowercase")]
-#[derive(uniffi::Enum)]
 pub enum LineEnding {
     None,
     Lf,

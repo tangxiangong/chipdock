@@ -1,9 +1,11 @@
 [workspace]
 members = [
     "crates/chipdock-core",
-    "crates/chipdock-bindgen",
+    "crates/chipdock-service",
+    "crates/chipdock-ffi",
+    "bindings/generator",
     "crates/chipdock-csharp",
-    "crates/chipdock-csharp-bindgen",
+    "bindings/csharp-generator",
     "crates/chipdock-release-notes",
     "xtask",
 ]
@@ -21,7 +23,14 @@ uniffi = "=0.32.2"
 interoptopus = "0.16"
 interoptopus_csharp = "0.16"
 chipdock-core = { path = "crates/chipdock-core" }
+chipdock-service = { path = "crates/chipdock-service" }
+chipdock-ffi = { path = "crates/chipdock-ffi" }
 chipdock-csharp = { path = "crates/chipdock-csharp" }
+anyhow = "1"
+chrono = { version = "0.4", features = ["serde"] }
+thiserror = "2"
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "io-util", "macros", "time"] }
+uuid = { version = "1", features = ["v4", "serde"] }
 tempfile = "3"
 
 [profile.release]
