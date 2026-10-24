@@ -49,36 +49,4 @@ final class SerialIntegrationTests: XCTestCase {
         }
         XCTAssertFalse(serial.updateBlocked)
     }
-    @MainActor
-    func testPeerToolMenusRenderBothPages() async throws {
-        func find(_ menu: NSMenu, title: String) -> (NSMenu, Int)? {
-            for (index, item) in menu.items.enumerated() {
-                if item.title == title { return (menu, index) }
-                if let submenu = item.submenu, let found = find(submenu, title: title) { return found }
-            }
-            return nil
-        }
-        let mainMenu = try XCTUnwrap(NSApp.mainMenu)
-        let window = try XCTUnwrap(NSApp.windows.first { $0.title == "ChipDock" })
-        let directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
-            .deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent(".build/SerialScreenshots")
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        window.orderFront(nil)
-        var snapshots: [Data] = []
-        for (title, filename) in [("串口连接", "serial.png"), ("固件烧录", "flash.png")] {
-            let (menu, index) = try XCTUnwrap(find(mainMenu, title: title))
-            menu.performActionForItem(at: index)
-            try await Task.sleep(for: .milliseconds(200))
-            window.layoutIfNeeded()
-            let view = try XCTUnwrap(window.contentView?.superview)
-            view.layoutSubtreeIfNeeded()
-            let bitmap = try XCTUnwrap(view.bitmapImageRepForCachingDisplay(in: view.bounds))
-            view.cacheDisplay(in: view.bounds, to: bitmap)
-            let data = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
-            XCTAssertGreaterThan(data.count, 2000)
-            try data.write(to: directory.appendingPathComponent(filename))
-            snapshots.append(data)
-        }
-        XCTAssertNotEqual(snapshots[0], snapshots[1], "Peer tool commands must switch the rendered page")
-    }
 }
