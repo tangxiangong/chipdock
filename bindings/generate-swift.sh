@@ -10,5 +10,4 @@ if [[ ! -f "$LIBRARY" ]]; then
 fi
 
 cargo run --locked --manifest-path "$PROJECT_ROOT/Cargo.toml" -p chipdock-bindgen -- \
-    generate --library "$LIBRARY" --language swift --no-format \
-    --config "$PROJECT_ROOT/crates/chipdock-ffi/uniffi.toml" --out-dir "$OUTPUT"
+    generate --library "$LIBRARY" --language swift --no-format --out-dir "$OUTPUT"

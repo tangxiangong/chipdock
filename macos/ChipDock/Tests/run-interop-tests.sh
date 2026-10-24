@@ -5,9 +5,9 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 export PATH="$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 export MACOSX_DEPLOYMENT_TARGET=14.0
 export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$PROJECT_ROOT/target}"
-TEST_BUILD_DIR="$PROJECT_ROOT/.build/BackendTests"
+TEST_BUILD_DIR="${CHIPDOCK_TEST_BUILD_DIR:-$PROJECT_ROOT/.build/BackendTests}"
 BINDINGS_DIR="$PROJECT_ROOT/bindings/generated/swift"
-mkdir -p "$BINDINGS_DIR"
+mkdir -p "$TEST_BUILD_DIR" "$BINDINGS_DIR"
 
 # macOS ships the UniFFI bridge; the Interoptopus crates are tested on Windows.
 cargo test --manifest-path "$PROJECT_ROOT/Cargo.toml" --package chipdock-core --package chipdock-service --package chipdock-ffi --package chipdock-bindgen --all-targets --locked
@@ -16,6 +16,7 @@ bash "$PROJECT_ROOT/bindings/generate-swift.sh" "$CARGO_TARGET_DIR/debug/libchip
 cp "$BINDINGS_DIR/ChipDockCoreFFI.modulemap" "$BINDINGS_DIR/module.modulemap"
 
 xcrun swiftc -swift-version 6 -parse-as-library -I "$BINDINGS_DIR" \
+    -module-cache-path "$TEST_BUILD_DIR/ModuleCache" \
     "$BINDINGS_DIR/ChipDockCore.swift" \
     "$PROJECT_ROOT/macos/ChipDock/Tests/RustInteropTests.swift" \
     "$CARGO_TARGET_DIR/debug/libchipdock_ffi.a" \

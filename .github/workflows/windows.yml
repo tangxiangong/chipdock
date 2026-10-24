@@ -45,7 +45,7 @@ jobs:
       - name: Check PowerShell scripts
         shell: pwsh
         run: |
-          foreach ($Script in Get-ChildItem windows/scripts/*.ps1) {
+          foreach ($Script in Get-ChildItem windows/scripts/*.ps1, ci/*.ps1) {
             $Errors = $null
             [System.Management.Automation.Language.Parser]::ParseFile($Script.FullName, [ref]$null, [ref]$Errors) | Out-Null
             if ($Errors) { $Errors | ForEach-Object { Write-Error "$($Script.Name): $_" }; exit 1 }
