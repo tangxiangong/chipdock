@@ -151,7 +151,9 @@ private struct ActivityView: View {
         .font(.callout)
         .foregroundStyle(.secondary)
         .padding(.horizontal, 12)
-        .frame(minWidth: 280, maxWidth: 440)
+        // Flexible principal-item widths can keep AppKit's toolbar layout
+        // cycling on macOS 27.2. Use the same width for fitting and placement.
+        .frame(width: 360)
         .accessibilityElement(children: .combine)
         .onChange(of: completion?.id) { _, _ in
             if let completion { AccessibilityNotification.Announcement(completion.message).post() }
