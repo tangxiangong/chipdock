@@ -124,7 +124,9 @@
           </Grid>
 
           <Grid Grid.Row="1">
-            <ListView x:Name="Terminal" SelectionMode="Extended" AutomationProperties.Name="串口数据终端"
+            <Grid.RowDefinitions><RowDefinition x:Name="ParsedRow" Height="0"/><RowDefinition x:Name="RawRow" Height="*"/></Grid.RowDefinitions>
+            <ListView x:Name="ParsedTerminal" Grid.Row="0" FontFamily="Consolas" FontSize="12" AutomationProperties.Name="解析记录" />
+            <ListView x:Name="Terminal" Grid.Row="1" SelectionMode="Extended" AutomationProperties.Name="串口数据终端"
                       Background="Transparent" ScrollViewer.HorizontalScrollMode="Disabled" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
               <ListView.ItemContainerStyle>
                 <Style TargetType="ListViewItem">
@@ -162,7 +164,7 @@
                 </DataTemplate>
               </ListView.ItemTemplate>
             </ListView>
-            <StackPanel x:Name="EmptyState" VerticalAlignment="Center" HorizontalAlignment="Center"
+            <StackPanel x:Name="EmptyState" Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center"
                         Spacing="12" Margin="24" MaxWidth="320">
               <FontIcon x:Name="EmptyIcon" Glyph="&#xE756;" FontSize="32" HorizontalAlignment="Center"
                         Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
@@ -257,7 +259,11 @@
             </Grid.ColumnDefinitions>
             <StackPanel x:Name="SendHeading" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
               <SymbolIcon Symbol="Edit" />
-              <TextBlock Text="发送区" FontSize="13" FontWeight="SemiBold" AutomationProperties.HeadingLevel="Level2" />
+              <ToggleButton x:Name="CommandMode" Content="命令" Click="OnCommandMode" />
+              <Button Content="协议规则" Click="OnProtocolRules" />
+              <ComboBox x:Name="ProtocolDisplay" SelectedIndex="0" SelectionChanged="OnProtocolDisplay" AutomationProperties.Name="解析显示">
+                <ComboBoxItem Content="原始"/><ComboBoxItem Content="解析"/><ComboBoxItem Content="同时"/>
+              </ComboBox>
             </StackPanel>
             <ComboBox x:Name="ChecksumPicker" Grid.Column="1" Width="156" VerticalAlignment="Center"
                       AutomationProperties.Name="发送校验算法" SelectionChanged="OnSelectionChanged"
@@ -269,9 +275,13 @@
             <ComboBox x:Name="EndingPicker" Grid.Column="5" Width="80" VerticalAlignment="Center"
                       AutomationProperties.Name="发送行尾" SelectionChanged="OnSelectionChanged" />
           </Grid>
-          <TextBox x:Name="InputBox" Grid.Row="1" AcceptsReturn="True" TextWrapping="Wrap" PlaceholderText="输入文本或设备指令…"
+          <Grid Grid.Row="1">
+          <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+          <TextBox x:Name="InputBox" Grid.Row="0" KeyDown="OnCommandKeyDown" AcceptsReturn="True" TextWrapping="Wrap" PlaceholderText="输入文本或设备指令…"
                    Padding="18,8" Background="Transparent" BorderThickness="0" CornerRadius="0" FontFamily="Consolas" FontSize="13"
                    AutomationProperties.Name="要发送的数据" TextChanged="OnInputChanged" />
+          <TextBlock x:Name="CommandPreview" Grid.Row="1" Margin="18,0,18,4" TextWrapping="Wrap" FontFamily="Consolas" FontSize="12" IsTextSelectionEnabled="True" />
+          </Grid>
           <Grid x:Name="ComposerActions" Grid.Row="2" Padding="18,8,18,14" ColumnSpacing="12" RowSpacing="8">
             <Grid.RowDefinitions>
               <RowDefinition Height="Auto" />

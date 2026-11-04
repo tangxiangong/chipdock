@@ -14,6 +14,80 @@ final class SerialStore {
     private(set) var refreshing = false
     var error: String?
     var input = ""
+    var commandMode = false
+    var protocolRules: [SerialProtocolRule] = {
+        guard let data = UserDefaults.standard.data(forKey: "serial.protocol.rules"),
+              let rules = try? JSONDecoder().decode([SerialProtocolRule].self, from: data) else { return [] }
+        return rules
+    }()
+    var protocolRecords: [SerialProtocolRecord] = []
+    var protocolDisplay = "both"
+    var commandPreview = ""
+    var commandError = ""
+    var commandHistory: [String] = []
+    var feedback = ""
+    private var protocolBuffer = ""
+    private var protocolRevision = 0
+    private var pendingResponse = ""
+    private var responseDeadline: Date?
+    private var responseStartedAt: Date?
+    private var historyIndex = 0
+
+    func previewCommand() async {
+        guard commandMode else { commandPreview = ""; commandError = ""; return }
+        let value = input
+        let revision = protocolRevision
+        commandPreview = ""
+        do {
+            let result = try await core.program(rules: protocolRules, operation: "encode", input: value)
+            guard value == input && revision == protocolRevision else { return }
+            commandPreview = result.hex; commandError = ""
+        } catch {
+            guard value == input && revision == protocolRevision else { return }
+            commandError = error.localizedDescription
+        }
+    }
+    func saveRules(_ rules: [SerialProtocolRule]) async throws {
+        _ = try await core.program(rules: rules, operation: "validate")
+        let data = try JSONEncoder().encode(rules)
+        UserDefaults.standard.set(data, forKey: "serial.protocol.rules")
+        protocolRules = rules; protocolRevision += 1; resetProtocol()
+        await previewCommand()
+    }
+    func testRules(_ rules: [SerialProtocolRule], input: String, receive: Bool) async throws -> SerialProtocolResult {
+        try await core.program(rules: rules, operation: receive ? "decode" : "encode", input: receive ? "" : input, incoming: receive ? input : "")
+    }
+    func recallCommand(_ delta: Int) {
+        guard !commandHistory.isEmpty else { return }
+        historyIndex = min(commandHistory.count, max(0, historyIndex + delta))
+        input = historyIndex == commandHistory.count ? "" : commandHistory[historyIndex]
+    }
+    private func resetProtocol() {
+        protocolBuffer = ""; pendingResponse = ""; responseDeadline = nil; responseStartedAt = nil; feedback = ""
+    }
+    private func decodeProtocol(_ incoming: [SerialFrame]) async {
+        guard protocolRules.contains(where: { $0.receive }) else { return }
+        let revision = connectionRevision
+        let configRevision = protocolRevision
+        for frame in incoming where frame.isReceive && !frame.bytes.isEmpty {
+            do {
+                let result = try await core.program(rules: protocolRules, operation: "decode", buffer: protocolBuffer, incoming: frame.hex)
+                guard revision == connectionRevision && configRevision == protocolRevision else { return }
+                protocolBuffer = result.buffer
+                protocolRecords.append(contentsOf: result.records)
+                if protocolRecords.count > 2000 { protocolRecords.removeFirst(protocolRecords.count - 2000) }
+                if let deadline = responseDeadline, let started = responseStartedAt,
+                   let received = frame.receivedAt, received >= started, received <= deadline,
+                   result.records.contains(where: { $0.valid && $0.name == pendingResponse }) {
+                    feedback = "收到匹配反馈：\(pendingResponse)（未验证请求序号）"; pendingResponse = ""; responseDeadline = nil
+                }
+            } catch {
+                guard revision == connectionRevision && configRevision == protocolRevision else { return }
+                protocolBuffer = ""; self.error = error.localizedDescription
+            }
+        }
+    }
+
     var searchText = ""
     var direction = SerialDirectionFilter.all
     var baudRateInput = "" {
@@ -41,7 +115,7 @@ final class SerialStore {
 
     var locked: Bool { status.connected || busy }
     var canSend: Bool { canTransmit && !autoSending }
-    private var canTransmit: Bool { status.connected && !sending && !input.isEmpty && !busy }
+    private var canTransmit: Bool { status.connected && !sending && !input.isEmpty && !busy && (!commandMode || (!commandPreview.isEmpty && commandError.isEmpty)) }
     var autoSending: Bool { autoSender.isRunning }
     var validBaudRate: Bool { SerialBaudRate.parse(baudRateInput) != nil }
     var canConnect: Bool { !busy && !preferences.selectedPath.isEmpty && validBaudRate }
@@ -49,7 +123,7 @@ final class SerialStore {
         guard let value = Int(autoSendIntervalInput), SerialAutoSender.intervalRange.contains(value) else { return nil }
         return value
     }
-    var canStartAutoSend: Bool { canSend && autoSendInterval != nil }
+    var canStartAutoSend: Bool { !commandMode && canSend && autoSendInterval != nil }
     var selectedPort: SerialPort? { ports.first { $0.path == preferences.selectedPath } }
 
     func start() async {
@@ -68,9 +142,15 @@ final class SerialStore {
                 if !changingConnection && !busy && revision == connectionRevision && status != batch.status {
                     if let failure = batch.status.lastError, failure != status.lastError { error = failure }
                     status = batch.status
-                    if !status.connected { autoSender.stop() }
+                    if !status.connected { autoSender.stop(); resetProtocol() }
                 }
-                if !batch.frames.isEmpty { append(batch.frames) }
+                if batch.droppedFrames > 0 { protocolBuffer = "" }
+                if !batch.frames.isEmpty {
+                    append(batch.frames)
+                    if !changingConnection && !busy && revision == connectionRevision { await decodeProtocol(batch.frames) }
+                }
+                if !status.connected { resetProtocol() }
+                if let deadline = responseDeadline, Date() > deadline { feedback = "等待反馈超时：\(pendingResponse)"; pendingResponse = ""; responseDeadline = nil }
                 if batch.droppedFrames > 0 { error = "接收速度超过显示缓冲，已丢弃 \(batch.droppedFrames) 条旧记录；字节统计保持完整。" }
                 tick += 1
                 if tick % 10 == 0 { await refreshPorts(silent: true) }
@@ -104,6 +184,7 @@ final class SerialStore {
         }
         autoSender.stop()
         busy = true
+        resetProtocol()
         connectionRevision += 1
         let revision = connectionRevision
         defer { if revision == connectionRevision { busy = false } }
@@ -123,7 +204,7 @@ final class SerialStore {
 
     func toggleAutoSend() {
         if autoSending { autoSender.stop(); return }
-        guard canSend else { return }
+        guard canStartAutoSend else { return }
         guard let interval = autoSendInterval else {
             error = "自动发送间隔必须是 10–3600000 毫秒。"
             return
@@ -140,15 +221,32 @@ final class SerialStore {
         sending = true
         defer { sending = false }
         do {
-            try await core.send(input: input, format: preferences.sendFormat, lineEnding: preferences.lineEnding, checksum: preferences.checksum)
+            if commandMode {
+                let command = input
+                let configRevision = protocolRevision
+                let result = try await core.program(rules: protocolRules, operation: "encode", input: command)
+                guard revision == connectionRevision && configRevision == protocolRevision && status.connected && !busy else { return false }
+                responseStartedAt = Date(timeIntervalSince1970: floor(Date().timeIntervalSince1970 * 1000) / 1000)
+                pendingResponse = result.response
+                responseDeadline = result.response.isEmpty ? nil : Date().addingTimeInterval(Double(result.timeout_ms) / 1000)
+                feedback = result.response.isEmpty ? "" : "等待反馈：\(result.response)"
+                try await core.send(input: result.hex, format: .hex, lineEnding: "none", checksum: .none)
+                commandHistory.append(command)
+                if commandHistory.count > 100 { commandHistory.removeFirst() }
+                historyIndex = commandHistory.count
+                protocolRecords.append(SerialProtocolRecord(name: "TX", hex: result.hex, message: command, valid: true))
+                if protocolRecords.count > 2000 { protocolRecords.removeFirst(protocolRecords.count - 2000) }
+            } else {
+                try await core.send(input: input, format: preferences.sendFormat, lineEnding: preferences.lineEnding, checksum: preferences.checksum)
+            }
             return status.connected && !busy && revision == connectionRevision
         } catch {
-            if revision == connectionRevision { self.error = error.localizedDescription }
+            if revision == connectionRevision { resetProtocol(); self.error = error.localizedDescription }
             return false
         }
     }
 
-    func clear() { frames.removeAll(keepingCapacity: true); retainedBytes = 0 }
+    func clear() { protocolRecords.removeAll(); frames.removeAll(keepingCapacity: true); retainedBytes = 0 }
 
     private func append(_ incoming: [SerialFrame]) {
         frames.append(contentsOf: incoming)
@@ -165,6 +263,7 @@ final class SerialStore {
         autoSender.stop()
         pollingTask?.cancel()
         busy = true
+        resetProtocol()
         connectionRevision += 1
         if let result = try? await core.disconnect() { status = result }
     }

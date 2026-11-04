@@ -19,11 +19,27 @@ struct SerialTerminalView: View {
     var body: some View {
         let frames = visibleFrames
         VStack(spacing: 0) {
+            if serial.protocolDisplay != "raw" && !serial.protocolRules.isEmpty {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 6) {
+                        ForEach(serial.protocolRecords) { record in
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("\(record.name.isEmpty ? "RX" : record.name)  \(record.message)")
+                                    .foregroundStyle(record.valid ? Color.primary : Color.orange)
+                                Text(record.hex).foregroundStyle(.secondary)
+                            }.font(.system(.caption, design: .monospaced)).textSelection(.enabled)
+                        }
+                    }.frame(maxWidth: .infinity, alignment: .leading).padding(12)
+                }.frame(maxHeight: serial.protocolDisplay == "both" ? 150 : .infinity)
+                Divider()
+            }
+            if serial.protocolDisplay != "parsed" || serial.protocolRules.isEmpty {
             TerminalTable(frames: frames, format: serial.preferences.displayFormat,
                           autoScroll: serial.preferences.autoScroll, state: serial.terminalTableState)
                 .overlay {
                     if frames.isEmpty { emptyState(filtered: !serial.frames.isEmpty) }
                 }
+            }
             Divider()
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 12) {
@@ -62,6 +78,11 @@ struct SerialTerminalView: View {
 
     private func displayOptions(count: Int) -> some View {
         HStack(spacing: 12) {
+            if !serial.protocolRules.isEmpty {
+                Picker("解析显示", selection: $serial.protocolDisplay) {
+                    Text("原始").tag("raw"); Text("解析").tag("parsed"); Text("同时").tag("both")
+                }.frame(width: 130)
+            }
             Picker("接收编码", selection: $serial.preferences.displayFormat) {
                 ForEach(SerialDataFormat.allCases) { Text($0.title).tag($0) }
             }

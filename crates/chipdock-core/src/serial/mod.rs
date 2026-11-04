@@ -14,6 +14,7 @@ use tokio_serial::{
 
 mod checksum;
 pub mod encoding;
+pub mod program;
 pub mod types;
 mod usb_ids;
 

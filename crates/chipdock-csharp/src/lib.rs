@@ -467,6 +467,7 @@ pub fn inventory() -> RustInventory {
         .register(function!(serial::chipdock_serial_connect))
         .register(function!(serial::chipdock_serial_disconnect))
         .register(function!(serial::chipdock_serial_send))
+        .register(function!(serial::chipdock_serial_program))
         .register(function!(version))
         .register(function!(list_probes))
         .register(function!(connect_target))

@@ -152,6 +152,22 @@ mod tests {
     }
 
     #[test]
+    fn protocol_wire_previews_without_a_connection() {
+        let json = r#"{"rules":[{"name":"speed","template":"AA BB {v:u16be} {checksum:sum8}"}],"operation":"encode","input":"speed 45"}"#;
+        let response =
+            chipdock_serial_program(Wire::from(SerialProgramRequest { json: json.into() }))
+                .unwrap()
+                .unwire();
+        assert!(response.error.is_none());
+        assert!(response.json.contains("AA BB 00 2D 92"));
+        let response =
+            chipdock_serial_program(Wire::from(SerialProgramRequest { json: "{}".into() }))
+                .unwrap()
+                .unwire();
+        assert!(response.error.is_some());
+    }
+
+    #[test]
     fn wire_preserves_every_checksum_selection() {
         for checksum in [
             ChecksumAlgorithm::None,
@@ -170,4 +186,34 @@ mod tests {
             assert_eq!(request.unwire().checksum, checksum);
         }
     }
+}
+
+#[ffi]
+pub struct SerialProgramRequest {
+    pub json: String,
+}
+#[ffi]
+pub struct SerialProgramResponse {
+    pub json: String,
+    pub error: Option<String>,
+}
+#[ffi]
+pub fn chipdock_serial_program(
+    input: Wire<SerialProgramRequest>,
+) -> ffi::Result<Wire<SerialProgramResponse>, BridgeError> {
+    panic_to_result(|| {
+        let input = match request(input) {
+            Ok(value) => value,
+            Err(error) => return ffi::Result::Err(error),
+        };
+        invoke(
+            || match chipdock_core::serial::program::execute(&input.json) {
+                Ok(json) => SerialProgramResponse { json, error: None },
+                Err(error) => SerialProgramResponse {
+                    json: String::new(),
+                    error: Some(error.to_string()),
+                },
+            },
+        )
+    })
 }

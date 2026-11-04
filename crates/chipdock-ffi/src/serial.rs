@@ -39,3 +39,9 @@ pub fn serial_send_with_checksum(
 ) -> Result<(), SerialError> {
     serial::serial_send_with_checksum(input, format, line_ending, checksum)
 }
+
+/// Validate, preview and decode serial protocol templates without hardware access.
+#[uniffi::export]
+pub fn serial_program(request: String) -> Result<String, SerialError> {
+    chipdock_core::serial::program::execute(&request).map_err(Into::into)
+}

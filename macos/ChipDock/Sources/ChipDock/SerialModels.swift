@@ -93,6 +93,7 @@ struct SerialFrame: Identifiable, Encodable, Sendable {
         formatter.dateFormat = "HH:mm:ss.SSS"
         return formatter
     }()
+    @MainActor var receivedAt: Date? { Self.timestampParser.date(from: timestamp) }
     @MainActor var time: String {
         guard let date = Self.timestampParser.date(from: timestamp) else { return timestamp }
         return Self.timeFormatter.string(from: date)
@@ -150,5 +151,94 @@ struct SerialPreferences: Codable, Sendable {
 
     func save() {
         if let data = try? JSONEncoder().encode(self) { UserDefaults.standard.set(data, forKey: "serial.preferences") }
+    }
+}
+
+struct SerialProtocolRule: Codable, Identifiable, Sendable, Equatable {
+    var name = "new-command"
+    var template = "AA {value:u16be} {checksum:sum8}"
+    var display = ""
+    var receive = false
+    var checksum_start = 0
+    var checksum_end: Int?
+    var response = ""
+    var timeout_ms = 1000
+    var delimiter = ""
+    var id: String { name }
+}
+struct SerialProtocolResult: Decodable, Sendable {
+    var hex: String
+    var buffer: String
+    var records: [SerialProtocolRecord]
+    var response: String
+    var timeout_ms: Int
+}
+struct SerialProtocolRecord: Decodable, Sendable, Identifiable {
+    var id = UUID()
+    var name: String
+    var hex: String
+    var message: String
+    var valid: Bool
+    private enum CodingKeys: String, CodingKey { case name, hex, message, valid }
+}
+
+extension SerialProtocolRule {
+    private enum CodingKeys: String, CodingKey { case name, template, display, receive, checksum_start, checksum_end, response, timeout_ms, delimiter }
+    init(from decoder: Decoder) throws {
+        self.init()
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        name = try c.decode(String.self, forKey: .name)
+        template = try c.decode(String.self, forKey: .template)
+        display = try c.decodeIfPresent(String.self, forKey: .display) ?? ""
+        receive = try c.decodeIfPresent(Bool.self, forKey: .receive) ?? false
+        checksum_start = try c.decodeIfPresent(Int.self, forKey: .checksum_start) ?? 0
+        checksum_end = try c.decodeIfPresent(Int.self, forKey: .checksum_end)
+        response = try c.decodeIfPresent(String.self, forKey: .response) ?? ""
+        timeout_ms = try c.decodeIfPresent(Int.self, forKey: .timeout_ms) ?? 1000
+        delimiter = try c.decodeIfPresent(String.self, forKey: .delimiter) ?? ""
+    }
+}
+
+/// Editable fragments for the currently selected frame, never whole rules.
+enum SerialFrameFragment: String, CaseIterable, Identifiable {
+    case header, u8, u16be, u16le, i16be, u32be, sum8, xor8, crc16
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .header: "帧头 AA BB"
+        case .sum8: "SUM8"
+        case .xor8: "XOR8"
+        case .crc16: "CRC16-Modbus"
+        default: rawValue
+        }
+    }
+    var token: String {
+        switch self {
+        case .header: "AA BB"
+        case .sum8: "{checksum:sum8}"
+        case .xor8: "{checksum:xor8}"
+        case .crc16: "{checksum:crc16modbus}"
+        default: "{value:\(rawValue)}"
+        }
+    }
+    func inserting(into template: String) -> String {
+        var tokens = template.split(whereSeparator: \.isWhitespace).map(String.init)
+        if token.hasPrefix("{checksum:") {
+            tokens.removeAll { $0.hasPrefix("{checksum:") }
+            tokens.append(token)
+        } else {
+            var fragment = token
+            if token.hasPrefix("{value:") {
+                var name = "value"
+                var suffix = 2
+                while tokens.contains(where: { $0.hasPrefix("{\(name):") }) {
+                    name = "value\(suffix)"; suffix += 1
+                }
+                fragment = token.replacingOccurrences(of: "{value:", with: "{\(name):")
+            }
+            if self == .header { tokens.insert(contentsOf: fragment.components(separatedBy: " "), at: 0) }
+            else { tokens.insert(fragment, at: tokens.firstIndex(where: { $0.hasPrefix("{checksum:") }) ?? tokens.count) }
+        }
+        return tokens.joined(separator: " ")
     }
 }

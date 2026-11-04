@@ -63,6 +63,15 @@ final class SerialBackend: Sendable {
             try translated { try serialSendWithChecksum(input: input, format: encoding, lineEnding: ending, checksum: algorithm) }
         }
     }
+    func program(rules: [SerialProtocolRule], operation: String, input: String = "", buffer: String = "", incoming: String = "") async throws -> SerialProtocolResult {
+        struct Request: Encodable { var rules: [SerialProtocolRule]; var operation: String; var input: String; var buffer: String; var incoming: String }
+        let request = Request(rules: rules, operation: operation, input: input, buffer: buffer, incoming: incoming)
+        let json = String(decoding: try JSONEncoder().encode(request), as: UTF8.self)
+        return try await run { [self] in
+            let response = try translated { try serialProgram(request: json) }
+            return try JSONDecoder().decode(SerialProtocolResult.self, from: Data(response.utf8))
+        }
+    }
     private func translated<T>(_ operation: () throws -> T) throws -> T {
         do { return try operation() }
         catch let error as SerialError { switch error { case .Operation(let message): throw SerialClientError.operation(message) } }

@@ -21,6 +21,8 @@ private struct SerialSendTests {
 
     static func main() async {
         let tests: [(String, @MainActor () async throws -> Void)] = [
+            ("protocol JSON shares defaults and round trips", protocolRules),
+            ("frame fragments preserve payload and checksum order", protocolPresets),
             ("legacy preferences retain settings", legacyPreferences),
             ("custom baud rates reject invalid input", customBaudRates),
             ("invalid intervals never start", invalidIntervals),
@@ -35,6 +37,28 @@ private struct SerialSendTests {
         }
         if failures > 0 { exit(1) }
         print("Serial send logic: \(tests.count) checks passed")
+    }
+
+    static func protocolPresets() async throws {
+        let source = "AA BB {value:u16be} {checksum:sum8}"
+        let added = SerialFrameFragment.u8.inserting(into: source)
+        try check(added == "AA BB {value:u16be} {value2:u8} {checksum:sum8}", "Parameter must preserve bytes and precede checksum with a unique name")
+        let replaced = SerialFrameFragment.crc16.inserting(into: added)
+        try check(replaced == "AA BB {value:u16be} {value2:u8} {checksum:crc16modbus}", "Selecting checksum must replace only the checksum")
+        try check(SerialFrameFragment.header.inserting(into: "{value:u8}") == "AA BB {value:u8}", "Header must precede payload")
+        try check(SerialFrameFragment.u16le.inserting(into: "") == "{value:u16le}", "Empty frame must accept a fragment")
+        try check(SerialFrameFragment(rawValue: "unrelated") == nil, "Unknown fragment must be rejected")
+    }
+
+    static func protocolRules() async throws {
+        let json = #"[{"name":"motor-speed","template":"AA BB {speed:u16be:0:3000} {checksum:sum8}","response":"report"},{"name":"report","receive":true,"template":"CC DD {speed:u16be} {checksum:sum8}","display":"速度：{speed} rpm"}]"#
+        let rules = try JSONDecoder().decode([SerialProtocolRule].self, from: Data(json.utf8))
+        try check(rules[0].timeout_ms == 1000 && rules[0].checksum_end == nil && !rules[0].receive, "Optional protocol defaults differ from Rust")
+        let restored = try JSONDecoder().decode([SerialProtocolRule].self, from: JSONEncoder().encode(rules))
+        try check(restored == rules, "Protocol import/export changed templates or linkage")
+        let response = #"{"hex":"","buffer":"CC","records":[{"name":"report","hex":"CC DD 00 2D D6","message":"速度：45 rpm","valid":true}],"response":"","timeout_ms":0}"#
+        let decoded = try JSONDecoder().decode(SerialProtocolResult.self, from: Data(response.utf8))
+        try check(decoded.buffer == "CC" && decoded.records[0].valid, "Decode response lost buffer or validity")
     }
 
     static func legacyPreferences() async throws {

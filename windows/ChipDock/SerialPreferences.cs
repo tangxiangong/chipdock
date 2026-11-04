@@ -6,6 +6,7 @@ internal sealed class SerialPreferences
     private static readonly string DirectoryPath = AppSettings.StorageDirectory;
     private static readonly string FilePath = Path.Combine(DirectoryPath, "serial-preferences.json");
     internal static SerialPreferences Current { get; } = Load();
+    public string ProtocolRules { get; set; } = "[]";
     public uint BaudRate { get; set; } = 115200;
     public byte DataBits { get; set; } = 8;
     public byte StopBits { get; set; } = 1;
