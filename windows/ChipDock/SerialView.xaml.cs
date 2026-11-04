@@ -30,6 +30,7 @@ public sealed partial class SerialView : UserControl
     private async void OnCommandMode(object sender, RoutedEventArgs args)
     {
         autoSender.Stop(); InputBox.AcceptsReturn = !IsCommand;
+        CommandPreviewViewport.Visibility = IsCommand ? Visibility.Visible : Visibility.Collapsed;
         await PreviewCommand(); RefreshState();
     }
     private async Task PreviewCommand()
@@ -60,16 +61,23 @@ public sealed partial class SerialView : UserControl
     private void OnProtocolDisplay(object sender, SelectionChangedEventArgs args)
     {
         if (updating || ParsedRow is null) return;
-        ParsedRow.Height = ProtocolDisplay.SelectedIndex == 0 ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
-        RawRow.Height = ProtocolDisplay.SelectedIndex == 1 ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
+        RefreshProtocolDisplay();
+    }
+    private void RefreshProtocolDisplay()
+    {
+        var hasRules = JsonSerializer.Deserialize<JsonElement>(preferences.ProtocolRules).GetArrayLength() > 0;
+        ProtocolDisplay.Visibility = hasRules ? Visibility.Visible : Visibility.Collapsed;
+        ParsedRow.Height = !hasRules || ProtocolDisplay.SelectedIndex == 0 ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
+        RawRow.Height = hasRules && ProtocolDisplay.SelectedIndex == 1 ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
     }
     private async void OnProtocolRules(object sender, RoutedEventArgs args)
     {
         var rules = JsonSerializer.Deserialize<List<ProtocolRule>>(preferences.ProtocolRules) ?? [];
-        var list = new ListView { SelectionMode = ListViewSelectionMode.Single };
+        var list = new ListView { SelectionMode = ListViewSelectionMode.Single, Margin = new Thickness(0, 8, 0, 0) };
+        var ruleCount = new TextBlock { Style = Ui.Style("CaptionSecondaryTextStyle") };
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(list, "协议规则列表");
         var mono = new Microsoft.UI.Xaml.Media.FontFamily("Consolas");
-        var name = new TextBox { Header = "Alias / 名称", PlaceholderText = "例如 motor-speed", FontFamily = mono };
+        var name = new TextBox { Header = "命令名称 / Alias", PlaceholderText = "例如 motor-speed", FontFamily = mono };
         var receive = new ToggleSwitch { Header = "规则类型", OffContent = "发送命令", OnContent = "接收解析" };
         var template = new TextBox { Header = "帧模板", PlaceholderText = "AA BB {speed:u16be} {checksum:sum8}", AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 72, MaxHeight = 140, FontFamily = mono };
         var display = new TextBox { Header = "显示模板 · 可选", PlaceholderText = "例如 电机速度：{speed} rpm" };
@@ -82,21 +90,39 @@ public sealed partial class SerialView : UserControl
         var output = new TextBlock { TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true, FontFamily = mono };
         var notice = new InfoBar { IsOpen = false, IsClosable = true, Severity = InfoBarSeverity.Error };
         void Report(Exception error) { notice.Severity = InfoBarSeverity.Error; notice.Message = error.Message; notice.IsOpen = true; }
-        static TextBlock Hint(string text) => new() { Text = text, TextWrapping = TextWrapping.Wrap, FontSize = 12, Opacity = 0.7 };
+        static TextBlock Hint(string text) => new() { Text = text, TextWrapping = TextWrapping.Wrap, Style = Ui.Style("CaptionSecondaryTextStyle") };
         static StackPanel Stack(params UIElement[] items) { var panel = new StackPanel { Spacing = 12 }; foreach (var item in items) panel.Children.Add(item); return panel; }
-        static Border Section(string title, params UIElement[] items) {
-            var panel = Stack(new TextBlock { Text = title, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, FontSize = 14 });
+        static StackPanel Heading(string glyph, string title) {
+            var panel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
+            panel.Children.Add(new FontIcon { Glyph = glyph, FontSize = 16, Style = Ui.Style("AccentGlyphStyle") });
+            panel.Children.Add(new TextBlock { Text = title, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, FontSize = 14 });
+            return panel;
+        }
+        var fieldPairs = new List<Grid>();
+        Grid Pair(FrameworkElement first, FrameworkElement second) {
+            var grid = new Grid { ColumnSpacing = 16, RowSpacing = 12 };
+            grid.ColumnDefinitions.Add(new ColumnDefinition()); grid.ColumnDefinitions.Add(new ColumnDefinition());
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            grid.Children.Add(first); grid.Children.Add(second); Grid.SetColumn(second, 1);
+            fieldPairs.Add(grid); return grid;
+        }
+        static Border Section(string glyph, string title, params UIElement[] items) {
+            var panel = Stack(Heading(glyph, title));
             foreach (var item in items) panel.Children.Add(item);
-            var border = new Border { Child = panel, Padding = new Thickness(16), CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1) };
+            var border = new Border { Child = panel, Padding = new Thickness(20), CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1) };
             border.Style = Ui.Style("CardStyle");
             return border;
         }
         var syntax = new Expander { Header = "模板语法与示例", HorizontalAlignment = HorizontalAlignment.Stretch,
             Content = Stack(Hint("AA BB {speed:u16be:0:3000} {checksum:sum8}"), Hint("整数：u8 / i8，u16 / i16 / u32 / i32 配合 be（大端）或 le（小端）。参数顺序与模板一致。"), Hint("校验：sum8、xor8、crc16modbus，放在帧尾。")) };
         var receiveOptions = Stack(delimiter, Hint("文本解析时清空帧模板，显示模板使用 {text}。单帧最多 4096 字节。"));
-        var sendOptions = Stack(response, timeout);
-        var run = new Button { Content = "试算" };
-        var testSection = Section("离线试算", test, run, Hint("检查生成的字节或解析结果，不会向设备发送数据。"), output);
+        var sendOptions = Stack(Pair(response, timeout));
+        var run = new Button { Content = "生成预览", MinWidth = 112, HorizontalAlignment = HorizontalAlignment.Right };
+        var outputPlaceholder = Hint("输入命令后生成预览，结果将在这里显示。");
+        var outputContent = new Grid(); outputContent.Children.Add(outputPlaceholder); outputContent.Children.Add(output);
+        var outputWell = new Border { Style = Ui.Style("WellStyle"), CornerRadius = new CornerRadius(6), Padding = new Thickness(14), MinHeight = 64, Child = outputContent };
+        output.RegisterPropertyChangedCallback(TextBlock.TextProperty, (_, _) => outputPlaceholder.Visibility = string.IsNullOrEmpty(output.Text) ? Visibility.Visible : Visibility.Collapsed);
+        var testSection = Section("\uE9D9", "离线试算", Hint("预览发送字节或解析接收数据，不会向设备发送。"), test, run, outputWell);
         var selected = -1;
         var editingRevision = 0;
         const string fragmentFormat = "ChipDock.FrameFragment.v1";
@@ -125,7 +151,7 @@ public sealed partial class SerialView : UserControl
         for (var row = 0; row < 3; row++) fragmentGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         for (var index = 0; index < fragments.Length; index++) {
             var fragment = fragments[index];
-            var button = new Button { Content = fragment.Title, CanDrag = true, HorizontalAlignment = HorizontalAlignment.Stretch, Padding = new Thickness(6), FontSize = 12 };
+            var button = new Button { Content = fragment.Title, CanDrag = true, HorizontalAlignment = HorizontalAlignment.Stretch, Padding = new Thickness(8, 6, 8, 6), FontSize = 12, FontFamily = mono, CornerRadius = new CornerRadius(6) };
             button.Click += (_, _) => InsertFragment(fragment.Token);
             button.DragStarting += (_, e) => { e.Data.SetData(fragmentFormat, fragment.Token); e.Data.RequestedOperation = DataPackageOperation.Copy; };
             ToolTipService.SetToolTip(button, fragment.Token); Grid.SetColumn(button, index % 3); Grid.SetRow(button, index / 3); fragmentGrid.Children.Add(button);
@@ -143,8 +169,15 @@ public sealed partial class SerialView : UserControl
             catch (Exception error) { Report(error); }
             finally { deferral.Complete(); }
         };
-        var editor = Stack(Stack(receive, name), Section("帧配置", fragmentGrid, Hint("拖入下方帧模板，或点击插入。帧头放在开头，参数放在校验前；选择校验会替换已有校验。"), template, display, syntax), Section("校验与反馈", checksumStart, checksumEnd, receiveOptions, sendOptions), testSection);
-        var empty = Stack(new TextBlock { Text = "添加第一条规则", FontSize = 18, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold }, Hint("使用新增菜单创建发送命令或接收解析规则。"));
+        var advanced = new Expander { Header = Heading("\uE713", "校验与反馈"), HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch, Content = Stack(Pair(checksumStart, checksumEnd), receiveOptions, sendOptions) };
+        var editor = Stack(Section("\uE8D2", "规则信息", Pair(name, receive)),
+            Section("\uE943", "帧模板", template, Hint("点击或拖入片段，快速组合数据帧。"), fragmentGrid, display, syntax), advanced, testSection);
+        editor.Spacing = 16;
+        var empty = Stack(new FontIcon { Glyph = "\uE8D2", FontSize = 36, Style = Ui.Style("AccentGlyphStyle"), HorizontalAlignment = HorizontalAlignment.Left },
+            new TextBlock { Text = "从一条规则开始", FontSize = 20, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold },
+            Hint("将常用指令保存为命令，或把设备返回的数据转换为易读的结果。"));
+        empty.Margin = new Thickness(24, 36, 24, 36);
         var detail = new Grid(); detail.Children.Add(editor); detail.Children.Add(empty);
         var changingSelection = false;
         var delete = new Button { Content = new SymbolIcon(Symbol.Delete) };
@@ -155,7 +188,8 @@ public sealed partial class SerialView : UserControl
             sendOptions.Visibility = receive.IsOn ? Visibility.Collapsed : Visibility.Visible;
             test.Header = receive.IsOn ? "输入接收数据 · HEX" : "输入命令 · 包含 alias";
             test.PlaceholderText = receive.IsOn ? "CC DD 00 2D D6" : "motor-speed 45";
-            run.Content = receive.IsOn ? "解析" : "试算";
+            run.Content = receive.IsOn ? "解析数据" : "生成预览";
+            outputPlaceholder.Text = receive.IsOn ? "输入接收数据后解析，结果将在这里显示。" : "输入命令后生成预览，结果将在这里显示。";
         }
         void Store() {
             if (selected < 0 || selected >= rules.Count) return;
@@ -183,10 +217,15 @@ public sealed partial class SerialView : UserControl
         void Refresh(int index) {
             changingSelection = true;
             list.Items.Clear();
+            ruleCount.Text = $"{rules.Count} 条规则";
             foreach (var rule in rules) {
-                var label = Stack(new TextBlock { Text = rule.name, TextTrimming = TextTrimming.CharacterEllipsis }, Hint(rule.receive ? "↓ 接收解析" : "↑ 发送命令"));
+                var label = Stack(new TextBlock { Text = rule.name, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis }, Hint(rule.receive ? "接收解析" : "发送命令"));
                 label.Spacing = 3;
-                var item = new ListViewItem { Content = label, HorizontalContentAlignment = HorizontalAlignment.Stretch };
+                var row = new Grid { ColumnSpacing = 12 };
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); row.ColumnDefinitions.Add(new ColumnDefinition());
+                row.Children.Add(new FontIcon { Glyph = rule.receive ? "\uE896" : "\uE898", FontSize = 16, Style = Ui.Style("AccentGlyphStyle") });
+                Grid.SetColumn(label, 1); row.Children.Add(label);
+                var item = new ListViewItem { Content = row, HorizontalContentAlignment = HorizontalAlignment.Stretch, Padding = new Thickness(12, 10, 12, 10), Margin = new Thickness(0, 2, 0, 2), CornerRadius = new CornerRadius(6) };
                 ToolTipService.SetToolTip(item, rule.name); list.Items.Add(item);
             }
             list.SelectedIndex = index; Load(index); changingSelection = false;
@@ -210,7 +249,10 @@ public sealed partial class SerialView : UserControl
             item.Click += (_, _) => { try { Store(); rules.Add(new ProtocolRule { name = (isReceive ? "receive-" : "command-") + Guid.NewGuid().ToString("N")[..8], receive = isReceive }); Refresh(rules.Count - 1); } catch (Exception error) { Report(error); } };
             addMenu.Items.Add(item);
         }
-        var add = new Button { Content = "＋ 新增", Flyout = addMenu };
+        var add = new Button { Content = "＋ 新增规则", Flyout = addMenu, HorizontalAlignment = HorizontalAlignment.Stretch };
+        var emptyAdd = new Button { Content = "＋ 新增规则", Style = Ui.Style("AccentButtonStyle"), Margin = new Thickness(0, 8, 0, 0) };
+        emptyAdd.Click += (_, _) => addMenu.ShowAt(emptyAdd);
+        empty.Children.Add(emptyAdd);
         delete.Click += (_, _) => { if (selected >= 0) { rules.RemoveAt(selected); Refresh(Math.Min(selected, rules.Count - 1)); } };
         run.Click += async (_, _) => {
             var revision = editingRevision;
@@ -247,45 +289,59 @@ public sealed partial class SerialView : UserControl
         };
         var transferButtons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
         transferButtons.Children.Add(export); transferButtons.Children.Add(import);
-        var transferSection = new Expander { Header = "导入 / 导出 JSON", HorizontalAlignment = HorizontalAlignment.Stretch, Content = Stack(transfer, transferButtons) };
-        var sidebar = new Grid { Padding = new Thickness(0, 0, 12, 0) };
-        sidebar.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); sidebar.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        sidebar.Children.Add(list);
-        var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 12, 0, 0) };
-        actions.Children.Add(add); actions.Children.Add(delete); Grid.SetRow(actions, 1); sidebar.Children.Add(actions);
-        var details = new ScrollViewer { Content = Stack(detail, transferSection), HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Padding = new Thickness(8, 0, 8, 0) };
-        var columns = new Grid { ColumnSpacing = 12, RowSpacing = 12 };
+        var transferSection = new Expander { Header = Heading("\uE8B7", "导入与导出"), HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch, Content = Stack(Hint("使用 JSON 备份或共享规则。导入后，点击保存规则生效。"), transfer, transferButtons) };
+        var sidebar = new Grid { Padding = new Thickness(12), RowSpacing = 12 };
+        sidebar.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); sidebar.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); sidebar.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        var sidebarHeading = Stack(new TextBlock { Text = "规则库", FontSize = 16, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold }, ruleCount);
+        sidebarHeading.Spacing = 4; sidebarHeading.Margin = new Thickness(8, 4, 0, 0); sidebar.Children.Add(sidebarHeading);
+        Grid.SetRow(list, 1); sidebar.Children.Add(list);
+        var actions = new Grid { ColumnSpacing = 8 };
+        actions.ColumnDefinitions.Add(new ColumnDefinition()); actions.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        actions.Children.Add(add); Grid.SetColumn(delete, 1); actions.Children.Add(delete); Grid.SetRow(actions, 2); sidebar.Children.Add(actions);
+        var sidebarCard = new Border { Style = Ui.Style("CardStyle"), CornerRadius = new CornerRadius(8), Child = sidebar };
+        var detailStack = Stack(detail, transferSection); detailStack.Spacing = 16;
+        var details = new ScrollViewer { Content = detailStack, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Padding = new Thickness(0, 0, 12, 4) };
+        var columns = new Grid { ColumnSpacing = 20, RowSpacing = 16 };
         columns.ColumnDefinitions.Add(new ColumnDefinition()); columns.ColumnDefinitions.Add(new ColumnDefinition());
         columns.RowDefinitions.Add(new RowDefinition()); columns.RowDefinitions.Add(new RowDefinition());
-        columns.Children.Add(sidebar); columns.Children.Add(details);
+        columns.Children.Add(sidebarCard); columns.Children.Add(details);
         var content = new Grid { RowSpacing = 12, MinWidth = 0 };
         content.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         content.Children.Add(columns); Grid.SetRow(notice, 1); content.Children.Add(notice);
         var title = Stack(new TextBlock { Text = "命令与接收规则", FontSize = 20, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold }, Hint("定义发送指令，解析设备反馈")); title.Spacing = 4;
-        var dialog = new ContentDialog { XamlRoot = XamlRoot, Title = title, Content = content, PrimaryButtonText = "保存规则", CloseButtonText = "取消", DefaultButton = ContentDialogButton.Primary };
+        var contentHost = new ContentControl { Content = content, HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Stretch };
+        var dialog = new ContentDialog { XamlRoot = XamlRoot, Title = title, Content = contentHost, PrimaryButtonText = "保存规则", CloseButtonText = "取消", DefaultButton = ContentDialogButton.Primary };
         dialog.Resources["ContentDialogMaxWidth"] = 960d;
         void Resize() {
             var width = Math.Max(0, Math.Min(860, XamlRoot.Size.Width - 80));
-            content.Width = width; content.Height = Math.Max(0, Math.Min(580, XamlRoot.Size.Height - 220));
-            var narrow = width < 620;
-            columns.ColumnDefinitions[0].Width = narrow ? new GridLength(1, GridUnitType.Star) : new GridLength(200);
+            content.Width = width; content.Height = Math.Max(0, Math.Min(680, XamlRoot.Size.Height - 220));
+            var narrow = width < 680;
+            columns.ColumnDefinitions[0].Width = narrow ? new GridLength(1, GridUnitType.Star) : new GridLength(224);
             columns.ColumnDefinitions[1].Width = narrow ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
-            columns.RowDefinitions[0].Height = narrow ? new GridLength(120) : new GridLength(1, GridUnitType.Star);
+            columns.RowDefinitions[0].Height = narrow ? new GridLength(Math.Min(200, content.Height * 0.4)) : new GridLength(1, GridUnitType.Star);
             columns.RowDefinitions[1].Height = narrow ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
             Grid.SetColumn(details, narrow ? 0 : 1); Grid.SetRow(details, narrow ? 1 : 0);
             transferButtons.Orientation = narrow ? Orientation.Vertical : Orientation.Horizontal;
+            var editorWidth = narrow ? width - 12 : width - 256;
+            foreach (var pair in fieldPairs) {
+                var stacked = editorWidth < 460;
+                pair.ColumnDefinitions[1].Width = stacked ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
+                var second = (FrameworkElement)pair.Children[1];
+                Grid.SetColumn(second, stacked ? 0 : 1); Grid.SetRow(second, stacked ? 1 : 0);
+            }
         }
         void RootChanged(XamlRoot root, XamlRootChangedEventArgs change) => Resize();
         dialog.PrimaryButtonClick += async (_, e) => {
-            var deferral = e.GetDeferral(); content.IsEnabled = false; dialog.IsPrimaryButtonEnabled = false; dialog.IsSecondaryButtonEnabled = false;
+            var deferral = e.GetDeferral(); contentHost.IsEnabled = false; dialog.IsPrimaryButtonEnabled = false; dialog.IsSecondaryButtonEnabled = false;
             try {
                 Store(); var json = JsonSerializer.Serialize(rules);
                 await SerialBackend.Program(JsonSerializer.Serialize(new { rules, operation = "validate" }));
                 var old = preferences.ProtocolRules; preferences.ProtocolRules = json;
                 try { preferences.Save(); } catch { preferences.ProtocolRules = old; throw; }
-                protocolRevision++; ResetProtocol(); await PreviewCommand();
+                protocolRevision++; ResetProtocol(); RefreshProtocolDisplay(); await PreviewCommand();
             } catch (Exception error) { e.Cancel = true; Report(error); }
-            finally { content.IsEnabled = true; dialog.IsPrimaryButtonEnabled = true; dialog.IsSecondaryButtonEnabled = true; deferral.Complete(); }
+            finally { contentHost.IsEnabled = true; dialog.IsPrimaryButtonEnabled = true; dialog.IsSecondaryButtonEnabled = true; deferral.Complete(); }
         };
         Refresh(rules.Count > 0 ? 0 : -1); Resize();
         XamlRoot.Changed += RootChanged;
@@ -310,7 +366,7 @@ public sealed partial class SerialView : UserControl
     private SerialStatus status = new() { connected = false, path = null, config = null, rx_bytes = 0, tx_bytes = 0, opened_at = null, last_error = null };
     private bool busy, sending, polling, refreshing, exporting, updating = true, started, closed;
     private int ticks, retainedBytes, connectionRevision;
-    private double composerHeight = 190;
+    private double composerHeight = 280;
     private static readonly string[] Formats = ["hex", "ascii", "gbk", "utf-8"];
     private static readonly string[] Endings = ["none", "lf", "cr", "crlf"];
     private readonly SerialPreferences preferences = SerialPreferences.Current;
@@ -361,7 +417,7 @@ public sealed partial class SerialView : UserControl
         autoSender.Changed += RefreshState;
         autoSender.Failed += error => { if (!closed) ShowError(error.Message); };
         BaudPicker.RegisterPropertyChangedCallback(ComboBox.TextProperty, (_, _) => { if (!updating) RefreshState(); });
-        updating = false; RefreshState();
+        updating = false; RefreshProtocolDisplay(); RefreshState();
     }
 
     private static int IndexOrDefault(string[] values, string value, int fallback) => Array.IndexOf(values, value) is var index && index >= 0 ? index : fallback;
@@ -693,7 +749,7 @@ public sealed partial class SerialView : UserControl
     {
         var expanded = ComposerPaneToggle.IsChecked == true;
         ComposerPanel.Visibility = ComposerSplitter.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
-        ComposerRow.MinHeight = expanded ? 164 : 0;
+        ComposerRow.MinHeight = expanded ? 232 : 0;
         ComposerSplitterRow.Height = new GridLength(expanded ? 5 : 0);
         if (expanded) SetComposerHeight(composerHeight);
         else ComposerRow.Height = new GridLength(0);
@@ -713,8 +769,11 @@ public sealed partial class SerialView : UserControl
     }
     private void SetComposerHeight(double height)
     {
-        var minimum = Math.Max(164, SendOptions.ActualHeight + ComposerActions.ActualHeight + 64 * uiSettings.TextScaleFactor);
-        var maximum = Math.Max(minimum, Math.Min(320 * uiSettings.TextScaleFactor,
+        var inputHeight = 120 * uiSettings.TextScaleFactor;
+        InputBox.MinHeight = inputHeight;
+        var previewHeight = CommandPreviewViewport.Visibility == Visibility.Visible ? CommandPreviewViewport.ActualHeight : 0;
+        var minimum = Math.Max(232, SendOptions.ActualHeight + ComposerActions.ActualHeight + inputHeight + previewHeight);
+        var maximum = Math.Max(minimum, Math.Min(480 * uiSettings.TextScaleFactor,
             Workspace.ActualHeight - ErrorBar.ActualHeight - ReceiveToolbar.ActualHeight - ReceiveOptions.ActualHeight - 120));
         ComposerRow.MinHeight = minimum;
         composerHeight = Math.Clamp(height, minimum, maximum);
@@ -783,8 +842,11 @@ public sealed partial class SerialView : UserControl
                 SendButton.HorizontalAlignment = HorizontalAlignment.Right;
             }
             var expanded = ComposerPaneToggle.IsChecked == true;
-            SerialSurface.Height = Math.Max(SerialViewport.ActualHeight, (expanded ? 520 : 300) * textScale + ErrorBar.ActualHeight);
             if (expanded) SetComposerHeight(composerHeight);
+            var minimumSurface = expanded
+                ? Math.Max(520 * textScale, composerHeight + ReceiveToolbar.ActualHeight + ReceiveOptions.ActualHeight + 125 * textScale)
+                : 300 * textScale;
+            SerialSurface.Height = Math.Max(SerialViewport.ActualHeight, minimumSurface + ErrorBar.ActualHeight);
         }
         finally { resizingLayout = false; }
     }
