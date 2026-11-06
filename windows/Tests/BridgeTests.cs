@@ -27,8 +27,8 @@ internal static class BridgeTests
             Check.That(usage.format.IsBin && usage.used_bytes == 300 && usage.start_address == 0x0800_0000 && usage.end_address == 0x0800_012C,
                 "BIN usage with a Unicode path");
             var missingBase = await Failure(() => RustCore.FirmwareUsage(new FirmwareInput { path = firmware, format = null, base_address = null }));
-            Check.That(missingBase.code.IsMissingBinBaseAddress && missingBase.message.Length > 0 && missingBase.recovery.Length > 0,
-                "structured error with recovery advice");
+            Check.That(missingBase.code.IsInvalidUserInput && missingBase.message.Length > 0 && missingBase.recovery.Length > 0,
+                "unrecognized BIN address returns structured error with recovery advice");
             var unsupported = await Failure(() => RustCore.FirmwareUsage(new FirmwareInput { path = Path.Combine(directory, "notes.txt"), format = null, base_address = null }));
             Check.That(unsupported.code.IsUnsupportedFirmwareFormat, "unsupported firmware format");
 
