@@ -302,23 +302,6 @@ private struct SettingsGrid: View {
                     }
                 }
             }
-            if store.isBin {
-                HStack(alignment: .firstTextBaseline, spacing: 14) {
-                    label("基地址")
-                    HStack(spacing: 8) {
-                        TextField("基地址", text: $store.binBaseAddress)
-                            .textFieldStyle(.roundedBorder)
-                            .labelsHidden()
-                            .font(.body.monospaced())
-                            .frame(width: 130)
-                            .disabled(store.isBusy)
-                        if parseAddress(store.binBaseAddress) == nil {
-                            Label("无效的十六进制地址", systemImage: "exclamationmark.triangle.fill")
-                                .font(.callout).foregroundStyle(.red)
-                        }
-                    }
-                }
-            }
             HStack(alignment: .firstTextBaseline, spacing: 14) {
                 label("擦除")
                 VStack(alignment: .leading, spacing: 4) {

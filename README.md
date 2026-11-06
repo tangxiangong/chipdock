@@ -22,7 +22,7 @@ macOS 界面使用系统字体、SF Symbols 和原生控件；应用图标使用
 
 ## 烧录器与驱动
 
-Windows 会在连接时检查并尝试安装 / 修复所选 USB 调试接口的系统 WinUSB 驱动，覆盖 ST-Link、J-Link、CMSIS-DAP v2、已知 FTDI 调试通道、WCH-Link 和 CH347；Glasgow 支持修复已枚举 applet 的接口对。具体范围和限制见 [Windows 驱动说明](windows/README.md#运行时)。HID、串口和存储接口保留原驱动；Black Magic Probe、SiFli UART 使用对应的串口驱动。
+Windows 会在连接时检查并尝试安装 / 修复所选 USB 调试接口的系统 WinUSB 驱动，覆盖 ST-Link、J-Link、CMSIS-DAP v2、已知 FTDI 调试通道、WCH-Link、CH347 和 ESP USB-JTAG；Glasgow 支持修复已枚举 applet 的接口对。具体范围和限制见 [Windows 驱动说明](windows/README.md#运行时)。HID、串口和存储接口保留原驱动；Black Magic Probe、SiFli UART 使用对应的串口驱动。
 
 macOS 上常见 USB 调试探针通常无需额外驱动。使用 Apple 芯片的 Mac 笔记本时，需解锁并[允许 USB 配件连接](https://support.apple.com/zh-cn/102282)。扫描为空和 USB 访问失败时，应用会显示授权、设备断开或接口占用的恢复建议。若其他调试工具或 USB/FTDI 内核驱动占用了调试接口，需释放占用；当前 USB 库不能在 macOS 自动解除内核驱动占用。
 
@@ -209,3 +209,16 @@ cargo run --locked -p chipdock-release-notes -- windows ReleaseNotes.md .build/n
 本项目采用 [MIT](LICENSE-MIT) 或 [Apache-2.0](LICENSE-APACHE) 双许可证。
 
 第三方依赖说明见 [NOTICE](NOTICE)。
+
+## ESP 固件烧录
+
+已接入 `probe-rs-espressif`，芯片库、USB-JTAG 驱动及 ESP 调试序列与 probe-rs 0.32 同步。
+支持其提供的 ESP32、S2/S3、C2/C3/C5/C6/C61、H2、P4、S31 等目标；具体型号可在芯片选择器中搜索。
+使用原生 USB-JTAG 或兼容的外部 JTAG 探针，普通 USB 转串口不属于此烧录入口。
+ESP 目标或原生 ESP USB-JTAG 探针会自动采用 JTAG；自动识别失败时可手动选择型号。
+
+- **ELF/AXF**：ESP 目标使用官方 IDF 镜像加载器，转换应用并写入默认 bootloader、默认分区表。自定义分区/bootloader 的项目请使用已合并的 BIN。
+- **BIN**：在“目标配置”中设置基地址，默认留空，自动读取当前目录或上级目录 `flasher_args.json` 中该文件的偏移；也可识别带 bootloader 描述符的合并镜像及 bootloader 镜像。应用镜像可结合相邻的 `partition-table.bin`、`partition_table/partition-table.bin` 或 `partitions.bin` 中唯一的应用分区确定地址。
+- **无法确定地址的 BIN**：显示原因并阻止烧录，仍可手动填写地址。单独应用镜像没有分区偏移，不能一律假设为 `0x10000`；旧 bootloader 没有描述符时也需配置或手动地址。
+- 写后校验、按需擦除、预检查和完成后复位沿用现有操作。预检查仍会连接/暂停目标；ESP ELF 的加载器还会运行探测算法，但不写 Flash。
+- ESP 的静态内存布局表示目标支持的地址范围，不等同于板上实际 Flash 容量。

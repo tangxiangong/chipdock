@@ -18,6 +18,8 @@ internal sealed class TargetSetupDialog : ContentDialog
     private readonly TextBlock probeFooter = Ui.Text(size: 12);
     private readonly AutoSuggestBox chip = new() { Header = "芯片", PlaceholderText = "自动识别", QueryIcon = new SymbolIcon(Symbol.Find) };
     private readonly RadioButtons protocol = new() { Header = "协议", MaxColumns = 2 };
+    private readonly TextBlock baseAddressError = Ui.Text("请输入有效的 BIN 基地址或留空自动识别", 12, "CriticalTextStyle");
+    private readonly TextBox baseAddress = new() { Header = "BIN 基地址", PlaceholderText = "自动识别" };
     private readonly TextBox speed = new() { Width = 110 };
     private readonly StackPanel speedError = Ui.Row(6, Ui.Glyph(Glyphs.Warning, 12, "CriticalGlyphStyle"), Ui.Text("请输入大于 0 的速度", 12, "CriticalTextStyle"));
     private readonly CheckBox connectUnderReset = new() { Content = "复位下连接" };
@@ -33,7 +35,8 @@ internal sealed class TargetSetupDialog : ContentDialog
     private bool updating = true;
 
     private bool ValidSpeed => uint.TryParse(speed.Text.Trim(), out var value) && value > 0;
-    private bool CanConnect => !store.IsBusy && ValidSpeed && (!store.HasScanned || store.Probes.Count > 0);
+    private bool ValidBaseAddress => string.IsNullOrWhiteSpace(baseAddress.Text) || ParseAddress(baseAddress.Text) is not null;
+    private bool CanConnect => !store.IsBusy && ValidSpeed && ValidBaseAddress && (!store.HasScanned || store.Probes.Count > 0);
 
     internal TargetSetupDialog(WorkbenchStore store)
     {
@@ -79,6 +82,8 @@ internal sealed class TargetSetupDialog : ContentDialog
         chip.Text = selectedChip;
         protocol.SelectedIndex = store.WireProtocol.IsJtag ? 1 : 0;
         speed.Text = store.Speed;
+        baseAddress.Text = store.BinBaseAddress;
+        baseAddress.TextChanged += (_, _) => { if (!updating) Update(); };
         connectUnderReset.IsChecked = store.ConnectUnderReset;
 
         identified.Children.Add(Ui.Text("已识别", 14, semibold: true));
@@ -92,6 +97,7 @@ internal sealed class TargetSetupDialog : ContentDialog
             protocol,
             Ui.Column(4, Ui.Text("速度"), speedRow, speedError),
             connectUnderReset,
+            Ui.Column(4, baseAddress, baseAddressError, Ui.Secondary("留空自动识别 ESP BIN；ELF / HEX 使用文件内地址。", 12, wrap: true)),
             identified);
         formControls = new ContentControl { Content = form, HorizontalContentAlignment = HorizontalAlignment.Stretch };
         Content = new ScrollViewer
@@ -116,6 +122,7 @@ internal sealed class TargetSetupDialog : ContentDialog
                 store.WireProtocol = protocol.SelectedIndex == 1 ? WireProtocol.Jtag : WireProtocol.Swd;
                 store.Speed = speed.Text.Trim();
                 store.ConnectUnderReset = connectUnderReset.IsChecked == true;
+                store.BinBaseAddress = baseAddress.Text.Trim();
                 await store.Connect();
                 args.Cancel = store.Connection is null && store.TargetCandidates.Count == 0;
             }
@@ -196,6 +203,7 @@ internal sealed class TargetSetupDialog : ContentDialog
         probeFooter.Style = Ui.Style(store.Probes.Count == 0 ? "CriticalTextStyle" : "SecondaryTextStyle");
 
         Ui.SetVisible(speedError, !ValidSpeed);
+        Ui.SetVisible(baseAddressError, !ValidBaseAddress);
 
         Ui.SetVisible(identified, store.TargetInformation is not null);
         identifiedFacts.Children.Clear();

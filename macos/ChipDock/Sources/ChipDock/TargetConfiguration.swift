@@ -7,6 +7,7 @@ struct TargetConfiguration {
     var wireProtocol: WireProtocol
     var speed: String
     var connectUnderReset: Bool
+    var binBaseAddress: String = ""
 
     var validSpeed: UInt32? {
         let value = speed.trimmingCharacters(in: .whitespacesAndNewlines)

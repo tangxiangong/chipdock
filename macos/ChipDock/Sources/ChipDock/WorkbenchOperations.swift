@@ -83,7 +83,7 @@ extension WorkbenchStore {
         firmwarePreview = nil
         firmwareError = nil
         guard let input = firmwareInput else { return }
-        if isBin && parseAddress(binBaseAddress) == nil {
+        if isBin && !binBaseAddress.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && parseAddress(binBaseAddress) == nil {
             firmwareError = "请输入有效的 BIN 基地址"
             analyzingFirmware = false
             return
@@ -128,7 +128,7 @@ extension WorkbenchStore {
             appendLog("打开固件", status, level: .error, detail: file.path)
             return
         }
-        if let address = file.baseAddress { binBaseAddress = addressLabel(address) }
+        binBaseAddress = file.baseAddress.map { addressLabel($0) } ?? ""
         selectFirmware(URL(fileURLWithPath: file.path))
     }
 
@@ -179,7 +179,7 @@ extension WorkbenchStore {
         resetAfter = profile.flashOptions.resetAfter
         dryRun = profile.flashOptions.dryRun
         eraseStrategy = profile.flashOptions.skipErase ? .skip : (profile.flashOptions.allowEraseAll ? .full : .automatic)
-        if let address = profile.binBaseAddress { binBaseAddress = addressLabel(address) }
+        binBaseAddress = profile.binBaseAddress.map { addressLabel($0) } ?? ""
         if firmwareURL != nil { scheduleFirmwareAnalysis() }
         refreshMemoryMap()
         status = "已载入配置“\(profile.name)”"

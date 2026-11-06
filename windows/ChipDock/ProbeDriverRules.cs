@@ -2,7 +2,7 @@ using System.Globalization;
 
 namespace ChipDock;
 
-internal enum ProbeFamily { StLink, JLink, CmsisDap, Ftdi, WchLink, Ch347, Glasgow }
+internal enum ProbeFamily { StLink, JLink, CmsisDap, Ftdi, WchLink, Ch347, Glasgow, EspJtag }
 
 internal sealed record ProbeSelector(ushort Vendor, ushort Product, byte? Interface, string? Serial)
 {
@@ -72,6 +72,7 @@ internal static class ProbeDriverRules
         (0x1a86, 0x8010) => ProbeFamily.WchLink,
         (0x1a86, 0x55de or 0x55dd or 0x55e8) => ProbeFamily.Ch347,
         (0x20b7, 0x9db1) => ProbeFamily.Glasgow,
+        (0x303a, 0x1001) => ProbeFamily.EspJtag,
         _ => null,
     };
 
@@ -93,6 +94,8 @@ internal static class ProbeDriverRules
             ProbeFamily.JLink or ProbeFamily.WchLink when id.Interface is null or 0 => family,
             ProbeFamily.Ftdi when id.Interface == 0 || id.Interface is null && id.Product == 0x6014 => family,
             ProbeFamily.Ch347 when id.Interface is 2 or 4 => family,
+            // ESP USB Serial/JTAG: MI_00/01 are CDC; only MI_02 is JTAG.
+            ProbeFamily.EspJtag when id.Interface == 2 => family,
             ProbeFamily.Glasgow when id.Interface is not null && HasVendorClass(compatibleIds) => family,
             null when HasVendorClass(compatibleIds) && IsCmsisDap(description) => ProbeFamily.CmsisDap,
             _ => null,
@@ -147,6 +150,7 @@ internal static class ProbeDriverRules
     internal static string Title(this ProbeFamily family) => family switch
     {
         ProbeFamily.StLink => "ST-Link", ProbeFamily.JLink => "J-Link", ProbeFamily.CmsisDap => "CMSIS-DAP v2",
-        ProbeFamily.Ftdi => "FTDI", ProbeFamily.WchLink => "WCH-Link", ProbeFamily.Ch347 => "CH347", _ => "Glasgow",
+        ProbeFamily.Ftdi => "FTDI", ProbeFamily.WchLink => "WCH-Link", ProbeFamily.Ch347 => "CH347",
+        ProbeFamily.EspJtag => "ESP USB-JTAG", _ => "Glasgow",
     };
 }

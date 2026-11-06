@@ -112,7 +112,7 @@ internal sealed partial class WorkbenchStore
         AnalyzingFirmware = false;
         Notify();
         if (FirmwareInput is not { } input) return;
-        if (IsBin && ParseAddress(BinBaseAddress) is null)
+        if (IsBin && !string.IsNullOrWhiteSpace(BinBaseAddress) && ParseAddress(BinBaseAddress) is null)
         {
             FirmwareError = "请输入有效的 BIN 基地址";
             return;
@@ -178,7 +178,7 @@ internal sealed partial class WorkbenchStore
                 "文件可能已被移动或删除。请选择其他固件，或从最近使用中移除此记录。"));
             return;
         }
-        if (file.base_address is { } address) BinBaseAddress = AddressLabel(address);
+        BinBaseAddress = file.base_address is { } address ? AddressLabel(address) : "";
         SelectFirmware(file.path);
     }
 
@@ -218,7 +218,7 @@ internal sealed partial class WorkbenchStore
         DryRun = profile.flash_options.dry_run;
         EraseStrategy = profile.flash_options.skip_erase ? EraseStrategy.Skip
             : profile.flash_options.allow_erase_all ? EraseStrategy.Full : EraseStrategy.Automatic;
-        if (profile.bin_base_address is { } address) BinBaseAddress = AddressLabel(address);
+        BinBaseAddress = profile.bin_base_address is { } address ? AddressLabel(address) : "";
         if (FirmwarePath is not null) ScheduleFirmwareAnalysis();
         RefreshMemoryMap();
         SetStatus($"已载入配置“{profile.name}”");

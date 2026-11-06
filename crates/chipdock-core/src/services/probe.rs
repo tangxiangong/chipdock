@@ -34,6 +34,7 @@ struct TargetIdentification {
 
 /// 列出当前系统可见的调试探针。
 pub fn list_probes() -> Result<Vec<ProbeSummary>> {
+    super::esp::initialize();
     Ok(Lister::new()
         .list_all()
         .into_iter()
@@ -69,7 +70,12 @@ pub fn connect_target(request: ConnectRequest) -> Result<ConnectionInfo> {
         .map_err(AppError::operation)?;
 
     let mut probe = Lister::new().open(selector).map_err(AppError::operation)?;
-    let protocol = match request.target.protocol {
+    let wire_protocol = super::esp::protocol(
+        request.target.protocol,
+        request.target.chip.as_deref(),
+        &probe_identifier,
+    );
+    let protocol = match wire_protocol {
         WireProtocol::Swd => ProbeWireProtocol::Swd,
         WireProtocol::Jtag => ProbeWireProtocol::Jtag,
     };
@@ -150,7 +156,7 @@ pub fn connect_target(request: ConnectRequest) -> Result<ConnectionInfo> {
     Ok(ConnectionInfo {
         probe: probe_identifier,
         chip,
-        protocol: request.target.protocol,
+        protocol: wire_protocol,
         speed_khz: request.target.speed_khz,
         connect_under_reset: request.target.connect_under_reset,
         target_information,

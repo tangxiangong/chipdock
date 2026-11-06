@@ -8,7 +8,11 @@ struct TargetSetupSheet: View {
 
     private let speedPresets: [UInt32] = [100, 1000, 4000, 10000, 24000]
     private var canConnect: Bool {
-        !store.isBusy && draft.validSpeed != nil && (!store.hasScanned || !store.probes.isEmpty)
+        !store.isBusy && draft.validSpeed != nil && validBaseAddress && (!store.hasScanned || !store.probes.isEmpty)
+    }
+
+    private var validBaseAddress: Bool {
+        draft.binBaseAddress.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || parseAddress(draft.binBaseAddress) != nil
     }
 
     init(store: WorkbenchStore) {
@@ -113,6 +117,22 @@ struct TargetSetupSheet: View {
                             .font(.caption).foregroundStyle(.red)
                     }
                     Toggle("复位下连接", isOn: $draft.connectUnderReset)
+                }
+
+                Section {
+                    TextField("BIN 基地址", text: $draft.binBaseAddress, prompt: Text("自动识别"))
+                        .font(.body.monospaced())
+                    if !validBaseAddress {
+                        Text("请输入有效的十六进制地址").foregroundStyle(.red)
+                    } else if draft.binBaseAddress.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                              store.binBaseAddress.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                              store.isBin, let address = store.firmwareUsage?.startAddress {
+                        LabeledContent("已识别地址", value: addressLabel(address))
+                    }
+                } header: {
+                    Text("固件地址")
+                } footer: {
+                    Text("留空自动识别 ESP BIN；其他 BIN 可手动输入。ELF / HEX 使用文件内地址。")
                 }
 
                 if let information = store.targetInformation {

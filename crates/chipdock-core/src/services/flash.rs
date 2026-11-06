@@ -163,7 +163,12 @@ fn run_probe_rs_flash(
 
     let mut probe = Lister::new().open(selector).map_err(AppError::operation)?;
 
-    let protocol = match request.target.protocol {
+    let wire_protocol = super::esp::protocol(
+        request.target.protocol,
+        request.target.chip.as_deref(),
+        &probe_identifier,
+    );
+    let protocol = match wire_protocol {
         WireProtocol::Swd => ProbeWireProtocol::Swd,
         WireProtocol::Jtag => ProbeWireProtocol::Jtag,
     };
@@ -175,14 +180,27 @@ fn run_probe_rs_flash(
         probe.set_speed(speed_khz).map_err(AppError::operation)?;
     }
 
+    let registry = super::esp::flash_registry()?;
     let mut session = if request.target.connect_under_reset {
-        probe.attach_under_reset(target_selector, policy.permissions())
+        probe.attach_under_reset_with_registry(target_selector, policy.permissions(), &registry)
     } else {
-        probe.attach(target_selector, policy.permissions())
+        probe.attach_with_registry(target_selector, policy.permissions(), &registry)
     }
     .map_err(AppError::operation)?;
 
-    let format = probe_rs_format(firmware_format, request.firmware.base_address)?;
+    let base_address = if firmware_format == FirmwareFormat::Bin {
+        super::esp::validate_bin_target(Path::new(&request.firmware.path), &session.target().name)?;
+        Some(super::firmware::bin_base_address(&request.firmware)?)
+    } else {
+        None
+    };
+    let format: Box<dyn probe_rs::flashing::ImageLoader> = if firmware_format == FirmwareFormat::Elf
+        && session.target().default_format.as_deref() == Some("idf")
+    {
+        Box::new(probe_rs_espressif::image_format::IdfLoader::default())
+    } else {
+        probe_rs_format(firmware_format, base_address)?
+    };
     let mut options = DownloadOptions::default();
     options.verify = request.options.verify;
     options.dry_run = request.options.dry_run;
@@ -366,14 +384,17 @@ mod tests {
     }
 
     #[test]
-    fn validate_flash_request_should_reject_missing_bin_base_address() {
+    fn validate_flash_request_should_reject_unrecognized_bin_without_base_address() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("app.bin");
+        std::fs::write(&path, [1, 2, 3, 4]).unwrap();
         let mut request = valid_elf_request();
-        request.firmware.path = "/tmp/app.bin".to_string();
+        request.firmware.path = path.display().to_string();
         request.firmware.format = Some(FirmwareFormat::Bin);
 
         let err = validate_flash_request(&request).expect_err("request should be rejected");
 
-        assert!(matches!(err, AppError::MissingBinBaseAddress));
+        assert!(matches!(err, AppError::InvalidUserInput { .. }));
     }
 
     #[test]

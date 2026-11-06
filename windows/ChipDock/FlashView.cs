@@ -49,9 +49,6 @@ internal sealed class FlashView : UserControl
     private readonly TextBlock targetState = Ui.Secondary("未连接");
     private readonly TextBlock targetDetail = Ui.Secondary(size: 12, wrap: true);
     private readonly Button changeTarget, disconnectTarget;
-    private readonly TextBox baseAddress = new() { Width = 150, PlaceholderText = "0x08000000" };
-    private readonly StackPanel baseAddressError = Ui.Row(6, Ui.Glyph(Glyphs.Warning, 12, "CriticalGlyphStyle"), Ui.Text("无效的十六进制地址", 12, "CriticalTextStyle"));
-    private readonly Border baseAddressCard;
     private readonly ComboBox eraseStrategy = new() { MinWidth = 150 };
     private readonly TextBlock eraseDetail = Ui.Secondary(size: 12, wrap: true);
     private readonly ToggleSwitch verify = Switch(), resetAfter = Switch(), dryRun = Switch();
@@ -166,12 +163,6 @@ internal sealed class FlashView : UserControl
         targetState.VerticalAlignment = VerticalAlignment.Center;
         var targetCard = Card(Glyphs.Chip, Ui.Column(2, targetTitle, targetDetail), Ui.Row(8, targetState, disconnectTarget, changeTarget));
 
-        baseAddress.FontFamily = (FontFamily)Application.Current.Resources["MonoFontFamily"];
-        baseAddress.TextChanged += (_, _) => store.BinBaseAddress = baseAddress.Text;
-        Ui.Name(baseAddress, "基地址");
-        var baseAddressText = Ui.Column(2, Ui.Text("基地址"), Ui.Secondary("BIN 文件写入的起始地址", 12), baseAddressError);
-        baseAddressCard = Card(Glyphs.Memory, baseAddressText, baseAddress);
-
         foreach (var strategy in Enum.GetValues<EraseStrategy>()) eraseStrategy.Items.Add(strategy.Title());
         eraseStrategy.SelectionChanged += (_, _) => { if (eraseStrategy.SelectedIndex >= 0) store.EraseStrategy = (EraseStrategy)eraseStrategy.SelectedIndex; };
         Ui.Name(eraseStrategy, "擦除");
@@ -202,7 +193,7 @@ internal sealed class FlashView : UserControl
             Grid.SetColumn(optionCards[index], index % 2);
             options.Children.Add(optionCards[index]);
         }
-        var settings = Ui.Column(4, targetCard, baseAddressCard, options);
+        var settings = Ui.Column(4, targetCard, options);
 
         // Erases the whole chip without programming, after confirmation.
         erase = Ui.Button(Glyphs.Erase, "擦除芯片…", () => _ = window.ConfirmErase());
@@ -380,11 +371,6 @@ internal sealed class FlashView : UserControl
         changeTarget.IsEnabled = !store.IsBusy;
         Ui.SetVisible(disconnectTarget, store.Connection is not null);
         disconnectTarget.IsEnabled = store.CanDisconnect;
-
-        Ui.SetVisible(baseAddressCard, store.IsBin);
-        Ui.SetText(baseAddress, store.BinBaseAddress);
-        Ui.SetVisible(baseAddressError, ParseAddress(store.BinBaseAddress) is null);
-        baseAddress.IsEnabled = !store.IsBusy;
 
         if (eraseStrategy.SelectedIndex != (int)store.EraseStrategy) eraseStrategy.SelectedIndex = (int)store.EraseStrategy;
         eraseDetail.Text = store.EraseStrategy.Detail();

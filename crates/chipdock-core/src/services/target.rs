@@ -11,6 +11,7 @@ const MAX_CHIP_LIMIT: usize = 100;
 
 /// 根据关键字搜索 probe-rs 内置芯片型号。
 pub fn search_chips(query: &str, limit: usize) -> Result<Vec<String>> {
+    super::esp::initialize();
     let trimmed = query.trim();
     if trimmed.is_empty() {
         return Err(AppError::InvalidUserInput {
@@ -36,6 +37,7 @@ pub fn require_chip(chip: Option<&str>) -> Result<String> {
 
 /// 查询指定芯片型号的内存布局。
 pub fn target_memory_map(chip: &str) -> Result<Vec<MemoryRegionLayout>> {
+    super::esp::initialize();
     let chip = require_chip(Some(chip))?;
     let target = Registry::from_builtin_families()
         .get_target_by_name(&chip)

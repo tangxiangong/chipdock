@@ -48,7 +48,7 @@ final class WorkbenchStore {
     var firmwarePreview: FirmwarePreview?
     var analyzingFirmware = false
     var firmwareError: String?
-    var binBaseAddress = "0x08000000"
+    var binBaseAddress = ""
     var verify = UserDefaults.standard.object(forKey: "defaultVerify") as? Bool ?? true
     var resetAfter = UserDefaults.standard.object(forKey: "defaultReset") as? Bool ?? true
     var dryRun = false
@@ -72,7 +72,7 @@ final class WorkbenchStore {
     var canConnect: Bool { !isBusy && validSpeed != nil && (!hasScanned || !probes.isEmpty) }
     var canFlash: Bool {
         !isBusy && connection != nil && firmwareUsage != nil && firmwareError == nil && !analyzingFirmware
-            && (!isBin || parseAddress(binBaseAddress) != nil)
+            && (!isBin || binBaseAddress.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || parseAddress(binBaseAddress) != nil)
     }
     var canDisconnect: Bool { !isBusy && connection != nil }
     var canErase: Bool { !isBusy && connection != nil }
@@ -94,7 +94,7 @@ final class WorkbenchStore {
     }
     var targetConfiguration: TargetConfiguration {
         TargetConfiguration(selectedProbe: selectedProbe, chip: chip, wireProtocol: wireProtocol,
-                            speed: speed, connectUnderReset: connectUnderReset)
+                            speed: speed, connectUnderReset: connectUnderReset, binBaseAddress: binBaseAddress)
     }
 
     func applyTargetConfiguration(_ configuration: TargetConfiguration) {
@@ -103,6 +103,8 @@ final class WorkbenchStore {
         wireProtocol = configuration.wireProtocol
         speed = configuration.speed
         connectUnderReset = configuration.connectUnderReset
+        binBaseAddress = configuration.binBaseAddress
+        scheduleFirmwareAnalysis()
     }
     var firmwareInput: FirmwareInput? {
         guard let firmwareURL else { return nil }

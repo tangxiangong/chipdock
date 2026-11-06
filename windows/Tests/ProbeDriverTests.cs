@@ -72,6 +72,7 @@ internal static class ProbeDriverTests
         GuidChecks();
         await InstallationChecks(probe, device, ready, legacyProbe, standaloneReady);
         await OtherProbeChecks();
+        await EspJtagChecks();
     }
 
     private static bool IsDebugInterface(string instanceId) => ProbeDriverRules.DebugInterface(instanceId, [], "") is not null;
@@ -120,6 +121,39 @@ internal static class ProbeDriverTests
         Check.That(ProbeDriverRules.RepairGuids(repaired, first).SequenceEqual(repaired), "GUID repair is idempotent");
     }
 
+    private static async Task EspJtagChecks()
+    {
+        const string instance = @"USB\VID_303A&PID_1001&MI_02\CHILD";
+        Check.That(ProbeDriverRules.DebugInterface(instance, [@"USB\Class_FF&SubClass_FF&Prot_01"], "USB JTAG/serial debug unit") == ProbeFamily.EspJtag,
+            "ESP native JTAG interface is recognized independently of its display name");
+        Check.That(ProbeDriverRules.DebugInterface(instance.ToLowerInvariant(), [], "") == ProbeFamily.EspJtag,
+            "ESP missing-driver discovery accepts case-insensitive hardware IDs");
+        foreach (var id in new[] { instance.Replace("MI_02", "MI_00"), instance.Replace("MI_02", "MI_01"),
+            instance.Replace("MI_02", "MI_03"), instance.Replace("&MI_02", ""), instance.Replace("PID_1001", "PID_1002") })
+            Check.That(ProbeDriverRules.DebugInterface(id, [], "") is null, "ESP parent, CDC and unrelated interfaces are preserved");
+        foreach (var compatible in new[] { @"USB\COMPOSITE", @"USB\Class_02", @"USB\Class_0A", @"USB\Class_03", @"USB\Class_08", @"USB\Class_09" })
+            Check.That(ProbeDriverRules.DebugInterface(instance, [compatible], "") is null,
+                "protected descriptors override even the ESP JTAG hardware ID");
+
+        var probe = new ProbeSummary { identifier = "303a:1001:28:84:85:92:C1:14", vendor_id = 0x303a,
+            product_id = 0x1001, serial_number = "28:84:85:92:C1:14", product = "ESP JTAG" };
+        var ready = new UsbProbeDevice(instance, 0x303a, 0x1001, "28:84:85:92:c1:14", "WinUSB",
+            true, true, true, ProbeFamily.EspJtag);
+        Check.That(ProbeDriver.SelectDevice(probe, [ready]) == ready, "ESP colon-separated serial survives selector parsing and Windows casing");
+        foreach (var service in new[] { "", "libusb0", "libusbK", "WinUSB" })
+        {
+            var broken = ready with { Service = service, HasInterfaceGuid = false, Started = false, InterfaceActive = false };
+            var system = new FakeSystem([broken], [ready]);
+            await ProbeDriver.EnsureInstalled(probe, _ => { }, system);
+            Check.That(system.Checked == (service == "WinUSB" ? 0 : 1) && system.Installed.SequenceEqual([instance]),
+                $"ESP {service} missing driver or GUID is repaired on MI_02 only");
+        }
+        foreach (var service in new[] { "usbser", "USBSTOR", "HidUsb", "unknown" })
+            Check.That(!(ready with { Service = service }).NeedsRepair, "ESP preserves protected and unknown driver services");
+        var guids = ProbeDriverRules.RepairGuids(null, null, ProbeFamily.EspJtag);
+        Check.That(ProbeDriverRules.RegisteredGuid(guids, null) is not null, "ESP GUID repair supplies a valid nusb interface GUID");
+    }
+
     private static async Task OtherProbeChecks()
     {
         var standaloneFtdi = new UsbProbeDevice(@"USB\VID_0403&PID_6014\SERIAL", 0x0403, 0x6014,
@@ -138,6 +172,7 @@ internal static class ProbeDriverTests
 
         foreach (var (family, vendor, product, instance, service) in new (ProbeFamily, ushort, ushort, string, string)[]
         {
+            (ProbeFamily.EspJtag, 0x303a, 0x1001, @"USB\VID_303A&PID_1001&MI_02\CHILD", ""),
             (ProbeFamily.JLink, 0x1366, 0x0101, @"USB\VID_1366&PID_0101\SERIAL", "JLink"),
             (ProbeFamily.Ftdi, 0x0403, 0x6010, @"USB\VID_0403&PID_6010&MI_00\CHILD", "FTDIBUS"),
             (ProbeFamily.WchLink, 0x1a86, 0x8010, @"USB\VID_1A86&PID_8010&MI_00\CHILD", "WCHLink"),

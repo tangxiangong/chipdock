@@ -1,3 +1,5 @@
+mod esp;
+
 /// 固件格式识别和烧录地址校验。
 pub mod firmware;
 /// 固件烧录任务编排。

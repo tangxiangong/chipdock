@@ -86,7 +86,7 @@ internal sealed partial class WorkbenchStore
     {
         get;
         set { if (field != value) { field = value; if (FirmwarePath is not null) ScheduleFirmwareAnalysis(); Notify(); } }
-    } = "0x08000000";
+    } = "";
 
     internal bool Verify { get; set { field = value; Notify(); } } = AppSettings.DefaultVerify;
     internal bool ResetAfter { get; set { field = value; Notify(); } } = AppSettings.DefaultReset;
@@ -109,7 +109,7 @@ internal sealed partial class WorkbenchStore
 
     internal bool CanFlash =>
         !IsBusy && Connection is not null && FirmwareUsage is not null && FirmwareError is null && !AnalyzingFirmware
-        && (!IsBin || ParseAddress(BinBaseAddress) is not null);
+        && (!IsBin || string.IsNullOrWhiteSpace(BinBaseAddress) || ParseAddress(BinBaseAddress) is not null);
 
     internal bool CanDisconnect => !IsBusy && Connection is not null;
 

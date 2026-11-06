@@ -49,7 +49,7 @@ pub fn validate_firmware(input: &FirmwareInput) -> Result<FirmwareFormat> {
     }
 
     if detected == FirmwareFormat::Bin {
-        let address = input.base_address.ok_or(AppError::MissingBinBaseAddress)?;
+        let address = bin_base_address(input)?;
         validate_flash_address(address)?;
     }
 
@@ -68,7 +68,7 @@ pub fn analyze_firmware_usage(input: &FirmwareInput) -> Result<FirmwareUsage> {
         });
     }
     let mut segments = match format {
-        FirmwareFormat::Bin => analyze_bin_usage(path, input.base_address)?,
+        FirmwareFormat::Bin => analyze_bin_usage(path, Some(bin_base_address(input)?))?,
         FirmwareFormat::Hex => analyze_hex_usage(path)?,
         FirmwareFormat::Elf => analyze_elf_usage(path)?,
     };
@@ -411,6 +411,14 @@ fn elf_parse_error(error: object::Error) -> AppError {
     }
 }
 
+/// Resolve an explicit BIN address or recognize an ESP build/image.
+pub fn bin_base_address(input: &FirmwareInput) -> Result<u64> {
+    match input.base_address {
+        Some(address) => Ok(address),
+        None => super::esp::bin_address(Path::new(&input.path)),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -611,14 +619,17 @@ mod tests {
     }
 
     #[test]
-    fn validate_firmware_should_reject_bin_without_base_address() {
+    fn validate_firmware_should_reject_unrecognized_bin_without_base_address() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("app.bin");
+        fs::write(&path, [1, 2, 3, 4]).unwrap();
         let input = FirmwareInput {
-            path: "/tmp/app.bin".to_string(),
+            path: path.display().to_string(),
             format: None,
             base_address: None,
         };
         let err = validate_firmware(&input).unwrap_err();
-        assert!(matches!(err, AppError::MissingBinBaseAddress));
+        assert!(matches!(err, AppError::InvalidUserInput { .. }));
     }
 
     #[test]

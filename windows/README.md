@@ -61,6 +61,7 @@ Rust 动态库位于 `target/<目标三元组>/<debug或release>/chipdock_csharp
 
 | 类型 | 自动安装 / 修复范围 |
 | --- | --- |
+| ESP USB-JTAG（303A:1001） | 仅修复 MI_02 JTAG 接口；保留 MI_00/MI_01 CDC 串口及复合设备父节点，支持缺驱动、libusb0/libusbK 迁移和 WinUSB GUID 修复 |
 | ST-Link V2 / V2-1 / V3 系列 | 独立 V2 或复合设备的调试接口 MI_00；可迁移 STTub 系列旧驱动，保留短序列号编码兼容 |
 | J-Link | probe-rs 可识别的 VID/PID，对独立设备或 MI_00 安装 / 修复 WinUSB，可迁移旧 JLink 驱动 |
 | CMSIS-DAP v2 | USB 总线报告名称含 CMSIS-DAP，且接口类为 FF/00 的 Bulk 接口；不更改 v1 HID 接口 |

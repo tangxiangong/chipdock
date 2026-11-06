@@ -128,7 +128,9 @@ fn open_session(
         .map_err(AppError::operation)?;
 
     let mut probe = Lister::new().open(selector).map_err(AppError::operation)?;
-    let protocol = match target.protocol {
+    let wire_protocol =
+        super::esp::protocol(target.protocol, target.chip.as_deref(), &probe_identifier);
+    let protocol = match wire_protocol {
         WireProtocol::Swd => ProbeWireProtocol::Swd,
         WireProtocol::Jtag => ProbeWireProtocol::Jtag,
     };
