@@ -21,7 +21,7 @@ internal sealed class FlashView : UserControl
     private readonly FontIcon formatIcon = Ui.Glyph(Glyphs.Document, 20);
     private readonly TextBlock firmwareName = Ui.Text(size: 20, semibold: true);
     private readonly TextBlock firmwareDirectory = Ui.Secondary(size: 13);
-    private readonly Button firmwareMenu = new() { Content = Ui.Glyph(Glyphs.More, 16), Padding = new Thickness(8) };
+    private readonly Button firmwareMenu = new() { Content = Ui.Glyph(Glyphs.More, 16), Style = Ui.Style("SubtleCommandButtonStyle"), Padding = new Thickness(8) };
     private readonly StackPanel analyzing = Ui.Row(8, new ProgressRing { Width = 16, Height = 16, IsActive = true }, Ui.Secondary("正在分析固件…"));
     private readonly InfoBar firmwareError = new() { Severity = InfoBarSeverity.Warning, IsClosable = false, IsOpen = true };
     private readonly FirmwareLayoutView layout = new();
@@ -35,8 +35,8 @@ internal sealed class FlashView : UserControl
     private readonly Button chooseFile;
     private readonly StackPanel recentSection = new() { Spacing = 6 };
     private readonly ListView recentList = new() { SelectionMode = ListViewSelectionMode.Single, MaxHeight = 5 * 36 };
-    private readonly Button clearMissingRecent = new() { Content = "清除失效记录", Padding = new Thickness(8, 4, 8, 4) };
-    private readonly Button clearRecent = new() { Content = "清空列表", Padding = new Thickness(8, 4, 8, 4) };
+    private readonly Button clearMissingRecent = new() { Content = "清除失效记录", Style = Ui.Style("SubtleCommandButtonStyle") };
+    private readonly Button clearRecent = new() { Content = "清空列表", Style = Ui.Style("SubtleCommandButtonStyle") };
     private List<RecentFirmwareRecord>? shownRecentFiles;
     private HashSet<string>? shownMissingRecentPaths;
     private FirmwareUsage? shownUsage;
@@ -69,8 +69,6 @@ internal sealed class FlashView : UserControl
         firmwareName.TextTrimming = TextTrimming.CharacterEllipsis;
         formatTile.Child = formatIcon;
         formatIcon.HorizontalAlignment = HorizontalAlignment.Center;
-        firmwareMenu.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
-        firmwareMenu.BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
         firmwareMenu.VerticalAlignment = VerticalAlignment.Center;
         ToolTipService.SetToolTip(firmwareMenu, "固件操作");
         Ui.Name(firmwareMenu, "固件操作");

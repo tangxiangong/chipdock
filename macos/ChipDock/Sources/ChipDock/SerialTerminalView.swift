@@ -8,21 +8,28 @@ struct SerialTerminalView: View {
     @Binding var composerExpanded: Bool
     @State private var searchRequested = false
     @State private var pendingExport: PendingExport?
+    @State private var analysis = false
+    @State private var colors = false
+    @State private var searchPosition: UInt64?
 
-    private var visibleFrames: [SerialFrame] {
-        serial.frames.filter { frame in
-            (serial.direction == .all || frame.isReceive == (serial.direction == .receive))
-                && (serial.searchText.isEmpty || frame.display(serial.preferences.displayFormat).localizedStandardContains(serial.searchText))
-        }
+    private var appearance: TerminalAppearance {
+        TerminalAppearance(format: serial.preferences.displayFormat, mixed: serial.preferences.mixed,
+            timestamps: serial.preferences.timestamps, query: serial.searchText, regex: serial.searchRegex,
+            caseSensitive: serial.searchCase, colors: serial.preferences.colors, txColor: serial.preferences.txColor)
     }
 
     var body: some View {
-        let frames = visibleFrames
+        let appearance = appearance
+        let query = appearance.matcher
+        let frames = (serial.pausedFrames ?? serial.frames).filter { frame in
+            (serial.direction == .all || frame.isReceive == (serial.direction == .receive))
+                && (appearance.query.isEmpty || query.map { appearance.range(in: appearance.display(frame), regex: $0) != nil } == true)
+        }
         VStack(spacing: 0) {
             if serial.protocolDisplay != "raw" && !serial.protocolRules.isEmpty {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 6) {
-                        ForEach(serial.protocolRecords) { record in
+                        ForEach(serial.pausedParsed ?? serial.protocolRecords) { record in
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("\(record.name.isEmpty ? "RX" : record.name)  \(record.message)")
                                     .foregroundStyle(record.valid ? Color.primary : Color.orange)
@@ -34,8 +41,8 @@ struct SerialTerminalView: View {
                 Divider()
             }
             if serial.protocolDisplay != "parsed" || serial.protocolRules.isEmpty {
-            TerminalTable(frames: frames, format: serial.preferences.displayFormat,
-                          autoScroll: serial.preferences.autoScroll, state: serial.terminalTableState)
+            TerminalTable(frames: frames, appearance: appearance, jump: serial.terminalJump,
+                          autoScroll: serial.preferences.autoScroll && serial.pausedFrames == nil, state: serial.terminalTableState)
                 .overlay {
                     if frames.isEmpty { emptyState(filtered: !serial.frames.isEmpty) }
                 }
@@ -47,14 +54,15 @@ struct SerialTerminalView: View {
                     Spacer(minLength: 12)
                     terminalActions.fixedSize()
                 }
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 6) {
                     displayOptions(count: frames.count)
                     terminalActions.frame(maxWidth: .infinity, alignment: .trailing)
                 }
             }
             .controlSize(.small)
-            .padding(.horizontal, 18)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 5)
+            .background(.bar)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .toolbar {
@@ -67,56 +75,101 @@ struct SerialTerminalView: View {
                     ForEach(SerialDirectionFilter.allCases) { Text($0.rawValue).tag($0) }
                 }
                 .pickerStyle(.segmented).labelsHidden().fixedSize()
+                Menu("搜索选项", systemImage: "line.3.horizontal.decrease") {
+                    Toggle("区分大小写", isOn: $serial.searchCase)
+                    Toggle("正则表达式", isOn: $serial.searchRegex)
+                }
                 SearchField(prompt: "搜索数据", text: $serial.searchText, focusRequested: $searchRequested)
                     .frame(minWidth: 120, idealWidth: 180, maxWidth: 240)
                     .help("搜索数据（⌘F）")
+                Button { navigate(frames, step: -1) } label: { Label("上一条命中", systemImage: "chevron.up") }
+                    .disabled(serial.searchText.isEmpty || frames.isEmpty)
+                Button { navigate(frames, step: 1) } label: { Label("下一条命中", systemImage: "chevron.down") }
+                    .disabled(serial.searchText.isEmpty || frames.isEmpty)
             }
         }
         .focusedSceneValue(\.serialSearchRequested, $searchRequested)
         .exportPresentation($pendingExport)
+        .sheet(isPresented: $analysis) { SerialRecordAnalysis(serial: serial) }
+        .sheet(isPresented: $colors) { SerialColorEditor(serial: serial) }
     }
 
     private func displayOptions(count: Int) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             if !serial.protocolRules.isEmpty {
                 Picker("解析显示", selection: $serial.protocolDisplay) {
                     Text("原始").tag("raw"); Text("解析").tag("parsed"); Text("同时").tag("both")
-                }.frame(width: 130)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
+                .help("解析显示")
             }
             Picker("接收编码", selection: $serial.preferences.displayFormat) {
                 ForEach(SerialDataFormat.allCases) { Text($0.title).tag($0) }
             }
-            .frame(width: 160)
-            Text("\(count)/\(serial.frames.count) 条")
-                .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+            .labelsHidden()
+            .fixedSize()
+            .help("接收编码")
+            Text(count == serial.frames.count ? "\(count) 条" : "\(count) / \(serial.frames.count) 条")
+                .font(.caption).monospacedDigit().foregroundStyle(.secondary)
         }
     }
 
     private var terminalActions: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 4) {
             Toggle(isOn: $serial.preferences.autoScroll) {
                 Label("自动滚动", systemImage: "arrow.down.to.line")
             }
             .toggleStyle(.button)
             .help(serial.preferences.autoScroll ? "关闭自动滚动" : "滚动到最新数据")
-            Button(action: exportHistory) {
+            Toggle(isOn: Binding(get: { serial.pausedFrames != nil }, set: { _ in serial.togglePause() })) {
+                Label(serial.pausedFrames == nil ? "暂停显示" : "继续显示", systemImage: "pause")
+            }
+            .toggleStyle(.button)
+            .help(serial.pausedFrames == nil ? "暂停显示" : "继续显示")
+            Divider().frame(height: 14).padding(.horizontal, 4)
+            Menu {
+                Toggle("文本与 HEX 混显", isOn: $serial.preferences.mixed)
+                Toggle("显示时间戳", isOn: $serial.preferences.timestamps)
+                Button("着色规则…") { colors = true }
+                Divider()
+                Button("重置计数") { Task { await serial.resetCounters() } }
+                Toggle("清屏时重置计数", isOn: $serial.preferences.resetOnClear)
+            } label: {
+                Label("显示选项", systemImage: "slider.horizontal.3")
+            }
+            .menuIndicator(.hidden)
+            .help("显示选项")
+            Button("记录表", systemImage: "tablecells") { analysis = true }
+                .help("记录表")
+            Menu {
+                Button("JSON") { exportHistory() }
+                ForEach(["txt", "csv", "bin"], id: \.self) { format in
+                    Button(format.uppercased()) { exportHistory(format: format) }
+                }
+            } label: {
                 Label("导出", systemImage: "square.and.arrow.up")
             }
+            .menuIndicator(.hidden)
             .disabled(serial.frames.isEmpty)
-            .help("将当前保留的全部收发记录导出为 JSON（不受筛选影响）")
+            .help("导出记录")
             Button(action: serial.clear) {
                 Label("清屏", systemImage: "trash")
             }
             .disabled(serial.frames.isEmpty)
             .help("清空终端（⌘L）")
-            Button { composerExpanded.toggle() } label: {
-                Label(composerExpanded ? "收起发送区" : "展开发送区",
-                      systemImage: composerExpanded ? "chevron.down" : "chevron.up")
+            Divider().frame(height: 14).padding(.horizontal, 4)
+            Toggle(isOn: $composerExpanded) {
+                Label("发送区", systemImage: "rectangle.bottomthird.inset.filled")
             }
-            .buttonStyle(.bordered)
+            .toggleStyle(.button)
             .help(composerExpanded ? "收起发送区" : "展开发送区")
             .accessibilityValue(composerExpanded ? "已展开" : "已收起")
         }
+        .labelStyle(.iconOnly)
+        .buttonStyle(.borderless)
+        .menuStyle(.borderlessButton)
     }
 
     private func exportHistory() {
@@ -131,31 +184,100 @@ struct SerialTerminalView: View {
         }
     }
 
-    private func emptyState(filtered: Bool) -> some View {
-        VStack(spacing: 12) {
-            Image(systemName: filtered ? "magnifyingglass" : "terminal")
-                .font(.system(size: 32, weight: .light))
-                .foregroundStyle(.tertiary)
-                .accessibilityHidden(true)
-            Text(filtered ? "没有匹配的数据" : serial.status.connected ? "等待设备数据" : "暂无收发记录")
-                .font(.system(size: 14, weight: .medium))
-            Text(filtered ? "尝试其他搜索内容，或显示全部方向。" : serial.status.connected ? "设备数据会实时显示在这里。" : "在左侧选择串口并连接，即可开始收发。")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-            if filtered {
-                Button("清除筛选") { serial.searchText = ""; serial.direction = .all }
-                    .controlSize(.small)
+    private func navigate(_ matches: [SerialFrame], step: Int) {
+        guard !matches.isEmpty else { return }
+        let index = matches.firstIndex { $0.sequence == searchPosition }
+        let start = index ?? (step > 0 ? -1 : 0)
+        let target = matches[(start + step + matches.count) % matches.count].sequence
+        searchPosition = target
+        serial.preferences.autoScroll = false
+        serial.terminalJump = target
+    }
+
+    private func exportHistory(format: String) {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = "ChipDock-Serial.\(format)"
+        panel.begin { result in
+            guard result == .OK, let path = panel.url?.path else { return }
+            Task { @MainActor in
+                do {
+                    _ = try await serial.workbench(["action": "export", "path": path,
+                                                     "format": format, "after": serial.clearedThrough])
+                } catch { serial.error = error.localizedDescription }
             }
         }
-        .padding(24)
+    }
+
+    private func emptyState(filtered: Bool) -> some View {
+        ContentUnavailableView {
+            Label(filtered ? "没有匹配的数据" : serial.status.connected ? "等待设备数据" : "暂无收发记录",
+                  systemImage: filtered ? "magnifyingglass" : serial.status.connected ? "antenna.radiowaves.left.and.right" : "cable.connector")
+        } description: {
+            Text(filtered ? "尝试其他搜索内容，或显示全部方向。" : serial.status.connected ? "设备数据会实时显示在这里。" : "在左侧选择串口并连接，即可开始收发。")
+        } actions: {
+            if filtered {
+                Button("清除筛选") { serial.searchText = ""; serial.direction = .all }
+            }
+        }
+    }
+}
+
+private struct TerminalAppearance: Equatable {
+    var format = SerialDataFormat.utf8
+    var mixed = false
+    var timestamps = true
+    var query = ""
+    var regex = false
+    var caseSensitive = false
+    var colors: [SerialColorRule] = []
+    var txColor = ""
+
+    var matcher: NSRegularExpression? {
+        guard !query.isEmpty && query.utf16.count <= 256 else { return nil }
+        return try? NSRegularExpression(pattern: regex ? query : NSRegularExpression.escapedPattern(for: query),
+                                        options: caseSensitive ? [] : [.caseInsensitive])
+    }
+
+    func range(in text: String, regex: NSRegularExpression) -> NSRange? {
+        let deadline = ContinuousClock.now.advanced(by: .milliseconds(12))
+        var found: NSRange?
+        regex.enumerateMatches(in: text, options: [.reportProgress], range: NSRange(location: 0, length: text.utf16.count)) { match, _, stop in
+            if let match { found = match.range }
+            if found != nil || ContinuousClock.now >= deadline { stop.pointee = true }
+        }
+        return found
+    }
+
+    func display(_ frame: SerialFrame) -> String {
+        guard mixed else { return frame.display(format) }
+        let text = frame.display(format == .hex ? .utf8 : format)
+        return text + "\n" + frame.hex
+    }
+
+    func color(_ frame: SerialFrame, text: String) -> NSColor {
+        let label = frame.isReceive ? colors.first { rule in
+            if rule.regex {
+                guard let regex = try? NSRegularExpression(pattern: rule.pattern) else { return false }
+                return range(in: text, regex: regex) != nil
+            }
+            return text.localizedCaseInsensitiveContains(rule.pattern)
+        }?.color : txColor
+        switch label {
+        case "red": return .systemRed
+        case "orange": return .systemOrange
+        case "green": return .systemGreen
+        case "blue": return .systemBlue
+        case "purple": return .systemPurple
+        default: return .labelColor
+        }
     }
 }
 
 // AppKit supplies column resizing, multiline rows, selection, copying and precise scrolling.
 private struct TerminalTable: NSViewRepresentable {
     let frames: [SerialFrame]
-    let format: SerialDataFormat
+    let appearance: TerminalAppearance
+    let jump: UInt64?
     let autoScroll: Bool
     let state: TerminalTableState
 
@@ -189,7 +311,7 @@ private struct TerminalTable: NSViewRepresentable {
             guard let coordinator, let table else { return }
             let text = table.selectedRowIndexes.compactMap { index -> String? in
                 guard coordinator.frames.indices.contains(index) else { return nil }
-                return coordinator.frames[index].display(coordinator.format)
+                return coordinator.appearance.display(coordinator.frames[index])
             }.joined(separator: "\n")
             guard !text.isEmpty else { return }
             NSPasteboard.general.clearContents()
@@ -212,15 +334,17 @@ private struct TerminalTable: NSViewRepresentable {
         let coordinator = context.coordinator
         coordinator.state = state
         let ids = frames.map(\.id)
-        let changed = coordinator.frames.map(\.id) != ids || coordinator.format != format
+        let changed = coordinator.frames.map(\.id) != ids || coordinator.appearance != appearance
         let initial = !coordinator.didLoad
         let follow = autoScroll && (initial ? state.topFrameID == nil : changed || !coordinator.autoScroll)
         if !initial { coordinator.captureViewport() }
         coordinator.updating = true
         defer { coordinator.updating = false; coordinator.didLoad = true }
+        table.tableColumns.first?.isHidden = !appearance.timestamps
         if changed {
             coordinator.frames = frames
-            coordinator.format = format
+            coordinator.appearance = appearance
+            coordinator.matcher = appearance.matcher
             table.reloadData()
             table.selectRowIndexes(state.selection(in: ids), byExtendingSelection: false)
         }
@@ -232,6 +356,11 @@ private struct TerminalTable: NSViewRepresentable {
         }
         coordinator.autoScroll = autoScroll
         if follow, !frames.isEmpty { table.scrollRowToVisible(frames.count - 1) }
+        if let jump, coordinator.jump != jump, let index = frames.firstIndex(where: { $0.sequence == jump }) {
+            coordinator.jump = jump
+            table.selectRowIndexes(IndexSet(integer: index), byExtendingSelection: false)
+            table.scrollRowToVisible(index)
+        }
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -243,7 +372,9 @@ private struct TerminalTable: NSViewRepresentable {
     @MainActor
     final class Coordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate {
         var frames: [SerialFrame] = []
-        var format = SerialDataFormat.utf8
+        var appearance = TerminalAppearance()
+        var matcher: NSRegularExpression?
+        var jump: UInt64?
         var autoScroll = false
         var state: TerminalTableState?
         weak var scroll: NSScrollView?
@@ -276,7 +407,7 @@ private struct TerminalTable: NSViewRepresentable {
 
         func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
             guard frames.indices.contains(row), let column = tableView.tableColumns.last else { return 30 }
-            let text = frames[row].display(format).trimmingCharacters(in: .newlines)
+            let text = appearance.display(frames[row]).trimmingCharacters(in: .newlines)
             let bounds = (text as NSString).boundingRect(
                 with: NSSize(width: max(1, column.width - 8), height: .greatestFiniteMagnitude),
                 options: [.usesLineFragmentOrigin, .usesFontLeading],
@@ -331,7 +462,16 @@ private struct TerminalTable: NSViewRepresentable {
                 cell.imageView?.image = NSImage(systemSymbolName: frame.isReceive ? "arrow.down.left" : "arrow.up.right",
                                                accessibilityDescription: frame.isReceive ? "接收" : "发送")
             case "size": cell.textField?.stringValue = String(frame.bytes.count)
-            default: cell.textField?.stringValue = frame.display(format).trimmingCharacters(in: .newlines)
+            default:
+                let text = appearance.display(frame).trimmingCharacters(in: .newlines)
+                let style = NSMutableAttributedString(string: text, attributes: [
+                    .foregroundColor: appearance.color(frame, text: text),
+                    .font: NSFont.monospacedSystemFont(ofSize: 13, weight: .regular),
+                ])
+                if let matcher, let range = appearance.range(in: text, regex: matcher) {
+                    style.addAttribute(.backgroundColor, value: NSColor.systemYellow.withAlphaComponent(0.35), range: range)
+                }
+                cell.textField?.attributedStringValue = style
             }
             return cell
         }

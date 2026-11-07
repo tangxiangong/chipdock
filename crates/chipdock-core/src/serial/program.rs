@@ -1,5 +1,10 @@
 //! Declarative serial commands. All operations are pure and never access a device.
-use super::{bytes_to_hex, checksum::append_checksum, parse_hex, types::ChecksumAlgorithm};
+use super::{
+    bytes_to_hex,
+    checksum::{calculate, width},
+    parse_hex,
+    types::ChecksumAlgorithm,
+};
 use anyhow::{Result, bail, ensure};
 use serde::{Deserialize, Serialize};
 
@@ -24,6 +29,12 @@ pub struct Rule {
     /// Nonempty delimiter selects a UTF-8 text frame, exposed as {text}.
     #[serde(default)]
     pub delimiter: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub length_field: String,
+    #[serde(default)]
+    pub length_includes_frame: bool,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub trailer: String,
 }
 fn timeout() -> u64 {
     1000
@@ -40,6 +51,8 @@ struct Request {
     incoming: String,
     #[serde(default)]
     operation: String,
+    #[serde(default)]
+    rule: String,
 }
 #[derive(Serialize, Default)]
 struct Response {
@@ -48,14 +61,35 @@ struct Response {
     records: Vec<Record>,
     response: String,
     timeout_ms: u64,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    layout: Vec<Span>,
 }
 #[derive(Serialize)]
-struct Record {
+struct Span {
     name: String,
+    start: usize,
+    bytes: usize,
     hex: String,
-    message: String,
-    valid: bool,
 }
+
+#[cfg_attr(feature = "csharp", interoptopus::ffi)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Record {
+    pub name: String,
+    pub hex: String,
+    pub message: String,
+    pub valid: bool,
+    pub checksum_valid: Option<bool>,
+    pub payload_hex: String,
+}
+
+pub(super) struct Command {
+    pub bytes: Vec<u8>,
+    pub response: String,
+    pub timeout_ms: u64,
+}
+
 #[derive(Clone)]
 enum Part {
     Byte(u8),
@@ -75,7 +109,16 @@ struct Compiled {
     payload: usize,
     length: usize,
     delimiter: Vec<u8>,
+    trailer: Vec<u8>,
+    variable: Option<LengthField>,
 }
+
+struct LengthField {
+    offset: usize,
+    width: usize,
+    little: bool,
+}
+
 fn identifier(s: &str) -> bool {
     !s.is_empty()
         && s.len() <= 64
@@ -96,14 +139,19 @@ fn compile(rule: &Rule) -> Result<Compiled> {
         "反馈超时须为 10–3600000 毫秒"
     );
     let delimiter = parse_hex(&rule.delimiter)?;
+    let trailer = parse_hex(&rule.trailer)?;
+    ensure!(trailer.len() <= 32, "帧尾最多 32 字节");
     if !delimiter.is_empty() {
         ensure!(
             rule.receive && delimiter.len() <= 16 && rule.template.is_empty(),
             "文本接收规则须使用空模板及 1–16 字节分隔符"
         );
         ensure!(
-            rule.checksum_start == 0 && rule.checksum_end.is_none(),
-            "文本规则不支持校验范围"
+            rule.checksum_start == 0
+                && rule.checksum_end.is_none()
+                && trailer.is_empty()
+                && rule.length_field.is_empty(),
+            "文本规则仅使用分隔符定义帧尾，不支持长度字段或校验范围"
         );
         validate_display(&rule.display, &["text"])?;
         return Ok(Compiled {
@@ -113,6 +161,8 @@ fn compile(rule: &Rule) -> Result<Compiled> {
             payload: 0,
             length: 0,
             delimiter,
+            trailer,
+            variable: None,
         });
     }
     let mut parts = Vec::new();
@@ -133,6 +183,9 @@ fn compile(rule: &Rule) -> Result<Compiled> {
                     "sum8" => ChecksumAlgorithm::Sum8,
                     "xor8" => ChecksumAlgorithm::Xor8,
                     "crc16modbus" => ChecksumAlgorithm::Crc16Modbus,
+                    "crc16ccitt" => ChecksumAlgorithm::Crc16Ccitt,
+                    "crc32" => ChecksumAlgorithm::Crc32,
+                    "lrc" => ChecksumAlgorithm::Lrc,
                     _ => bail!("未知校验算法"),
                 };
                 checked = true;
@@ -197,12 +250,7 @@ fn compile(rule: &Rule) -> Result<Compiled> {
             Part::Field { width, .. } => *width,
         })
         .sum::<usize>();
-    let length = payload
-        + match checksum {
-            ChecksumAlgorithm::None => 0,
-            ChecksumAlgorithm::Crc16Modbus => 2,
-            _ => 1,
-        };
+    let length = payload + width(checksum) + trailer.len();
     ensure!(payload > 0 && length <= LIMIT, "帧长度须为 1–4096 字节");
     ensure!(
         !rule.receive || matches!(parts.first(), Some(Part::Byte(_))),
@@ -213,6 +261,37 @@ fn compile(rule: &Rule) -> Result<Compiled> {
             && rule.checksum_end.unwrap_or(payload) <= payload,
         "校验范围无效（起始包含，结束不包含）"
     );
+    let variable = if rule.length_field.is_empty() {
+        None
+    } else {
+        let mut offset = 0;
+        let mut field = None;
+        for part in &parts {
+            match part {
+                Part::Byte(_) => offset += 1,
+                Part::Field {
+                    name,
+                    signed,
+                    width,
+                    little,
+                    ..
+                } => {
+                    if name == &rule.length_field {
+                        ensure!(!signed, "长度字段必须使用无符号整数");
+                        field = Some(LengthField {
+                            offset,
+                            width: *width,
+                            little: *little,
+                        });
+                    }
+                    offset += width;
+                }
+            }
+        }
+        ensure!(!names.contains(&"payload"), "变量载荷使用保留字段 payload");
+        names.push("payload");
+        Some(field.ok_or_else(|| anyhow::anyhow!("找不到长度字段 {}", rule.length_field))?)
+    };
     validate_display(&rule.display, &names)?;
     Ok(Compiled {
         rule: rule.clone(),
@@ -221,6 +300,8 @@ fn compile(rule: &Rule) -> Result<Compiled> {
         payload,
         length,
         delimiter,
+        trailer,
+        variable,
     })
 }
 fn validate_display(display: &str, names: &[&str]) -> Result<()> {
@@ -257,19 +338,88 @@ fn number(s: &str) -> Result<i64> {
 }
 impl Compiled {
     fn check(&self, payload: &[u8]) -> Vec<u8> {
-        let mut checked = payload
-            [self.rule.checksum_start..self.rule.checksum_end.unwrap_or(self.payload)]
-            .to_vec();
-        let before = checked.len();
-        append_checksum(&mut checked, self.checksum);
-        checked[before..].to_vec()
+        calculate(
+            &payload[self.rule.checksum_start..self.rule.checksum_end.unwrap_or(payload.len())],
+            self.checksum,
+        )
     }
+
+    fn frame_length(&self, bytes: &[u8]) -> Result<Option<usize>> {
+        if !self.delimiter.is_empty() {
+            return Ok(bytes
+                .windows(self.delimiter.len())
+                .position(|w| w == self.delimiter)
+                .map(|n| n + self.delimiter.len()));
+        }
+        let Some(field) = &self.variable else {
+            return Ok(Some(self.length));
+        };
+        let Some(value) = bytes.get(field.offset..field.offset + field.width) else {
+            return Ok(None);
+        };
+        let value = unsigned(value, field.little) as usize;
+        ensure!(value <= LIMIT, "长度字段超过帧上限");
+        let length = if self.rule.length_includes_frame {
+            value
+        } else {
+            value + self.length
+        };
+        ensure!(
+            (self.length..=LIMIT).contains(&length),
+            "长度字段超出帧范围"
+        );
+        Ok(Some(length))
+    }
+
+    fn layout(&self, bytes: &[u8]) -> Vec<Span> {
+        let mut result = Vec::new();
+        let mut offset = 0;
+        let mut span = |name: &str, start: usize, end: usize| {
+            if let Some(data) = bytes.get(start..end).filter(|data| !data.is_empty()) {
+                result.push(Span {
+                    name: name.into(),
+                    start,
+                    bytes: data.len(),
+                    hex: bytes_to_hex(data),
+                });
+            }
+        };
+        if !self.delimiter.is_empty() {
+            let end = bytes.len().saturating_sub(self.delimiter.len());
+            span("text", 0, end);
+            span("delimiter", end, bytes.len());
+            return result;
+        }
+        for part in &self.parts {
+            let (label, width) = match part {
+                Part::Byte(_) => ("固定字节", 1),
+                Part::Field { name, width, .. } => (name.as_str(), *width),
+            };
+            span(label, offset, offset + width);
+            offset += width;
+        }
+        let end = bytes.len().saturating_sub(self.trailer.len());
+        let checksum_at = end.saturating_sub(width(self.checksum));
+        span("payload", self.payload, checksum_at);
+        span("checksum", checksum_at, end);
+        if self.checksum != ChecksumAlgorithm::None {
+            span(
+                "校验覆盖",
+                self.rule.checksum_start,
+                self.rule.checksum_end.unwrap_or(checksum_at),
+            );
+        }
+        span("帧尾", end, bytes.len());
+        result
+    }
+
     fn encode(&self, args: &[&str]) -> Result<Vec<u8>> {
         let count = self
             .parts
             .iter()
             .filter(|p| matches!(p, Part::Field { .. }))
             .count();
+        let count = count + usize::from(self.variable.is_some());
         ensure!(
             args.len() == count,
             "{} 需要 {} 个参数，实际 {} 个",
@@ -309,7 +459,16 @@ impl Compiled {
                 }
             }
         }
+        if self.variable.is_some() {
+            bytes.extend(parse_hex(args.next().copied().unwrap_or_default())?);
+            ensure!(
+                self.frame_length(&bytes)?
+                    == Some(bytes.len() + width(self.checksum) + self.trailer.len()),
+                "长度字段与实际载荷不符"
+            );
+        }
         bytes.extend(self.check(&bytes));
+        bytes.extend_from_slice(&self.trailer);
         Ok(bytes)
     }
     fn prefix(&self, bytes: &[u8]) -> bool {
@@ -342,8 +501,11 @@ impl Compiled {
                 self.rule.display.replace("{text}", text)
             });
         }
+        ensure!(bytes.ends_with(&self.trailer), "固定帧尾不匹配");
+        let end = bytes.len() - self.trailer.len();
+        let payload_end = end - width(self.checksum);
         ensure!(
-            self.check(&bytes[..self.payload]) == bytes[self.payload..],
+            self.check(&bytes[..payload_end]) == bytes[payload_end..end],
             "校验失败"
         );
         let mut offset = 0;
@@ -361,16 +523,7 @@ impl Compiled {
                     max,
                 } => {
                     let raw = &bytes[offset..offset + width];
-                    let mut value = 0i64;
-                    if *little {
-                        for b in raw.iter().rev() {
-                            value = (value << 8) | i64::from(*b);
-                        }
-                    } else {
-                        for b in raw {
-                            value = (value << 8) | i64::from(*b);
-                        }
-                    }
+                    let mut value = unsigned(raw, *little);
                     if *signed && value & (1 << (width * 8 - 1)) != 0 {
                         value -= 1 << (width * 8);
                     }
@@ -384,6 +537,11 @@ impl Compiled {
                 }
             }
         }
+        if self.variable.is_some() {
+            let payload = bytes_to_hex(&bytes[self.payload..payload_end]);
+            display = display.replace("{payload}", &payload);
+            fields.push(format!("payload={payload}"));
+        }
         Ok(if display.is_empty() {
             fields.join("  ")
         } else {
@@ -391,124 +549,233 @@ impl Compiled {
         })
     }
 }
+fn unsigned(bytes: &[u8], little: bool) -> i64 {
+    if little {
+        bytes
+            .iter()
+            .rev()
+            .fold(0, |value, &b| (value << 8) | i64::from(b))
+    } else {
+        bytes
+            .iter()
+            .fold(0, |value, &b| (value << 8) | i64::from(b))
+    }
+}
+
+#[derive(Default)]
+pub(super) struct Program {
+    rules: Vec<Compiled>,
+    has_receive: bool,
+}
+
+impl Program {
+    pub fn new(source: &[Rule]) -> Result<Self> {
+        ensure!(source.len() <= 128, "最多支持 128 条规则");
+        let mut rules: Vec<Compiled> = Vec::new();
+        for rule in source {
+            ensure!(
+                !rules.iter().any(|r| r.rule.name == rule.name),
+                "规则名称重复：{}",
+                rule.name
+            );
+            rules.push(compile(rule)?);
+        }
+        for rule in &rules {
+            if !rule.rule.response.is_empty() {
+                ensure!(
+                    !rule.rule.receive
+                        && rules
+                            .iter()
+                            .any(|r| r.rule.receive && r.rule.name == rule.rule.response),
+                    "关联接收规则不存在：{}",
+                    rule.rule.response
+                );
+            }
+        }
+        Ok(Self {
+            has_receive: rules.iter().any(|rule| rule.rule.receive),
+            rules,
+        })
+    }
+
+    pub fn command_names(&self) -> Vec<String> {
+        self.rules
+            .iter()
+            .filter(|rule| !rule.rule.receive)
+            .map(|rule| rule.rule.name.clone())
+            .collect()
+    }
+
+    pub fn has_receive(&self) -> bool {
+        self.has_receive
+    }
+
+    pub fn encode(&self, input: &str) -> Result<Command> {
+        let mut words = input.split_whitespace();
+        let name = words.next().unwrap_or_default();
+        let rule = self
+            .rules
+            .iter()
+            .find(|r| !r.rule.receive && r.rule.name == name)
+            .ok_or_else(|| anyhow::anyhow!("未知发送命令：{name}"))?;
+        Ok(Command {
+            bytes: rule.encode(&words.collect::<Vec<_>>())?,
+            response: rule.rule.response.clone(),
+            timeout_ms: rule.rule.timeout_ms,
+        })
+    }
+
+    pub fn decode(&self, bytes: &[u8]) -> (Vec<(usize, Record)>, usize) {
+        let mut records = Vec::new();
+        let mut offset = 0;
+        let receive: Vec<_> = self.rules.iter().filter(|rule| rule.rule.receive).collect();
+        while offset < bytes.len() {
+            let tail = &bytes[offset..];
+            let mut candidates = Vec::new();
+            let mut invalid_length = None;
+            let mut partial = false;
+            for rule in &receive {
+                if !rule.prefix(tail) {
+                    continue;
+                }
+                match rule.frame_length(tail) {
+                    Ok(Some(n)) if n <= tail.len() && n <= LIMIT => {
+                        candidates.push((*rule, n, rule.decode(&tail[..n])))
+                    }
+                    Ok(_) => partial = true,
+                    Err(error) => invalid_length = Some(error.to_string()),
+                }
+            }
+            if candidates.iter().any(|(_, _, result)| result.is_ok()) {
+                candidates.retain(|(_, _, result)| result.is_ok());
+            } else if partial && tail.len() < LIMIT {
+                break;
+            }
+            if candidates.len() > 1 {
+                offset += 1;
+                records.push((
+                    offset,
+                    unmatched(
+                        tail[0],
+                        format!(
+                            "规则冲突：{}",
+                            candidates
+                                .iter()
+                                .map(|(rule, _, _)| rule.rule.name.as_str())
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        ),
+                    ),
+                ));
+            } else if let Some((rule, length, decoded)) = candidates.pop() {
+                let valid = decoded.is_ok();
+                let raw = &tail[..length];
+                let check_end = length - rule.trailer.len();
+                let data_end = check_end - width(rule.checksum);
+                let checksum_valid = (rule.checksum != ChecksumAlgorithm::None)
+                    .then(|| rule.check(&raw[..data_end]) == raw[data_end..check_end]);
+                let payload_hex = if rule.variable.is_some() {
+                    bytes_to_hex(&raw[rule.payload..data_end])
+                } else if !rule.delimiter.is_empty() {
+                    bytes_to_hex(&raw[..length - rule.delimiter.len()])
+                } else {
+                    bytes_to_hex(&raw[..data_end])
+                };
+                offset += if valid || !rule.delimiter.is_empty() {
+                    length
+                } else {
+                    1
+                };
+                records.push((
+                    offset,
+                    Record {
+                        name: rule.rule.name.clone(),
+                        hex: bytes_to_hex(raw),
+                        message: decoded.unwrap_or_else(|error| error.to_string()),
+                        valid,
+                        checksum_valid,
+                        payload_hex,
+                    },
+                ));
+            } else {
+                offset += 1;
+                records.push((
+                    offset,
+                    unmatched(
+                        tail[0],
+                        invalid_length.unwrap_or_else(|| "未匹配数据".into()),
+                    ),
+                ));
+            }
+        }
+        (records, offset)
+    }
+}
+
+fn unmatched(byte: u8, message: String) -> Record {
+    Record {
+        name: String::new(),
+        hex: format!("{byte:02X}"),
+        message,
+        valid: false,
+        checksum_valid: None,
+        payload_hex: String::new(),
+    }
+}
+
 /// JSON boundary shared by native clients; errors never fall back to raw transmission.
 pub fn execute(json: &str) -> Result<String> {
     ensure!(json.len() <= 1024 * 1024, "协议请求过大");
     let request: Request = serde_json::from_str(json)?;
-    ensure!(request.rules.len() <= 128, "最多支持 128 条规则");
-    let mut rules = Vec::new();
-    for rule in &request.rules {
-        ensure!(
-            !rules.iter().any(|r: &Compiled| r.rule.name == rule.name),
-            "规则名称重复：{}",
-            rule.name
-        );
-        rules.push(compile(rule)?);
-    }
-    for rule in &rules {
-        if !rule.rule.response.is_empty() {
-            ensure!(
-                !rule.rule.receive
-                    && rules
-                        .iter()
-                        .any(|r| r.rule.receive && r.rule.name == rule.rule.response),
-                "关联接收规则不存在：{}",
-                rule.rule.response
-            );
-        }
-    }
+    let program = Program::new(&request.rules)?;
     let mut result = Response::default();
     match request.operation.as_str() {
         "validate" => {}
         "encode" => {
-            let mut words = request.input.split_whitespace();
-            let name = words.next().unwrap_or_default();
-            let rule = rules
-                .iter()
-                .find(|r| !r.rule.receive && r.rule.name == name)
-                .ok_or_else(|| anyhow::anyhow!("未知发送命令：{name}"))?;
-            result.hex = bytes_to_hex(&rule.encode(&words.collect::<Vec<_>>())?);
-            result.response = rule.rule.response.clone();
-            result.timeout_ms = rule.rule.timeout_ms;
+            let command = program.encode(&request.input)?;
+            result.hex = bytes_to_hex(&command.bytes);
+            result.response = command.response;
+            result.timeout_ms = command.timeout_ms;
         }
         "decode" => {
             let mut bytes = parse_hex(&request.buffer)?;
             bytes.extend(parse_hex(&request.incoming)?);
             ensure!(bytes.len() <= 65536, "接收输入超过 64 KiB");
-            let rules: Vec<_> = rules.iter().filter(|r| r.rule.receive).collect();
-            let mut offset = 0;
-            while offset < bytes.len() {
-                let tail = &bytes[offset..];
-                let mut candidates = Vec::new();
-                let mut partial = false;
-                for rule in &rules {
-                    if !rule.prefix(tail) {
-                        continue;
-                    }
-                    let length = if rule.delimiter.is_empty() {
-                        Some(rule.length)
-                    } else {
-                        tail.windows(rule.delimiter.len())
-                            .position(|w| w == rule.delimiter)
-                            .map(|n| n + rule.delimiter.len())
-                    };
-                    match length {
-                        Some(n) if n <= tail.len() && n <= LIMIT => candidates.push((*rule, n)),
-                        _ => partial = true,
-                    }
-                }
-                // A complete valid frame must not be held by another rule's unfinished frame.
-                // Only candidates passing checksum and field validation can conflict.
-                let valid_candidates: Vec<_> = candidates
-                    .iter()
-                    .copied()
-                    .filter(|(rule, length)| rule.decode(&tail[..*length]).is_ok())
-                    .collect();
-                if !valid_candidates.is_empty() {
-                    candidates = valid_candidates;
-                } else if partial && tail.len() < LIMIT {
-                    break;
-                }
-                if candidates.len() > 1 {
-                    result.records.push(Record {
-                        name: String::new(),
-                        hex: bytes_to_hex(&tail[..1]),
-                        message: format!(
-                            "规则冲突：{}",
-                            candidates
-                                .iter()
-                                .map(|(r, _)| r.rule.name.as_str())
-                                .collect::<Vec<_>>()
-                                .join(", ")
-                        ),
-                        valid: false,
-                    });
-                    offset += 1;
-                } else if let Some((rule, n)) = candidates.first() {
-                    let decoded = rule.decode(&tail[..*n]);
-                    let valid = decoded.is_ok();
-                    result.records.push(Record {
-                        name: rule.rule.name.clone(),
-                        hex: bytes_to_hex(&tail[..*n]),
-                        message: decoded.unwrap_or_else(|e| e.to_string()),
-                        valid,
-                    });
-                    offset += if valid || !rule.delimiter.is_empty() {
-                        *n
-                    } else {
-                        1
-                    };
-                } else {
-                    result.records.push(Record {
-                        name: String::new(),
-                        hex: bytes_to_hex(&tail[..1]),
-                        message: "未匹配数据".into(),
-                        valid: false,
-                    });
-                    offset += 1;
-                }
+            let (records, consumed) = program.decode(&bytes);
+            result.records = records.into_iter().map(|(_, record)| record).collect();
+            result.buffer = bytes_to_hex(&bytes[consumed..]);
+        }
+        "inspect" => {
+            let rule = program
+                .rules
+                .iter()
+                .find(|rule| rule.rule.name == request.rule)
+                .ok_or_else(|| anyhow::anyhow!("请选择协议规则"))?;
+            let bytes = if rule.rule.receive {
+                parse_hex(&request.incoming)?
+            } else {
+                let mut words = request.input.split_whitespace();
+                ensure!(
+                    words.next() == Some(rule.rule.name.as_str()),
+                    "样例须使用所选发送模板"
+                );
+                rule.encode(&words.collect::<Vec<_>>())?
+            };
+            ensure!(bytes.len() <= LIMIT, "样例超过帧上限");
+            result.hex = bytes_to_hex(&bytes);
+            let first_frame = rule
+                .frame_length(&bytes)
+                .ok()
+                .flatten()
+                .and_then(|length| bytes.get(..length));
+            if let Some(frame) = first_frame {
+                result.layout = rule.layout(frame);
             }
-            result.buffer = bytes_to_hex(&bytes[offset..]);
+            if rule.rule.receive {
+                let (records, consumed) = program.decode(&bytes);
+                result.records = records.into_iter().map(|(_, record)| record).collect();
+                result.buffer = bytes_to_hex(&bytes[consumed..]);
+            }
         }
         _ => bail!("未知协议操作"),
     }
@@ -528,6 +795,42 @@ mod tests {
     fn call(operation: &str, input: &str, buffer: &str, incoming: &str) -> Result<Value> {
         Ok(serde_json::from_str(&execute(&json!({"rules":rules(),"operation":operation,"input":input,"buffer":buffer,"incoming":incoming}).to_string())?)?)
     }
+    #[test]
+    fn variable_payload_reassembles_and_rejects_corrupt_lengths_and_trailers() {
+        let rules = json!([
+            {"name":"write","template":"AA {len:u8} {checksum:sum8}", "length_field":"len","trailer":"0D 0A"},
+            {"name":"report","receive":true,"template":"AA {len:u8} {checksum:sum8}", "length_field":"len","trailer":"0D 0A","display":"{payload}"}
+        ]);
+        let run = |request: Value| -> Value {
+            serde_json::from_str(&execute(&request.to_string()).unwrap()).unwrap()
+        };
+        let encoded = run(json!({"rules":rules,"operation":"encode","input":"write 2 01FF"}));
+        assert_eq!(encoded["hex"], "AA 02 01 FF AC 0D 0A");
+        let first = run(json!({"rules":rules,"operation":"decode","incoming":"AA 02 01"}));
+        assert_eq!(first["buffer"], "AA 02 01");
+        let next = run(
+            json!({"rules":rules,"operation":"decode","buffer":first["buffer"],
+            "incoming":"FF AC 00 00 AA 02 01 FF AC 0D 0A"}),
+        );
+        assert_eq!(next["records"][0]["valid"], false);
+        assert!(
+            next["records"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|record| record["message"] == "01 FF" && record["valid"] == true)
+        );
+
+        let invalid = json!([{"name":"report","receive":true,"template":"AA {len:u16be}","length_field":"len","length_includes_frame":true}]);
+        let result =
+            run(json!({"rules":invalid,"operation":"decode","incoming":"AA FF FF AA 00 04 11"}));
+        assert_eq!(result["records"][0]["valid"], false);
+        assert_eq!(
+            result["records"].as_array().unwrap().last().unwrap()["valid"],
+            true
+        );
+    }
+
     #[test]
     fn malformed_signs_return_errors_without_panicking() {
         for input in ["--9223372036854775808", "--1", "-+1", "0x-1"] {

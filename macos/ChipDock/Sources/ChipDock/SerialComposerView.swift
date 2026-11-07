@@ -5,57 +5,41 @@ struct SerialComposerView: View {
     @Bindable var serial: SerialStore
 
     @State private var managing = false
+    @State private var tools = false
+    @State private var workflows = false
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                Picker("发送模式", selection: $serial.commandMode) { Text("普通").tag(false); Text("命令").tag(true) }
-                    .pickerStyle(.segmented).frame(width: 160)
-                Spacer()
-                Button("管理命令与接收规则") { managing = true }.disabled(serial.sending)
-            }.padding(.horizontal, 18).padding(.top, 8).disabled(serial.autoSending)
-            if !serial.commandMode {
-            HStack(spacing: 12) {
-                Label("发送区", systemImage: "square.and.pencil")
-                    .font(.system(size: 13, weight: .semibold))
-                Spacer(minLength: 12)
+            HStack(spacing: 10) {
+                Picker("发送模式", selection: $serial.commandMode) { Text("文本").tag(false); Text("命令").tag(true) }
+                    .pickerStyle(.segmented).labelsHidden().fixedSize()
+                    .help("文本：直接发送输入内容；命令：按命令规则生成帧")
+                if !serial.commandMode { sendOptions }
+                Spacer(minLength: 8)
                 Menu {
-                    Picker("校验算法", selection: $serial.preferences.checksum) {
-                        Text("无校验（默认）").tag(SerialChecksum.none)
-                        Text("校验和（SUM8）").tag(SerialChecksum.sum8)
-                        Section("奇偶校验") {
-                            Text("奇校验").tag(SerialChecksum.oddParity)
-                            Text("偶校验").tag(SerialChecksum.evenParity)
-                        }
-                        Text("异或校验（XOR8）").tag(SerialChecksum.xor8)
-                        Text("CRC16/MODBUS").tag(SerialChecksum.crc16Modbus)
+                    Button("命令与接收规则…", systemImage: "list.bullet.rectangle") { managing = true }
+                        .disabled(serial.sending)
+                    Divider()
+                    Button("校验、分帧、Modbus 与采集…", systemImage: "wrench.and.screwdriver") { tools = true }
+                    Button("包库、文件、宏与应答…", systemImage: "square.stack.3d.up") { workflows = true }
+                    Divider()
+                    Button("打开实时曲线", systemImage: "chart.xyaxis.line") {
+                        openWindow(id: "serial-plot", value: SerialPlotKey(session: serial.id))
                     }
-                    .pickerStyle(.inline)
                 } label: {
-                    Label(serial.preferences.checksum.title, systemImage: "checkmark.shield")
+                    Label("工具", systemImage: "ellipsis.circle")
                 }
+                .menuStyle(.borderlessButton)
                 .fixedSize()
-                .help("对编码后的内容计算校验码，在行尾之前追加；奇偶校验追加 0 或 1，CRC16 使用 MODBUS 格式。")
-                Picker("编码", selection: $serial.preferences.sendFormat) {
-                    ForEach(SerialDataFormat.allCases) { Text($0.title).tag($0) }
-                }
-                .frame(width: 132)
-                Picker("行尾", selection: $serial.preferences.lineEnding) {
-                    Text("无").tag("none")
-                    Text("LF").tag("lf")
-                    Text("CR").tag("cr")
-                    Text("CRLF").tag("crlf")
-                }
-                .frame(width: 112)
-                .disabled(serial.preferences.sendFormat == .hex)
+                .help("串口工具")
             }
-            .disabled(serial.autoSending)
             .controlSize(.small)
-            .padding(.horizontal, 18)
-            .frame(height: 44)
-            }
+            .padding(.horizontal, 12)
+            .frame(height: 36)
+            Divider()
             if serial.commandMode {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 8) {
                     TextField("例如 motor-speed 45", text: $serial.input)
                         .textFieldStyle(.roundedBorder).font(.system(.body, design: .monospaced))
                         .onSubmit { Task { await serial.send() } }
@@ -63,65 +47,108 @@ struct SerialComposerView: View {
                             if direction == .up { serial.recallCommand(-1) }
                             if direction == .down { serial.recallCommand(1) }
                         }
-                    ScrollView(.horizontal) {
-                        HStack {
-                            ForEach(serial.protocolRules.filter { !$0.receive && (serial.input.isEmpty || $0.name.hasPrefix(serial.input)) }) { rule in
-                                Button(rule.name) { serial.input = rule.name + " " }.help(rule.template)
+                    let suggestions = serial.protocolRules.filter { !$0.receive && (serial.input.isEmpty || $0.name.hasPrefix(serial.input)) }
+                    if !suggestions.isEmpty {
+                        ScrollView(.horizontal) {
+                            HStack(spacing: 4) {
+                                ForEach(suggestions) { rule in
+                                    Button(rule.name) { serial.input = rule.name + " " }
+                                        .buttonStyle(.accessoryBar)
+                                        .help(rule.template)
+                                }
                             }
                         }
+                        .scrollIndicators(.never)
+                        .controlSize(.small)
                     }
-                    Text(serial.commandError.isEmpty ? "待发送：" + serial.commandPreview : serial.commandError)
-                        .font(.caption.monospaced()).foregroundStyle(serial.commandError.isEmpty ? Color.secondary : Color.red)
-                        .textSelection(.enabled)
-                    if !serial.feedback.isEmpty { Text(serial.feedback).font(.caption) }
-                }.padding(.horizontal, 18).padding(.vertical, 8)
+                    Label {
+                        Text(serial.commandError.isEmpty ? serial.commandPreview : serial.commandError)
+                            .font(.caption.monospaced())
+                            .textSelection(.enabled)
+                    } icon: {
+                        Image(systemName: serial.commandError.isEmpty ? "arrow.up.forward" : "exclamationmark.triangle.fill")
+                    }
+                    .font(.caption)
+                    .foregroundStyle(serial.commandError.isEmpty ? Color.secondary : Color.red)
+                    .opacity(serial.commandError.isEmpty && serial.commandPreview.isEmpty ? 0 : 1)
+                    .help("待发送的字节")
+                    if !serial.feedback.isEmpty { Text(serial.feedback).font(.caption).foregroundStyle(.secondary) }
+                }
+                .padding(.horizontal, 14).padding(.vertical, 10)
                 Spacer(minLength: 0)
             } else {
-            TextEditor(text: $serial.input)
-                .font(.system(size: 13, design: .monospaced))
-                .scrollContentBackground(.hidden)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .overlay(alignment: .topLeading) {
-                    if serial.input.isEmpty {
-                        Text(serial.preferences.sendFormat == .hex ? "输入十六进制字节，例如 AA 01 FF" : "输入文本或设备指令…")
-                            .font(.system(size: 13, design: .monospaced))
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 19)
-                            .padding(.vertical, 9)
-                            .allowsHitTesting(false)
-                            .accessibilityHidden(true)
+                TextEditor(text: $serial.input)
+                    .font(.system(.body, design: .monospaced))
+                    .scrollContentBackground(.hidden)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 6)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .overlay(alignment: .topLeading) {
+                        if serial.input.isEmpty {
+                            Text(serial.preferences.sendFormat == .hex ? "输入十六进制字节，例如 AA 01 FF" : "输入文本或设备指令…")
+                                .font(.system(.body, design: .monospaced))
+                                .foregroundStyle(.tertiary)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 6)
+                                .allowsHitTesting(false)
+                                .accessibilityHidden(true)
+                        }
                     }
-                }
-                .accessibilityLabel("要发送的数据")
-                .disabled(serial.autoSending)
-                .help(serial.preferences.sendFormat == .hex ? "原始字节 · 不追加行尾" : "⌘Return 发送 · Return 换行")
+                    .background(Color(nsColor: .textBackgroundColor))
+                    .accessibilityLabel("要发送的数据")
+                    .disabled(serial.autoSending)
+                    .help(serial.preferences.sendFormat == .hex ? (serial.preferences.hexLineEnding ? "HEX 可附加选定行尾" : "原始字节，不追加行尾") : "⌘Return 发送，Return 换行")
             }
-            HStack(spacing: 12) {
+            Divider()
+            HStack(spacing: 10) {
                 if !serial.commandMode {
-                HStack(spacing: 6) {
-                    Text("间隔").font(.caption).foregroundStyle(.secondary)
-                    TextField("毫秒", text: $serial.autoSendIntervalInput)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 72)
-                        .foregroundStyle(serial.autoSendInterval == nil ? Color.red : Color.primary)
-                        .disabled(serial.autoSending)
-                        .accessibilityLabel("自动发送间隔，毫秒")
-                        .help("每次发送完成后等待的时间，范围 10–3600000 毫秒。")
-                    Text("ms").font(.caption).foregroundStyle(.secondary)
+                    Menu {
+                        ForEach(Array(serial.preferences.history.reversed().enumerated()), id: \.offset) { _, entry in
+                            Button(String(entry.prefix(80))) { serial.input = entry }
+                        }
+                    } label: {
+                        Label("发送历史", systemImage: "clock.arrow.circlepath")
+                    }
+                    .labelStyle(.iconOnly)
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
+                    .fixedSize()
+                    .disabled(serial.preferences.history.isEmpty || serial.autoSending)
+                    .help("发送历史")
+                    Divider().frame(height: 14)
+                    HStack(spacing: 4) {
+                        Text("每")
+                        TextField("毫秒", text: $serial.autoSendIntervalInput)
+                            .textFieldStyle(.roundedBorder)
+                            .multilineTextAlignment(.trailing)
+                            .monospacedDigit()
+                            .frame(width: 64)
+                            .foregroundStyle(serial.autoSendInterval == nil ? Color.red : Color.primary)
+                            .disabled(serial.autoSending)
+                            .accessibilityLabel("自动发送间隔，毫秒")
+                            .help("每次发送完成后等待的时间，范围 10–3600000 毫秒。")
+                        Text("ms")
+                    }
+                    .foregroundStyle(.secondary)
+                    Toggle(isOn: Binding(get: { serial.autoSending }, set: { _ in serial.toggleAutoSend() })) {
+                        Label("自动发送", systemImage: "repeat")
+                    }
+                    .toggleStyle(.button)
+                    .disabled(!serial.autoSending && !serial.canStartAutoSend)
+                    .help(serial.autoSending ? "停止自动发送" : "立即发送一次，之后按间隔重复发送；断开连接或发送失败时停止。")
                 }
-                Button { serial.toggleAutoSend() } label: {
-                    Label(serial.autoSending ? "停止自动发送" : "自动发送", systemImage: serial.autoSending ? "stop.fill" : "repeat")
-                }
-                .buttonStyle(.bordered)
-                .disabled(!serial.autoSending && !serial.canStartAutoSend)
-                .help(serial.autoSending ? "停止自动发送" : "立即发送一次，之后按间隔重复发送；断开连接或发送失败时停止。")
+                if let kind = serial.status.jobKind, kind != "repeat" {
+                    if serial.status.jobTotal > 0 {
+                        ProgressView(value: Double(serial.status.jobDone), total: Double(serial.status.jobTotal))
+                            .frame(width: 80)
+                    }
+                    Text("\(serial.status.jobDone) / \(serial.status.jobTotal)").monospacedDigit().foregroundStyle(.secondary)
+                    Button("取消任务") { Task { await serial.cancelJob() } }
                 }
                 Spacer(minLength: 4)
                 if !serial.input.isEmpty {
                     Text("\(serial.input.count) 字符")
-                        .font(.caption.monospacedDigit())
+                        .monospacedDigit()
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
@@ -130,14 +157,61 @@ struct SerialComposerView: View {
                         .frame(minWidth: 64)
                 }
                 .buttonStyle(.borderedProminent)
+                .controlSize(.regular)
                 .disabled(!serial.canSend)
                 .help("发送数据（⌘Return）")
             }
-            .padding(.horizontal, 18)
-            .padding(.bottom, 14)
+            .font(.callout)
+            .controlSize(.small)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
         }
         .task(id: "\(serial.commandMode):\(serial.input)") { await serial.previewCommand() }
         .sheet(isPresented: $managing) { SerialProtocolEditor(serial: serial) }
+        .sheet(isPresented: $tools) { SerialToolsView(serial: serial) }
+        .sheet(isPresented: $workflows) { SerialWorkflowView(serial: serial) }
+    }
+
+    private var sendOptions: some View {
+        HStack(spacing: 8) {
+            Picker("编码", selection: $serial.preferences.sendFormat) {
+                ForEach(SerialDataFormat.allCases) { Text($0.title).tag($0) }
+            }
+            .labelsHidden()
+            .fixedSize()
+            .help("发送编码")
+            Picker("行尾", selection: $serial.preferences.lineEnding) {
+                Text("无行尾").tag("none")
+                Text("LF").tag("lf")
+                Text("CR").tag("cr")
+                Text("CRLF").tag("crlf")
+            }
+            .labelsHidden()
+            .fixedSize()
+            .help("行尾")
+            .disabled(serial.preferences.sendFormat == .hex && !serial.preferences.hexLineEnding)
+            Menu {
+                Picker("校验算法", selection: $serial.preferences.checksum) {
+                    Text("无校验（默认）").tag(SerialChecksum.none)
+                    Text("校验和（SUM8）").tag(SerialChecksum.sum8)
+                    Section("奇偶校验") {
+                        Text("奇校验").tag(SerialChecksum.oddParity)
+                        Text("偶校验").tag(SerialChecksum.evenParity)
+                    }
+                    Text("异或校验（XOR8）").tag(SerialChecksum.xor8)
+                    Text("CRC16/MODBUS").tag(SerialChecksum.crc16Modbus)
+                    Text("CRC16/CCITT").tag(SerialChecksum.crc16Ccitt)
+                    Text("CRC32").tag(SerialChecksum.crc32)
+                    Text("LRC").tag(SerialChecksum.lrc)
+                }
+                .pickerStyle(.inline)
+            } label: {
+                Label(serial.preferences.checksum.title, systemImage: "checkmark.shield")
+            }
+            .fixedSize()
+            .help("对编码后的内容计算校验码，在行尾之前追加；奇偶校验追加 0 或 1，CRC16 使用 MODBUS 格式。")
+        }
+        .disabled(serial.autoSending)
     }
 }
 
@@ -149,6 +223,7 @@ private struct SerialProtocolEditor: View {
     @State private var failure = ""
     @State private var testInput = ""
     @State private var testOutput = ""
+    @State private var layout: [SerialProtocolSpan] = []
     @State private var importing = false
     @State private var imported: [SerialProtocolRule]?
     @State private var pendingExport: PendingExport?
@@ -188,14 +263,15 @@ private struct SerialProtocolEditor: View {
                         }.frame(width: geometry.size.width, height: geometry.size.height)
                     }
                 } else {
-                    VStack(spacing: 12) {
-                        Image(systemName: "text.badge.plus").font(.system(size: 32)).foregroundStyle(.secondary)
-                        Text("添加第一条规则").font(.headline)
+                    ContentUnavailableView {
+                        Label("添加第一条规则", systemImage: "text.badge.plus")
+                    } description: {
                         Text("为常用指令设置名称，或定义接收帧的解析方式。")
-                            .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                    } actions: {
                         Button("新增发送命令") { addRule(receive: false) }.buttonStyle(.borderedProminent)
                         Button("新增接收规则") { addRule(receive: true) }
-                    }.padding(28).frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
             Divider()
@@ -329,6 +405,12 @@ private struct SerialProtocolEditor: View {
                         .accessibilityLabel("校验终点，不包含，空表示校验位之前")
                 }
             }
+            HStack {
+                field("长度字段 · 可选") { TextField("例如 len", text: $rules[selected].length_field) }
+                field("固定帧尾 HEX · 可选") { TextField("例如 0D 0A", text: $rules[selected].trailer) }
+            }
+            Toggle("长度表示整帧字节数", isOn: $rules[selected].length_includes_frame)
+                .disabled(rules[selected].length_field.isEmpty)
             if rules[selected].receive {
                 field("文本分隔符 HEX · 可选") {
                     TextField("例如 0D 0A", text: $rules[selected].delimiter)
@@ -360,8 +442,26 @@ private struct SerialProtocolEditor: View {
                     TextField(rules[selected].receive ? "CC DD 00 2D D6" : "motor-speed 45", text: $testInput)
                         .font(.system(.body, design: .monospaced)).accessibilityLabel("离线试算输入")
                 }
+                if rules[selected].receive, let latest = serial.frames.last(where: { $0.isReceive && !$0.bytes.isEmpty }) {
+                    Button("用最新 RX") { testInput = latest.parsed.last(where: { $0.valid })?.hex ?? latest.hex }
+                }
                 Button(testing ? "处理中…" : rules[selected].receive ? "解析" : "试算", action: runTest)
                     .disabled(testing || testInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+            if !testOutput.isEmpty, !layout.isEmpty {
+                ScrollView(.horizontal) {
+                    HStack {
+                        ForEach(Array(layout.enumerated()), id: \.offset) { index, span in
+                            VStack(alignment: .leading) {
+                                Text("\(span.name) [\(span.start)..<\(span.start + span.bytes)]").font(.caption)
+                                Text(span.hex).font(.caption.monospaced()).textSelection(.enabled)
+                            }
+                            .padding(6)
+                            .background([Color.blue, .teal, .orange, .purple][index % 4].opacity(0.15),
+                                        in: RoundedRectangle(cornerRadius: 4))
+                        }
+                    }
+                }
             }
             if !testOutput.isEmpty {
                 Text(testOutput).font(.callout.monospaced()).textSelection(.enabled)
@@ -404,13 +504,15 @@ private struct SerialProtocolEditor: View {
     }
 
     private func section<Content: View>(_ title: String, symbol: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label(title, systemImage: symbol).font(.callout.weight(.semibold))
-            content()
-        }.frame(maxWidth: .infinity, alignment: .leading)
-            .padding(16)
-            .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.separator.opacity(0.4)))
+        GroupBox {
+            VStack(alignment: .leading, spacing: 12) {
+                content()
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(8)
+        } label: {
+            Label(title, systemImage: symbol).font(.headline)
+        }
     }
 
     private func insertFragment(_ fragment: SerialFrameFragment) {
@@ -429,14 +531,18 @@ private struct SerialProtocolEditor: View {
         let snapshot = rules
         let index = selected
         let input = testInput
-        let receive = rules[index].receive
+        let rule = rules[index]
         testing = true
         Task {
             defer { testing = false }
             do {
-                let result = try await serial.testRules(snapshot, input: input, receive: receive)
+                let result = try await serial.testRules(snapshot, input: input, rule: rule)
                 guard rules == snapshot && selected == index && testInput == input else { return }
-                testOutput = result.hex + result.records.map { "\($0.name): \($0.message) [\($0.hex)]" }.joined(separator: "\n") + (result.buffer.isEmpty ? "" : "\n等待剩余字节：" + result.buffer)
+                layout = result.layout ?? []
+                var lines = [result.hex]
+                lines.append(contentsOf: result.records.map { "\($0.name): \($0.message) [\($0.hex)]" })
+                if !result.buffer.isEmpty { lines.append("等待剩余字节：" + result.buffer) }
+                testOutput = lines.filter { !$0.isEmpty }.joined(separator: "\n")
                 failure = ""
             } catch {
                 if rules == snapshot && selected == index && testInput == input { failure = error.localizedDescription }

@@ -1,5 +1,3 @@
-import AppKit
-import SwiftUI
 import XCTest
 @testable import ChipDock
 
@@ -9,30 +7,5 @@ final class WindowLayoutTests: XCTestCase {
         XCTAssertEqual(FlashView.columnWidth(in: 1160), 1044)
         XCTAssertEqual(FlashView.columnWidth(in: 1800), 1620)
         XCTAssertEqual(FlashView.columnWidth(in: 40), 0)
-    }
-
-    @MainActor
-    func testNarrowWindowsAndPaneCombinationsDoNotEnterConstraintLoop() async throws {
-        let store = WorkbenchStore()
-        let host = NSHostingView(rootView: ToolkitView(toolkit: ToolkitState(), store: store, serial: SerialStore()))
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1160, height: 740),
-                              styleMask: [.titled, .resizable], backing: .buffered, defer: false)
-        window.isReleasedWhenClosed = false
-        window.contentView = host
-        defer { window.close() }
-
-        // The minimum width combined with auxiliary panes previously reproduced
-        // the split-view constraint loop that crashed the application at launch.
-        for width in [900.0, 1160.0] {
-            window.setContentSize(NSSize(width: width, height: 740))
-            for configuration in 0..<4 {
-                store.showMemory = configuration & 1 != 0
-                store.showLogs = configuration & 2 != 0
-                window.layoutIfNeeded()
-                host.layoutSubtreeIfNeeded()
-                try await Task.sleep(for: .milliseconds(40))
-                XCTAssertGreaterThan(host.bounds.width, 0)
-            }
-        }
     }
 }

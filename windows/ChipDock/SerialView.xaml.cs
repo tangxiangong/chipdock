@@ -15,21 +15,21 @@ namespace ChipDock;
 
 public sealed partial class SerialView : UserControl
 {
-    private string protocolBuffer = "", commandHex = "", pendingResponse = "";
-    private DateTimeOffset? responseDeadline, responseStartedAt;
+    private string commandHex = "", commandDraft = "";
     private readonly List<string> protocolRecords = [];
     private readonly List<string> commandHistory = [];
-    private int historyIndex, previewRevision, protocolRevision;
+    private int historyIndex, previewRevision;
     private bool IsCommand => CommandMode.IsChecked == true;
-    private async Task<JsonElement> Protocol(string operation, string input = "", string incoming = "", string? rules = null)
+    private async Task<JsonElement> Protocol(string operation, string input = "")
     {
-        var json = JsonSerializer.Serialize(new { rules = JsonSerializer.Deserialize<JsonElement>(rules ?? preferences.ProtocolRules), operation, input, incoming, buffer = operation == "decode" ? protocolBuffer : "" });
+        var json = JsonSerializer.Serialize(new { rules = JsonSerializer.Deserialize<JsonElement>(preferences.ProtocolRules), operation, input });
         return JsonSerializer.Deserialize<JsonElement>(await SerialBackend.Program(json));
     }
-    private void ResetProtocol() { protocolBuffer = ""; pendingResponse = ""; responseDeadline = null; responseStartedAt = null; }
     private async void OnCommandMode(object sender, RoutedEventArgs args)
     {
-        autoSender.Stop(); InputBox.AcceptsReturn = !IsCommand;
+        InputBox.AcceptsReturn = !IsCommand;
+        if (IsCommand) InputBox.Text = commandDraft;
+        else { commandDraft = InputBox.Text; InputBox.Text = preferences.Draft; }
         CommandPreviewViewport.Visibility = IsCommand ? Visibility.Visible : Visibility.Collapsed;
         await PreviewCommand(); RefreshState();
     }
@@ -76,7 +76,7 @@ public sealed partial class SerialView : UserControl
         var list = new ListView { SelectionMode = ListViewSelectionMode.Single, Margin = new Thickness(0, 8, 0, 0) };
         var ruleCount = new TextBlock { Style = Ui.Style("CaptionSecondaryTextStyle") };
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(list, "协议规则列表");
-        var mono = new Microsoft.UI.Xaml.Media.FontFamily("Consolas");
+        var mono = (Microsoft.UI.Xaml.Media.FontFamily)Application.Current.Resources["MonoFontFamily"];
         var name = new TextBox { Header = "命令名称 / Alias", PlaceholderText = "例如 motor-speed", FontFamily = mono };
         var receive = new ToggleSwitch { Header = "规则类型", OffContent = "发送命令", OnContent = "接收解析" };
         var template = new TextBox { Header = "帧模板", PlaceholderText = "AA BB {speed:u16be} {checksum:sum8}", AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 72, MaxHeight = 140, FontFamily = mono };
@@ -84,6 +84,10 @@ public sealed partial class SerialView : UserControl
         var checksumStart = new TextBox { Header = "校验起点 · 从 0 开始", Text = "0" };
         var checksumEnd = new TextBox { Header = "校验终点 · 不包含", PlaceholderText = "自动，直到校验位前" };
         var delimiter = new TextBox { Header = "文本分隔符 HEX · 可选", PlaceholderText = "例如 0D 0A", FontFamily = mono };
+        var lengthField = new TextBox { Header = "长度字段 · 可选", PlaceholderText = "例如 len" };
+        var lengthIncludesFrame = new CheckBox { Content = "长度表示整帧字节数" };
+        var trailer = new TextBox { Header = "固定帧尾 HEX · 可选", PlaceholderText = "例如 0D 0A" };
+        var layout = new StackPanel { Spacing = 4 };
         var response = new TextBox { Header = "关联接收规则 · 可选", PlaceholderText = "接收规则的名称" };
         var timeout = new TextBox { Header = "等待超时 · ms", Text = "1000" };
         var test = new TextBox { Header = "输入命令 · 包含 alias", PlaceholderText = "motor-speed 45", FontFamily = mono };
@@ -122,7 +126,12 @@ public sealed partial class SerialView : UserControl
         var outputContent = new Grid(); outputContent.Children.Add(outputPlaceholder); outputContent.Children.Add(output);
         var outputWell = new Border { Style = Ui.Style("WellStyle"), CornerRadius = new CornerRadius(6), Padding = new Thickness(14), MinHeight = 64, Child = outputContent };
         output.RegisterPropertyChangedCallback(TextBlock.TextProperty, (_, _) => outputPlaceholder.Visibility = string.IsNullOrEmpty(output.Text) ? Visibility.Visible : Visibility.Collapsed);
-        var testSection = Section("\uE9D9", "离线试算", Hint("预览发送字节或解析接收数据，不会向设备发送。"), test, run, outputWell);
+        var latest = new Button { Content = "用最新 RX" };
+        latest.Click += (_, _) => {
+            if (frames.LastOrDefault(frame => frame.IsReceive && frame.Record.bytes.Count != 0) is { } frame)
+                test.Text = frame.Record.parsed.LastOrDefault(record => record.valid)?.hex ?? frame.Record.hex;
+        };
+        var testSection = Section("\uE9D9", "离线试算", Hint("预览发送字节或解析接收数据，不会向设备发送。"), test, Stack(latest, run), layout, outputWell);
         var selected = -1;
         var editingRevision = 0;
         const string fragmentFormat = "ChipDock.FrameFragment.v1";
@@ -170,7 +179,7 @@ public sealed partial class SerialView : UserControl
             finally { deferral.Complete(); }
         };
         var advanced = new Expander { Header = Heading("\uE713", "校验与反馈"), HorizontalAlignment = HorizontalAlignment.Stretch,
-            HorizontalContentAlignment = HorizontalAlignment.Stretch, Content = Stack(Pair(checksumStart, checksumEnd), receiveOptions, sendOptions) };
+            HorizontalContentAlignment = HorizontalAlignment.Stretch, Content = Stack(Pair(checksumStart, checksumEnd), Pair(lengthField, trailer), lengthIncludesFrame, receiveOptions, sendOptions) };
         var editor = Stack(Section("\uE8D2", "规则信息", Pair(name, receive)),
             Section("\uE943", "帧模板", template, Hint("点击或拖入片段，快速组合数据帧。"), fragmentGrid, display, syntax), advanced, testSection);
         editor.Spacing = 16;
@@ -188,6 +197,7 @@ public sealed partial class SerialView : UserControl
             sendOptions.Visibility = receive.IsOn ? Visibility.Collapsed : Visibility.Visible;
             test.Header = receive.IsOn ? "输入接收数据 · HEX" : "输入命令 · 包含 alias";
             test.PlaceholderText = receive.IsOn ? "CC DD 00 2D D6" : "motor-speed 45";
+            latest.Visibility = receive.IsOn ? Visibility.Visible : Visibility.Collapsed;
             run.Content = receive.IsOn ? "解析数据" : "生成预览";
             outputPlaceholder.Text = receive.IsOn ? "输入接收数据后解析，结果将在这里显示。" : "输入命令后生成预览，结果将在这里显示。";
         }
@@ -201,10 +211,11 @@ public sealed partial class SerialView : UserControl
                 endValue = value;
             }
             rules[selected] = new ProtocolRule { name = name.Text, receive = receive.IsOn, template = template.Text, display = display.Text,
-                checksum_start = startValue, checksum_end = endValue, delimiter = delimiter.Text, response = response.Text, timeout_ms = timeoutValue };
+                checksum_start = startValue, checksum_end = endValue, delimiter = delimiter.Text, response = response.Text, timeout_ms = timeoutValue, length_field = lengthField.Text,
+                length_includes_frame = lengthIncludesFrame.IsChecked == true, trailer = trailer.Text };
         }
         void Load(int index) {
-            selected = index; editingRevision++; output.Text = ""; test.Text = ""; notice.IsOpen = false;
+            selected = index; editingRevision++; output.Text = ""; layout.Children.Clear(); test.Text = ""; notice.IsOpen = false;
             var hasSelection = index >= 0 && index < rules.Count;
             editor.Visibility = hasSelection ? Visibility.Visible : Visibility.Collapsed;
             empty.Visibility = hasSelection ? Visibility.Collapsed : Visibility.Visible;
@@ -212,7 +223,7 @@ public sealed partial class SerialView : UserControl
             if (!hasSelection) return;
             var r = rules[index]; name.Text = r.name; receive.IsOn = r.receive; template.Text = r.template; display.Text = r.display;
             checksumStart.Text = r.checksum_start.ToString(); checksumEnd.Text = r.checksum_end?.ToString() ?? "";
-            delimiter.Text = r.delimiter; response.Text = r.response; timeout.Text = r.timeout_ms.ToString(); UpdateKind();
+            delimiter.Text = r.delimiter; lengthField.Text = r.length_field; lengthIncludesFrame.IsChecked = r.length_includes_frame; trailer.Text = r.trailer; response.Text = r.response; timeout.Text = r.timeout_ms.ToString(); UpdateKind();
         }
         void Refresh(int index) {
             changingSelection = true;
@@ -241,8 +252,8 @@ public sealed partial class SerialView : UserControl
             }
             UpdateKind(); editingRevision++; output.Text = "";
         };
-        foreach (var input in new[] { name, template, display, checksumStart, checksumEnd, delimiter, response, timeout, test })
-            input.TextChanged += (_, _) => { editingRevision++; output.Text = ""; };
+        foreach (var input in new[] { name, template, display, checksumStart, checksumEnd, delimiter, lengthField, trailer, response, timeout, test })
+            input.TextChanged += (_, _) => { editingRevision++; output.Text = ""; layout.Children.Clear(); };
         var addMenu = new MenuFlyout();
         foreach (var isReceive in new[] { false, true }) {
             var item = new MenuFlyoutItem { Text = isReceive ? "接收规则" : "发送命令", Icon = new SymbolIcon(isReceive ? Symbol.Download : Symbol.Upload) };
@@ -258,7 +269,7 @@ public sealed partial class SerialView : UserControl
             var revision = editingRevision;
             try {
                 Store(); run.IsEnabled = false;
-                var json = JsonSerializer.Serialize(new { rules, operation = receive.IsOn ? "decode" : "encode", input = test.Text, incoming = receive.IsOn ? test.Text : "" });
+                var json = JsonSerializer.Serialize(new { rules, operation = "inspect", rule = name.Text, input = test.Text, incoming = receive.IsOn ? test.Text : "" });
                 var result = JsonSerializer.Deserialize<JsonElement>(await SerialBackend.Program(json));
                 if (revision != editingRevision) return;
                 var lines = new List<string>();
@@ -266,6 +277,18 @@ public sealed partial class SerialView : UserControl
                 foreach (var record in result.GetProperty("records").EnumerateArray())
                     lines.Add($"{record.GetProperty("name").GetString()}: {record.GetProperty("message").GetString()} [{record.GetProperty("hex").GetString()}]");
                 if (result.GetProperty("buffer").GetString() is { Length: > 0 } buffer) lines.Add("等待剩余字节：" + buffer);
+                layout.Children.Clear();
+                if (result.TryGetProperty("layout", out var spans))
+                    foreach (var span in spans.EnumerateArray())
+                    {
+                        var start = span.GetProperty("start").GetInt32();
+                        var end = start + span.GetProperty("bytes").GetInt32();
+                        layout.Children.Add(new Border {
+                            Background = layout.Children.Count % 2 == 0 ? Ui.Brush(Microsoft.UI.Colors.DodgerBlue, 0.20) : Ui.Brush(Microsoft.UI.Colors.MediumPurple, 0.20),
+                            Padding = new Thickness(8, 4, 8, 4),
+                            Child = new TextBlock { Text = $"{span.GetProperty("name").GetString()} [{start}..<{end}]  {span.GetProperty("hex").GetString()}", FontFamily = mono, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true }
+                        });
+                    }
                 output.Text = string.Join("\n", lines); notice.IsOpen = false;
             } catch (Exception error) { if (revision == editingRevision) Report(error); }
             finally { run.IsEnabled = true; }
@@ -339,7 +362,7 @@ public sealed partial class SerialView : UserControl
                 await SerialBackend.Program(JsonSerializer.Serialize(new { rules, operation = "validate" }));
                 var old = preferences.ProtocolRules; preferences.ProtocolRules = json;
                 try { preferences.Save(); } catch { preferences.ProtocolRules = old; throw; }
-                protocolRevision++; ResetProtocol(); RefreshProtocolDisplay(); await PreviewCommand();
+                await ApplyProtocol(); RefreshProtocolDisplay(); await PreviewCommand();
             } catch (Exception error) { e.Cancel = true; Report(error); }
             finally { contentHost.IsEnabled = true; dialog.IsPrimaryButtonEnabled = true; dialog.IsSecondaryButtonEnabled = true; deferral.Complete(); }
         };
@@ -356,26 +379,46 @@ public sealed partial class SerialView : UserControl
         public int checksum_start { get; set; }
         public int? checksum_end { get; set; }
         public string delimiter { get; set; } = "";
+        public string length_field { get; set; } = "";
+        public bool length_includes_frame { get; set; }
+        public string trailer { get; set; } = "";
         public string response { get; set; } = "";
         public int timeout_ms { get; set; } = 1000;
     }
     private readonly ObservableCollection<TerminalFrame> frames = [];
     private readonly ObservableCollection<TerminalFrame> visibleFrames = [];
     private readonly DispatcherQueueTimer timer;
-    private readonly SerialAutoSender autoSender = new();
-    private SerialStatus status = new() { connected = false, path = null, config = null, rx_bytes = 0, tx_bytes = 0, opened_at = null, last_error = null };
+    private bool startingRepeat;
+    private bool AutoSending => startingRepeat || status.job_kind == "repeat";
+    private SerialStatus status = new()
+    {
+        connected = false, reconnecting = false, generation = 0, path = null, config = null,
+        rts = null, dtr = null, rx_bytes = 0, tx_bytes = 0, opened_at = null, last_error = null,
+        selected_protocol = null, feedback = null, uptime_ms = 0, rx_per_second = 0, tx_per_second = 0,
+        logging = false, capturing = false, capture_error = null,
+        job_kind = null, job_done = 0, job_total = 0, job_error = null
+    };
     private bool busy, sending, polling, refreshing, exporting, updating = true, started, closed;
     private int ticks, retainedBytes, connectionRevision;
+    private ulong cursor, clearedThrough;
+    private List<TerminalFrame>? pausedFrames;
     private double composerHeight = 280;
-    private static readonly string[] Formats = ["hex", "ascii", "gbk", "utf-8"];
+    private static readonly string[] Formats = ["hex", "ascii", "gbk", "utf-8", "latin-1"];
     private static readonly string[] Endings = ["none", "lf", "cr", "crlf"];
-    private readonly SerialPreferences preferences = SerialPreferences.Current;
+    private readonly SerialPreferences preferences;
+    internal ulong SessionId { get; }
+    internal string SessionTitle => status.path ?? $"会话 {SessionId}";
+    internal SerialPreferences CopyPreferences() => preferences.CopyForSession();
     private readonly Windows.UI.ViewManagement.UISettings uiSettings = new();
     private bool resizingLayout;
     private bool? compactLayout, connectionOverlay;
 
-    public SerialView()
+    public SerialView() : this(1, SerialPreferences.Current) { }
+
+    internal SerialView(ulong id, SerialPreferences preferences)
     {
+        SessionId = id;
+        this.preferences = preferences;
         InitializeComponent();
         Terminal.ItemsSource = visibleFrames;
         var terminalMenu = new MenuFlyout();
@@ -397,34 +440,46 @@ public sealed partial class SerialView : UserControl
             else CopyFrames(selectedOnly: true);
         }));
         BaudPicker.ItemsSource = new[] { "1200", "2400", "4800", "9600", "19200", "38400", "57600", "115200", "230400", "460800", "921600" };
-        DataBitsPicker.ItemsSource = new byte[] { 5, 6, 7, 8 }; StopBitsPicker.ItemsSource = new byte[] { 1, 2 };
-        ParityPicker.ItemsSource = new[] { "无", "奇校验", "偶校验" }; FlowPicker.ItemsSource = new[] { "无", "XON / XOFF", "RTS / CTS" };
+        DataBitsPicker.ItemsSource = new byte[] { 5, 6, 7, 8 }; StopBitsPicker.ItemsSource = new[] { "1", "1.5", "2" };
+        ParityPicker.ItemsSource = new[] { "无", "奇校验", "偶校验", "Mark", "Space" }; FlowPicker.ItemsSource = new[] { "无", "XON / XOFF", "RTS / CTS" };
         BaudPicker.SelectedItem = preferences.BaudRate.ToString(System.Globalization.CultureInfo.InvariantCulture);
         BaudPicker.Text = preferences.BaudRate.ToString(System.Globalization.CultureInfo.InvariantCulture);
         DataBitsPicker.SelectedItem = preferences.DataBits; if (DataBitsPicker.SelectedIndex < 0) DataBitsPicker.SelectedItem = (byte)8;
-        StopBitsPicker.SelectedItem = preferences.StopBits; if (StopBitsPicker.SelectedIndex < 0) StopBitsPicker.SelectedItem = (byte)1;
-        ParityPicker.SelectedIndex = Math.Clamp(preferences.Parity, 0, 2); FlowPicker.SelectedIndex = Math.Clamp(preferences.FlowControl, 0, 2);
-        DisplayPicker.ItemsSource = SendFormatPicker.ItemsSource = new[] { "HEX", "ASCII", "GBK", "UTF-8" };
+        StopBitsPicker.SelectedIndex = preferences.StopBits switch { 15 => 1, 2 => 2, _ => 0 };
+        ParityPicker.SelectedIndex = Math.Clamp(preferences.Parity, 0, 4); FlowPicker.SelectedIndex = Math.Clamp(preferences.FlowControl, 0, 2);
+        DisplayPicker.ItemsSource = SendFormatPicker.ItemsSource = new[] { "HEX", "ASCII", "GBK", "UTF-8", "Latin-1" };
         DisplayPicker.SelectedIndex = IndexOrDefault(Formats, preferences.DisplayFormat, 3);
         SendFormatPicker.SelectedIndex = IndexOrDefault(Formats, preferences.SendFormat, 3);
         EndingPicker.ItemsSource = new[] { "无", "LF", "CR", "CRLF" }; EndingPicker.SelectedIndex = IndexOrDefault(Endings, preferences.LineEnding, 0);
-        ChecksumPicker.ItemsSource = new[] { "无校验（默认）", "校验和（SUM8）", "奇校验", "偶校验", "异或校验（XOR8）", "CRC16/MODBUS" };
-        ChecksumPicker.SelectedIndex = Math.Clamp(preferences.Checksum, 0, 5);
+        ChecksumPicker.ItemsSource = new[] { "无校验（默认）", "校验和（SUM8）", "奇校验", "偶校验", "异或校验（XOR8）", "CRC16/MODBUS", "CRC16/CCITT", "CRC32", "LRC" };
+        ChecksumPicker.SelectedIndex = Math.Clamp(preferences.Checksum, 0, 8);
         AutoSendInterval.Value = Math.Clamp(preferences.AutoSendIntervalMilliseconds, 10, 3_600_000);
+        InputBox.Text = preferences.Draft;
         AutoScrollToggle.IsChecked = preferences.AutoScroll;
+        AutoConnectToggle.IsChecked = preferences.AutoConnect;
+        ReconnectToggle.IsChecked = preferences.AutoReconnect;
         uiSettings.TextScaleFactorChanged += OnTextScaleChanged;
         timer = DispatcherQueue.CreateTimer(); timer.Interval = TimeSpan.FromMilliseconds(100); timer.Tick += OnTick;
-        autoSender.Changed += RefreshState;
-        autoSender.Failed += error => { if (!closed) ShowError(error.Message); };
         BaudPicker.RegisterPropertyChangedCallback(ComboBox.TextProperty, (_, _) => { if (!updating) RefreshState(); });
         updating = false; RefreshProtocolDisplay(); RefreshState();
     }
 
     private static int IndexOrDefault(string[] values, string value, int fallback) => Array.IndexOf(values, value) is var index && index >= 0 ? index : fallback;
-    private async void OnLoaded(object sender, RoutedEventArgs args)
+    private async void OnLoaded(object sender, RoutedEventArgs args) => await Start();
+    internal async Task Start()
     {
         if (started) return; started = true;
+        try
+        {
+            await ApplyProtocol();
+            await ApplyFraming(preferences.FramingMode, preferences.FramingValue);
+            await Workbench(new { action = "replies", rules = ParseArray(preferences.Replies) });
+        }
+        catch (Exception error) { ShowError(error.Message); }
+        var startupPath = preferences.SelectedPath;
         await RefreshPorts();
+        if (SessionId == 1 && preferences.AutoConnect && PortPicker.SelectedItem is PortChoice { Info: not null } port && port.Path == startupPath)
+            await ToggleConnection();
         if (!closed) timer.Start();
     }
     private async void OnTick(DispatcherQueueTimer sender, object args)
@@ -433,51 +488,34 @@ public sealed partial class SerialView : UserControl
         polling = true; var revision = connectionRevision;
         try
         {
-            var batch = await SerialBackend.Poll();
+            var batch = await SerialBackend.Poll(SessionId, cursor);
             if (closed) return;
+            cursor = batch.next_cursor;
             if (!busy && revision == connectionRevision)
             {
                 if (batch.status.last_error is { } error && error != status.last_error) ShowError(error);
+                if (batch.status.capture_error is { } captureError && captureError != status.capture_error) ShowError(captureError);
+                if (batch.status.job_error is { } jobError && jobError != status.job_error && jobError != "发送任务已取消") ShowError(jobError);
+                var changedConnection = status.generation != batch.status.generation;
                 status = batch.status;
-                if (!status.connected) { autoSender.Stop(); ResetProtocol(); }
+                if (changedConnection && status.connected) ApplyConnectedSettings();
+                if (IsCommand && status.feedback is { } feedback) CommandPreview.Text = feedback;
             }
-            if (batch.dropped_frames > 0) protocolBuffer = "";
             foreach (var frame in batch.frames) {
-                var item = new TerminalFrame(frame, preferences.DisplayFormat); frames.Add(item); retainedBytes += item.MemoryCost;
+                var item = new TerminalFrame(frame, preferences.DisplayFormat);
+                frames.Add(item); retainedBytes += item.MemoryCost;
+                foreach (var record in frame.parsed)
+                    protocolRecords.Add($"{frame.timestamp} RX {record.name}: {record.message} [{record.hex}]");
             }
-            var configRevision = protocolRevision;
-            foreach (var frame in batch.frames)
-            {
-                if (busy || revision != connectionRevision || configRevision != protocolRevision) break;
-                try {
-                if (frame.direction.IsReceive && JsonSerializer.Deserialize<JsonElement>(preferences.ProtocolRules).EnumerateArray().Any(r => r.TryGetProperty("receive", out var rx) && rx.GetBoolean())) {
-                    var decoded = await Protocol("decode", incoming: frame.hex);
-                    if (busy || revision != connectionRevision || configRevision != protocolRevision) break;
-                    protocolBuffer = decoded.GetProperty("buffer").GetString() ?? "";
-                    foreach (var record in decoded.GetProperty("records").EnumerateArray()) {
-                        var name = record.GetProperty("name").GetString();
-                        protocolRecords.Add($"{frame.timestamp} RX {name}: {record.GetProperty("message").GetString()} [{record.GetProperty("hex").GetString()}]");
-                        if (responseDeadline is { } deadline && responseStartedAt is { } began && DateTimeOffset.TryParse(frame.timestamp, out var received) && received >= began && received <= deadline && name == pendingResponse && record.GetProperty("valid").GetBoolean()) {
-                            CommandPreview.Text = "收到匹配反馈：" + name + "（未验证请求序号）"; pendingResponse = ""; responseDeadline = null;
-                        }
-                    }
-                    if (protocolRecords.Count > 2000) protocolRecords.RemoveRange(0, protocolRecords.Count-2000);
-                }
-                } catch (Exception error) {
-                    if (revision == connectionRevision && configRevision == protocolRevision) { protocolBuffer = ""; ShowError(error.Message); }
-                    break;
-                }
-            }
+            if (protocolRecords.Count > 2000) protocolRecords.RemoveRange(0, protocolRecords.Count - 2000);
             while (frames.Count > 2000 || retainedBytes > 8 * 1024 * 1024) { retainedBytes -= frames[0].MemoryCost; frames.RemoveAt(0); }
             if (batch.dropped_frames > 0) ShowError($"显示缓冲已丢弃 {batch.dropped_frames} 条旧记录；字节统计保持完整。");
             if (batch.frames.Count > 0) RefreshTerminal();
-            if (responseDeadline is { } expired && DateTimeOffset.UtcNow > expired) { CommandPreview.Text = "等待反馈超时：" + pendingResponse; responseDeadline = null; pendingResponse = ""; }
-            if (batch.frames.Count > 0) ParsedTerminal.ItemsSource = protocolRecords.ToArray();
-            if (!status.connected) ResetProtocol();
+            if (batch.frames.Count > 0 && pausedFrames is null) ParsedTerminal.ItemsSource = protocolRecords.ToArray();
             RefreshState();
             if (++ticks % 10 == 0) await RefreshPorts(silent: true);
         }
-        catch (Exception error) { autoSender.Stop(); if (!closed) ShowError(error.Message); }
+        catch (Exception error) { if (!closed) ShowError(error.Message); }
         finally { polling = false; }
     }
     internal async Task RefreshPorts(bool silent = false)
@@ -491,14 +529,14 @@ public sealed partial class SerialView : UserControl
             // A scan started before connect/disconnect must not replace its device selection.
             if (closed || busy || revision != connectionRevision) return;
             var choices = ports.Select(p => new PortChoice(p.path, p.display_name, p)).ToList();
-            var selected = status.connected ? status.path : preferences.SelectedPath;
-            if (status.connected && !choices.Any(p => p.Path == selected) && selected is not null) choices.Add(new(selected, selected + "（已移除）", null));
+            var selected = status.connected || status.reconnecting ? status.path : preferences.SelectedPath;
+            if (!string.IsNullOrEmpty(selected) && (status.connected || status.reconnecting || preferences.AutoConnect) && !choices.Any(p => p.Path == selected)) choices.Add(new(selected, selected + "（已移除）", null));
             // Preserve the selected device and keyboard focus between hotplug scans.
-            if (PortPicker.ItemsSource is List<PortChoice> current && current.Count == choices.Count && current.Zip(choices).All(pair => SamePort(pair.First, pair.Second))) return;
+            if ((PortPicker.SelectedItem as PortChoice)?.Path == selected && PortPicker.ItemsSource is List<PortChoice> current && current.Count == choices.Count && current.Zip(choices).All(pair => SamePort(pair.First, pair.Second))) return;
             updating = true;
             PortPicker.ItemsSource = choices;
             PortPicker.SelectedItem = choices.FirstOrDefault(p => p.Path == selected) ?? choices.FirstOrDefault();
-            if (!status.connected) preferences.SelectedPath = (PortPicker.SelectedItem as PortChoice)?.Path ?? "";
+            if (!status.connected && !status.reconnecting) preferences.SelectedPath = (PortPicker.SelectedItem as PortChoice)?.Path ?? "";
         }
         catch (Exception error) { if (!silent && !closed) ShowError(error.Message); }
         finally { updating = false; refreshing = false; if (!closed) RefreshState(); }
@@ -507,17 +545,16 @@ public sealed partial class SerialView : UserControl
     internal async Task ToggleConnection()
     {
         if (!CanToggleConnection) return;
-        autoSender.Stop();
-        busy = true; connectionRevision++; ResetProtocol(); RefreshState();
+        busy = true; connectionRevision++; RefreshState();
         try
         {
             SaveSerialPreferences(); ErrorBar.IsOpen = false;
-            status = status.connected ? await SerialBackend.Disconnect() : await SerialBackend.Connect(preferences.SelectedPath, new SerialConfig
+            status = status.connected || status.reconnecting ? await SerialBackend.Disconnect(SessionId) : await SerialBackend.Connect(SessionId, preferences.SelectedPath, new SerialConfig
             {
                 baud_rate = preferences.BaudRate, data_bits = preferences.DataBits, stop_bits = preferences.StopBits,
-                parity = preferences.Parity switch { 1 => Parity.Odd, 2 => Parity.Even, _ => Parity.None },
+                parity = preferences.Parity switch { 1 => Parity.Odd, 2 => Parity.Even, 3 => Parity.Mark, 4 => Parity.Space, _ => Parity.None },
                 flow_control = preferences.FlowControl switch { 1 => FlowControl.Software, 2 => FlowControl.Hardware, _ => FlowControl.None }
-            });
+            }, preferences.AutoReconnect);
 
         }
         catch (Exception error) { if (!closed) ShowError(error.Message); }
@@ -534,38 +571,56 @@ public sealed partial class SerialView : UserControl
         if (!CanTransmit) return false;
         var revision = connectionRevision;
         sending = true; RefreshState();
-        var format = SendFormatPicker.SelectedIndex switch { 0 => Core.SendFormat.Hex, 1 => Core.SendFormat.Ascii, 2 => Core.SendFormat.Gbk, _ => Core.SendFormat.Utf8 };
+        var format = SendFormatPicker.SelectedIndex switch { 0 => Core.SendFormat.Hex, 1 => Core.SendFormat.Ascii, 2 => Core.SendFormat.Gbk, 4 => Core.SendFormat.Latin1, _ => Core.SendFormat.Utf8 };
         var ending = EndingPicker.SelectedIndex switch { 1 => Core.LineEnding.Lf, 2 => Core.LineEnding.Cr, 3 => Core.LineEnding.Crlf, _ => Core.LineEnding.None };
         var checksum = ChecksumPicker.SelectedIndex switch
         {
             1 => ChecksumAlgorithm.Sum8, 2 => ChecksumAlgorithm.OddParity, 3 => ChecksumAlgorithm.EvenParity,
-            4 => ChecksumAlgorithm.Xor8, 5 => ChecksumAlgorithm.Crc16Modbus, _ => ChecksumAlgorithm.None
+            4 => ChecksumAlgorithm.Xor8, 5 => ChecksumAlgorithm.Crc16Modbus, 6 => ChecksumAlgorithm.Crc16Ccitt, 7 => ChecksumAlgorithm.Crc32, 8 => ChecksumAlgorithm.Lrc, _ => ChecksumAlgorithm.None
         };
         try
         {
             if (IsCommand) {
-                var command = InputBox.Text; var configRevision = protocolRevision; var result = await Protocol("encode", command);
-                if (revision != connectionRevision || configRevision != protocolRevision || busy || !status.connected) return false;
+                var command = InputBox.Text;
+                var result = await Workbench(new { action = "command", input = command });
+                if (closed || revision != connectionRevision) return false;
                 var hex = result.GetProperty("hex").GetString() ?? "";
-                responseStartedAt = DateTimeOffset.FromUnixTimeMilliseconds(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
-                pendingResponse = result.GetProperty("response").GetString() ?? "";
-                responseDeadline = pendingResponse.Length == 0 ? null : DateTimeOffset.UtcNow.AddMilliseconds(result.GetProperty("timeout_ms").GetInt32());
-                CommandPreview.Text = pendingResponse.Length == 0 ? hex : "等待反馈：" + pendingResponse;
-                await SerialBackend.Send(hex, Core.SendFormat.Hex, Core.LineEnding.None, ChecksumAlgorithm.None);
                 commandHistory.Add(command); if (commandHistory.Count > 100) commandHistory.RemoveAt(0); historyIndex = commandHistory.Count;
                 protocolRecords.Add(DateTimeOffset.Now.ToString("HH:mm:ss.fff") + " TX " + command + " [" + hex + "]");
                 if (protocolRecords.Count > 2000) protocolRecords.RemoveAt(0);
-            } else await SerialBackend.Send(InputBox.Text, format, ending, checksum);
+            } else {
+                var text = InputBox.Text;
+                await SerialBackend.Send(SessionId, text, format, ending, checksum, new SendOptions {
+                    hex_line_ending = preferences.HexLineEnding, skip_prefix = preferences.SkipPrefix, skip_suffix = preferences.SkipSuffix
+                });
+                preferences.History.Remove(text);
+                preferences.History.Add(text[..Math.Min(text.Length, 262144)]);
+                while (preferences.History.Count > 50 || preferences.History.Sum(text => text.Length) > 524288)
+                    preferences.History.RemoveAt(0);
+                preferences.Save();
+            }
             return !closed && status.connected && !busy && revision == connectionRevision;
         }
-        catch (Exception error) { ResetProtocol(); if (!closed && revision == connectionRevision) ShowError(error.Message); return false; }
+        catch (Exception error) { if (!closed && revision == connectionRevision) ShowError(error.Message); return false; }
         finally { sending = false; if (!closed) RefreshState(); }
     }
-    private void OnAutoSend(object sender, RoutedEventArgs args)
+    private async void OnAutoSend(object sender, RoutedEventArgs args)
     {
-        if (IsCommand) return;
-        if (autoSender.IsRunning) { autoSender.Stop(); return; }
-        if (CanSend && TryGetAutoSendInterval(out var interval)) autoSender.Start(interval, Transmit);
+        if (IsCommand || startingRepeat) return;
+        if (status.job_kind == "repeat") { await CancelJob(); return; }
+        if (!CanSend || !TryGetAutoSendInterval(out var interval)) return;
+        startingRepeat = true; RefreshState();
+        try
+        {
+            await Workbench(new { action = "startJob", job = new { kind = "repeat", intervalMs = interval,
+                message = new { text = InputBox.Text, format = preferences.SendFormat, ending = preferences.LineEnding,
+                    checksum = ChecksumNames[preferences.Checksum], options = new {
+                        hexLineEnding = preferences.HexLineEnding, skipPrefix = preferences.SkipPrefix, skipSuffix = preferences.SkipSuffix
+                    } } } });
+            status = (await SerialBackend.Poll(SessionId, cursor)).status;
+        }
+        catch (Exception error) { if (!closed) ShowError(error.Message); }
+        finally { startingRepeat = false; RefreshState(); }
     }
     private bool TryGetAutoSendInterval(out int interval)
     {
@@ -603,28 +658,39 @@ public sealed partial class SerialView : UserControl
     }
     private void RefreshState()
     {
-        CommandMode.IsEnabled = !autoSender.IsRunning && !sending;
+        CommandMode.IsEnabled = !AutoSending && !sending;
 
         if (closed) return;
-        PortPicker.IsEnabled = !busy && !status.connected && PortPicker.Items.Count > 0;
+        var locked = busy || status.connected || status.reconnecting;
+        PortPicker.IsEnabled = !locked && PortPicker.Items.Count > 0;
         foreach (var picker in new[] { BaudPicker, DataBitsPicker, StopBitsPicker, ParityPicker, FlowPicker })
-            picker.IsEnabled = !busy && !status.connected;
+            picker.IsEnabled = !locked;
+        AutoConnectToggle.IsEnabled = SessionId == 1 && !locked;
+        ReconnectToggle.IsEnabled = !locked;
+        ControlLines.Visibility = status.connected && !(status.path?.StartsWith("VIRTUAL-", StringComparison.Ordinal) ?? false) ? Visibility.Visible : Visibility.Collapsed;
+        RtsButton.IsEnabled = !busy && status.config?.flow_control.IsHardware != true;
+        DtrButton.IsEnabled = !busy;
+        RtsButton.Content = "RTS" + (status.rts is bool rts ? rts ? " 已置位" : " 已清除" : "");
+        DtrButton.Content = "DTR" + (status.dtr is bool dtr ? dtr ? " 已置位" : " 已清除" : "");
         ConnectButton.IsEnabled = CanToggleConnection;
-        ConnectLabel.Text = busy ? "正在处理…" : status.connected ? "断开连接" : "连接串口";
+        ConnectLabel.Text = busy ? "正在处理…" : status.reconnecting ? "取消重连" : status.connected ? "断开连接" : "连接串口";
         ConnectIcon.Symbol = status.connected ? Symbol.Stop : Symbol.Link;
         SendButton.IsEnabled = CanSend;
         SendLabel.Text = sending ? "发送中…" : "发送";
-        var automatic = autoSender.IsRunning;
+        var automatic = AutoSending;
         SendFormatPicker.IsEnabled = ChecksumPicker.IsEnabled = !automatic && !IsCommand;
         InputBox.IsReadOnly = automatic;
+        HistoryButton.IsEnabled = !automatic && !IsCommand && preferences.History.Count > 0;
         AutoSendInterval.IsEnabled = !automatic;
         AutoSendButton.IsEnabled = automatic || (!IsCommand && CanSend && TryGetAutoSendInterval(out _));
         AutoSendLabel.Text = automatic ? "停止自动发送" : "自动发送";
+        CancelJobButton.Visibility = status.job_kind is not null and not "repeat" ? Visibility.Visible : Visibility.Collapsed;
+        CancelJobButton.Content = $"取消任务 {status.job_done}/{status.job_total}";
         AutoSendIcon.Glyph = automatic ? "\uE71A" : "\uE8EE";
         InputCount.Text = InputBox.Text.Length == 0 ? "" : $"{new System.Globalization.StringInfo(InputBox.Text).LengthInTextElements:N0} 字符";
-        EndingPicker.IsEnabled = !IsCommand && !automatic && SendFormatPicker.SelectedIndex != 0;
+        EndingPicker.IsEnabled = !IsCommand && !automatic && (SendFormatPicker.SelectedIndex != 0 || preferences.HexLineEnding);
         InputBox.PlaceholderText = SendFormatPicker.SelectedIndex == 0 ? "十六进制数据，例如 AA 01 FF" : "输入文本或设备指令…";
-        ToolTipService.SetToolTip(InputBox, SendFormatPicker.SelectedIndex == 0 ? "HEX 按原始字节发送，不追加行尾。" : "Ctrl+Enter 发送 · Enter 换行");
+        ToolTipService.SetToolTip(InputBox, SendFormatPicker.SelectedIndex == 0 ? (preferences.HexLineEnding ? "HEX 可附加选定行尾。" : "HEX 按原始字节发送，不追加行尾。") : "Ctrl+Enter 发送 · Enter 换行");
         EmptyState.Visibility = visibleFrames.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         var filteredEmpty = frames.Count > 0 && visibleFrames.Count == 0;
         EmptyIcon.Glyph = filteredEmpty ? "\uE721" : "\uE756";
@@ -636,10 +702,14 @@ public sealed partial class SerialView : UserControl
             ? $"{frames.Count} 条" : $"{visibleFrames.Count}/{frames.Count} 条";
         ClearButton.IsEnabled = frames.Count > 0;
         ExportButton.IsEnabled = frames.Count > 0 && !exporting && ExportRequested is not null;
-        var parity = preferences.Parity switch { 1 => "O", 2 => "E", _ => "N" };
+        var parity = preferences.Parity switch { 1 => "O", 2 => "E", 3 => "M", 4 => "S", _ => "N" };
         Ui.SetLiveText(ConnectionStatus, busy ? "正在处理…" : status.connected
-            ? $"已连接 · {status.path} · {preferences.BaudRate} · {preferences.DataBits}{parity}{preferences.StopBits}" : "未连接");
-        ByteStatus.Text = $"RX {status.rx_bytes:N0} B    TX {status.tx_bytes:N0} B";
+            ? $"已连接 · {status.path} · {preferences.BaudRate} · {preferences.DataBits}{parity}{(preferences.StopBits == 15 ? "1.5" : preferences.StopBits.ToString())}" : status.reconnecting ? "等待原设备重新接入" : "未连接");
+        StatusDot.Style = Ui.Style(status.connected ? "ConnectedDotStyle" : "IdleDotStyle");
+        var traffic = $"↓ {status.rx_bytes:N0} B   ↑ {status.tx_bytes:N0} B";
+        if (status.connected)
+            traffic = $"{TimeSpan.FromMilliseconds(status.uptime_ms):hh\\:mm\\:ss}   {status.rx_per_second:N0} / {status.tx_per_second:N0} B/s   " + traffic;
+        ByteStatus.Text = (status.capturing || status.logging ? "● 采集中   " : "") + traffic;
         RefreshButton.IsEnabled = CanRefresh;
         var blocked = UpdateBlocked;
         if (blocked != lastUpdateBlocked || CanSend != lastCanSend || CanToggleConnection != lastCanToggle || refreshing != lastRefreshing)
@@ -648,17 +718,58 @@ public sealed partial class SerialView : UserControl
             ActivityChanged?.Invoke();
         }
     }
+    private void ApplyConnectedSettings()
+    {
+        if (status.config is not { } config) return;
+        updating = true;
+        try
+        {
+            BaudPicker.Text = config.baud_rate.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            BaudPicker.SelectedItem = BaudPicker.Text;
+            DataBitsPicker.SelectedItem = config.data_bits;
+            StopBitsPicker.SelectedIndex = config.stop_bits switch { 15 => 1, 2 => 2, _ => 0 };
+            ParityPicker.SelectedIndex = config.parity.IsOdd ? 1 : config.parity.IsEven ? 2 : config.parity.IsMark ? 3 : config.parity.IsSpace ? 4 : 0;
+            FlowPicker.SelectedIndex = config.flow_control.IsSoftware ? 1 : config.flow_control.IsHardware ? 2 : 0;
+            if (PortPicker.ItemsSource is List<PortChoice> choices && choices.FirstOrDefault(port => port.Path == status.path) is { } port)
+                PortPicker.SelectedItem = port;
+            preferences.BaudRate = config.baud_rate;
+            preferences.DataBits = config.data_bits;
+            preferences.StopBits = config.stop_bits;
+            preferences.Parity = ParityPicker.SelectedIndex;
+            preferences.FlowControl = FlowPicker.SelectedIndex;
+            preferences.SelectedPath = status.path ?? "";
+            preferences.Save();
+        }
+        catch (Exception error) { ShowError(error.Message); }
+        finally { updating = false; }
+    }
     private void SaveSerialPreferences()
     {
         if (TryGetBaudRate(out var baud)) preferences.BaudRate = baud;
         preferences.DataBits = DataBitsPicker.SelectedItem is byte bits ? bits : (byte)8;
-        preferences.StopBits = StopBitsPicker.SelectedItem is byte stops ? stops : (byte)1;
+        preferences.StopBits = StopBitsPicker.SelectedIndex switch { 1 => 15, 2 => 2, _ => 1 };
         preferences.Parity = Math.Max(0, ParityPicker.SelectedIndex); preferences.FlowControl = Math.Max(0, FlowPicker.SelectedIndex);
         preferences.SelectedPath = (PortPicker.SelectedItem as PortChoice)?.Path ?? "";
-        preferences.DisplayFormat = Formats[Math.Clamp(DisplayPicker.SelectedIndex, 0, 3)]; preferences.SendFormat = Formats[Math.Clamp(SendFormatPicker.SelectedIndex, 0, 3)];
+        preferences.DisplayFormat = Formats[Math.Clamp(DisplayPicker.SelectedIndex, 0, Formats.Length - 1)]; preferences.SendFormat = Formats[Math.Clamp(SendFormatPicker.SelectedIndex, 0, Formats.Length - 1)];
         preferences.LineEnding = Endings[Math.Clamp(EndingPicker.SelectedIndex, 0, 3)]; preferences.AutoScroll = AutoScrollToggle.IsChecked == true;
-        preferences.Checksum = Math.Clamp(ChecksumPicker.SelectedIndex, 0, 5);
+        preferences.Checksum = Math.Clamp(ChecksumPicker.SelectedIndex, 0, 8);
+        preferences.AutoConnect = AutoConnectToggle.IsChecked == true;
+        preferences.AutoReconnect = ReconnectToggle.IsChecked == true;
         preferences.Save();
+    }
+    private void OnConnectionOptions(object sender, RoutedEventArgs args)
+    {
+        if (updating) return;
+        try { SaveSerialPreferences(); }
+        catch (Exception error) { ShowError(error.Message); }
+    }
+    private async void OnSetLine(object sender, RoutedEventArgs args)
+    {
+        if (busy || !status.connected || sender is not MenuFlyoutItem { Tag: string line }) return;
+        busy = true; RefreshState();
+        try { status = await SerialBackend.SetLine(SessionId, line.StartsWith("rts", StringComparison.Ordinal), line.EndsWith('1')); }
+        catch (Exception error) { ShowError(error.Message); }
+        finally { busy = false; RefreshState(); }
     }
     private void OnSelectionChanged(object sender, SelectionChangedEventArgs args)
     {
@@ -674,7 +785,6 @@ public sealed partial class SerialView : UserControl
     {
         if (updating) return;
         OnSelectionChanged(sender, args);
-        foreach (var frame in frames) frame.SetFormat(preferences.DisplayFormat);
         RefreshTerminal(); RefreshState();
     }
     private void OnAutoScroll(object sender, RoutedEventArgs args)
@@ -682,16 +792,59 @@ public sealed partial class SerialView : UserControl
         if (updating) return;
         try { SaveSerialPreferences(); ScrollToLatest(); } catch (Exception error) { ShowError(error.Message); }
     }
-    private async void OnInputChanged(object sender, TextChangedEventArgs args) { if (updating) return; await PreviewCommand(); RefreshState(); }
-    private void OnClear(object sender, RoutedEventArgs args) { protocolRecords.Clear(); ParsedTerminal.ItemsSource = null; frames.Clear(); visibleFrames.Clear(); retainedBytes = 0; RefreshState(); }
-    private async void OnExport(object sender, RoutedEventArgs args)
+    private async void OnInputChanged(object sender, TextChangedEventArgs args)
     {
-        if (frames.Count == 0 || exporting || ExportRequested is not { } export) return;
+        if (updating) return;
+        if (!IsCommand)
+        {
+            preferences.Draft = InputBox.Text[..Math.Min(InputBox.Text.Length, 262144)];
+            try { preferences.Save(); } catch (Exception error) { ShowError(error.Message); }
+        }
+        await PreviewCommand();
+        RefreshState();
+    }
+    private void OnSendHistory(object sender, RoutedEventArgs args)
+    {
+        var menu = new MenuFlyout();
+        foreach (var text in preferences.History.AsEnumerable().Reverse())
+        {
+            var item = new MenuFlyoutItem { Text = text[..Math.Min(text.Length, 80)] };
+            item.Click += (_, _) => InputBox.Text = text;
+            menu.Items.Add(item);
+        }
+        menu.ShowAt(HistoryButton);
+    }
+    private void OnClear(object sender, RoutedEventArgs args)
+    {
+        clearedThrough = cursor;
+        frames.Clear(); pausedFrames?.Clear(); protocolRecords.Clear(); ParsedTerminal.ItemsSource = null;
+        retainedBytes = 0; RefreshTerminal(); RefreshState();
+        if (preferences.ResetOnClear) _ = ResetCounters();
+    }
+    private void OnExport(object sender, RoutedEventArgs args)
+    {
+        var menu = new MenuFlyout();
+        foreach (var format in new[] { "json", "txt", "csv", "bin" })
+        {
+            var item = new MenuFlyoutItem { Text = format.ToUpperInvariant() };
+            item.Click += async (_, _) => await ExportHistory(format);
+            menu.Items.Add(item);
+        }
+        menu.ShowAt(ExportButton);
+    }
+    private async Task ExportHistory(string format)
+    {
+        if (frames.Count == 0 || exporting) return;
         exporting = true; RefreshState();
         try
         {
-            var data = JsonSerializer.SerializeToUtf8Bytes(frames.Select(frame => frame.ExportRecord), new JsonSerializerOptions { WriteIndented = true });
-            await export(data);
+            if (format == "json" && ExportRequested is { } export)
+            {
+                var data = JsonSerializer.SerializeToUtf8Bytes(frames.Select(frame => frame.ExportRecord), new JsonSerializerOptions { WriteIndented = true });
+                await export(data);
+            }
+            else if (PickExport is { } pick && await pick("ChipDock-Serial", format) is { } path)
+                await Workbench(new { action = "export", path, format, after = clearedThrough });
         }
         catch (Exception error) { ShowError($"导出串口记录失败：{error.Message}"); }
         finally { exporting = false; RefreshState(); }
@@ -701,9 +854,21 @@ public sealed partial class SerialView : UserControl
     {
         var query = TerminalSearch.Text;
         var direction = DirectionPicker.SelectedIndex;
-        var matches = frames.Where(frame =>
-            (direction <= 0 || frame.IsReceive == (direction == 1))
-            && (query.Length == 0 || frame.DisplayText.Contains(query, StringComparison.CurrentCultureIgnoreCase))).ToList();
+        var search = BuildMatcher(query, searchRegex, searchCase);
+        List<(Func<string, bool> Match, Microsoft.UI.Xaml.Media.Brush? Brush)> styles;
+        try { styles = ColorRules(); } catch (InvalidOperationException) { styles = []; }
+        var matches = new List<TerminalFrame>();
+        var highlight = query.Length > 0 ? Ui.Brush(Microsoft.UI.Colors.Goldenrod, 0.25) : null;
+        var fallback = TerminalSearch.Foreground;
+        foreach (var frame in pausedFrames?.AsEnumerable() ?? frames)
+        {
+            if (direction > 0 && frame.IsReceive != (direction == 1)) continue;
+            frame.SetFormat(preferences.DisplayFormat, preferences.Mixed, preferences.Timestamps);
+            if (query.Length > 0 && (search is null || !search(frame.DisplayText))) continue;
+            var color = frame.IsReceive ? styles.FirstOrDefault(rule => rule.Match(frame.DisplayText)).Brush : ColorFor(preferences.TxColor);
+            frame.Style(color ?? fallback, highlight);
+            matches.Add(frame);
+        }
         var retained = matches.ToHashSet();
         // Keep existing rows alive so incoming data doesn't reset selection or scroll position.
         for (var index = visibleFrames.Count - 1; index >= 0; index--)
@@ -715,7 +880,7 @@ public sealed partial class SerialView : UserControl
     }
     private void ScrollToLatest()
     {
-        if (preferences.AutoScroll && visibleFrames.Count > 0) Terminal.ScrollIntoView(visibleFrames[^1]);
+        if (pausedFrames is null && preferences.AutoScroll && visibleFrames.Count > 0) Terminal.ScrollIntoView(visibleFrames[^1]);
     }
     private void OnSearchChanged(object sender, TextChangedEventArgs args)
     {
@@ -860,7 +1025,7 @@ public sealed partial class SerialView : UserControl
         picker.Width = width;
         picker.HorizontalAlignment = HorizontalAlignment.Stretch;
     }
-    private void ShowError(string message) { ErrorBar.Message = message; ErrorBar.IsOpen = true; }
+    internal void ShowError(string message) { ErrorBar.Message = message; ErrorBar.IsOpen = true; }
     private async void OnConnectShortcut(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args) { args.Handled = true; await ToggleConnection(); }
     private async void OnSendShortcut(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args) { args.Handled = true; await Send(); }
     private async void OnRefreshShortcut(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args) { args.Handled = true; await RefreshPorts(); }
@@ -869,13 +1034,13 @@ public sealed partial class SerialView : UserControl
     {
         args.Handled = true; TerminalSearch.Focus(FocusState.Programmatic); TerminalSearch.SelectAll();
     }
-    internal bool CanDisconnect => status.connected && !busy;
+    internal bool CanDisconnect => (status.connected || status.reconnecting) && !busy;
     internal Task Disconnect() => CanDisconnect ? ToggleConnection() : Task.CompletedTask;
     internal bool CanRefresh => !refreshing && !busy && !closed;
-    internal bool CanToggleConnection => !closed && !busy && (status.connected || (PortPicker.SelectedItem is PortChoice && TryGetBaudRate(out _)));
-    private bool CanTransmit => !closed && status.connected && !sending && !busy && InputBox.Text.Length > 0 && (!IsCommand || commandHex.Length > 0);
-    internal bool CanSend => CanTransmit && !autoSender.IsRunning;
-    internal bool UpdateBlocked => status.connected || busy || sending || autoSender.IsRunning;
+    internal bool CanToggleConnection => !closed && !busy && (status.connected || status.reconnecting || (PortPicker.SelectedItem is PortChoice { Info: not null } && TryGetBaudRate(out _)));
+    private bool CanTransmit => !closed && status.connected && status.job_kind is null && !sending && !busy && InputBox.Text.Length > 0 && (!IsCommand || commandHex.Length > 0);
+    internal bool CanSend => CanTransmit && !AutoSending;
+    internal bool UpdateBlocked => status.connected || status.reconnecting || busy || sending || AutoSending;
     private bool lastUpdateBlocked, lastCanSend, lastCanToggle, lastRefreshing;
     internal event Action? ActivityChanged;
     internal event Func<byte[], Task>? ExportRequested;
@@ -891,14 +1056,11 @@ public sealed partial class SerialView : UserControl
         package.SetText(text);
         Clipboard.SetContent(package);
     }
-    internal void Shutdown()
+    internal void Stop()
     {
         closed = true;
-        autoSender.Stop();
         timer.Stop();
         uiSettings.TextScaleFactorChanged -= OnTextScaleChanged;
-        try { SerialBackend.Shutdown(); }
-        catch (Exception error) { System.Diagnostics.Trace.TraceError("{0}", error); }
     }
     private sealed record PortChoice(string Path, string DisplayName, PortInfo? Info);
     private static bool SamePort(PortChoice left, PortChoice right) => left.Path == right.Path && left.DisplayName == right.DisplayName

@@ -2,6 +2,15 @@ import XCTest
 @testable import ChipDock
 
 final class CoreIntegrationTests: XCTestCase {
+    func testHostUsesIsolatedApplicationStorage() throws {
+        let environment = ProcessInfo.processInfo.environment
+        XCTAssertEqual(environment["CHIPDOCK_TEST_HOST"], "1")
+        let home = try XCTUnwrap(environment["CFFIXED_USER_HOME"])
+        XCTAssertTrue(FileManager.default.isWritableFile(atPath: home), "The XCTest home must exist and allow preference writes")
+        let support = try XCTUnwrap(FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first)
+        XCTAssertTrue(support.path.hasPrefix(home + "/"), "Application storage must remain inside the XCTest home")
+    }
+
     func testGeneratedBindingsSearchAndMemoryMap() throws {
         let core = ChipDockCore()
         XCTAssertEqual(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String, core.version())

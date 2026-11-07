@@ -22,6 +22,21 @@ struct SerialPort: Identifiable, Equatable, Sendable {
 
 struct SerialConnectionStatus: Equatable, Sendable {
     var connected = false
+    var jobKind: String?
+    var jobDone: UInt64 = 0
+    var jobTotal: UInt64 = 0
+    var jobError: String?
+    var uptimeMs: UInt64 = 0
+    var rxPerSecond: UInt64 = 0
+    var txPerSecond: UInt64 = 0
+    var logging = false
+    var capturing = false
+    var captureError: String?
+    var feedback: String?
+    var reconnecting = false
+    var generation: UInt64 = 0
+    var rts: Bool?
+    var dtr: Bool?
     var path: String?
     var config: SerialConnectionConfig?
     var rxBytes: UInt64 = 0
@@ -31,13 +46,13 @@ struct SerialConnectionStatus: Equatable, Sendable {
 }
 
 enum SerialDataFormat: String, Codable, CaseIterable, Identifiable, Sendable {
-    case hex, ascii, gbk, utf8 = "utf-8"
+    case hex, ascii, gbk, utf8 = "utf-8", latin1 = "latin-1"
     var id: String { rawValue }
     var title: String { rawValue.uppercased() }
 }
 
 enum SerialChecksum: String, Codable, CaseIterable, Identifiable, Sendable {
-    case none, sum8, oddParity, evenParity, xor8, crc16Modbus
+    case none, sum8, oddParity, evenParity, xor8, crc16Modbus, crc16Ccitt, crc32, lrc
     var id: Self { self }
     var title: String {
         switch self {
@@ -47,6 +62,9 @@ enum SerialChecksum: String, Codable, CaseIterable, Identifiable, Sendable {
         case .evenParity: "偶校验"
         case .xor8: "异或校验"
         case .crc16Modbus: "CRC16/MODBUS"
+        case .crc16Ccitt: "CRC16/CCITT"
+        case .crc32: "CRC32"
+        case .lrc: "LRC"
         }
     }
 }
@@ -76,6 +94,9 @@ struct SerialFrame: Identifiable, Encodable, Sendable {
     let hex: String
     let text: [String: String]
     let timestamp: String
+    var source = "serial"
+    var sequence: UInt64 = 0
+    var parsed: [SerialProtocolRecord] = []
 
     private enum CodingKeys: String, CodingKey {
         case direction, bytes, hex, text, timestamp
@@ -113,11 +134,29 @@ struct SerialPollBatch: Sendable {
     let status: SerialConnectionStatus
     let frames: [SerialFrame]
     let droppedFrames: UInt64
+    let nextCursor: UInt64
 }
 
 struct SerialPreferences: Codable, Sendable {
     var config = SerialConnectionConfig()
     var selectedPath = ""
+    var autoConnect = false
+    var autoReconnect = false
+    var packets = "[]"
+    var replies = "[]"
+    var mixed = false
+    var timestamps = true
+    var resetOnClear = false
+    var colors: [SerialColorRule] = []
+    var txColor = ""
+    var hexLineEnding = false
+    var skipPrefix: UInt32 = 0
+    var skipSuffix: UInt32 = 0
+    var framingMode = "read"
+    var framingValue = ""
+    var draft = ""
+    var history: [String] = []
+    let version = 1
     var displayFormat: SerialDataFormat = .utf8
     var sendFormat: SerialDataFormat = .utf8
     var lineEnding = "none"
@@ -126,15 +165,31 @@ struct SerialPreferences: Codable, Sendable {
     var autoSendIntervalMilliseconds = 1000
 
     private enum CodingKeys: String, CodingKey {
-        case config, selectedPath, displayFormat, sendFormat, lineEnding, autoScroll, checksum, autoSendIntervalMilliseconds
+        case version, packets, replies, mixed, timestamps, resetOnClear, colors, txColor, draft, history, hexLineEnding, skipPrefix, skipSuffix, framingMode, framingValue, config, selectedPath, autoConnect, autoReconnect, displayFormat, sendFormat, lineEnding, autoScroll, checksum, autoSendIntervalMilliseconds
     }
 
     init() {}
 
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
+        packets = try values.decodeIfPresent(String.self, forKey: .packets) ?? "[]"
+        replies = try values.decodeIfPresent(String.self, forKey: .replies) ?? "[]"
+        mixed = try values.decodeIfPresent(Bool.self, forKey: .mixed) ?? false
+        timestamps = try values.decodeIfPresent(Bool.self, forKey: .timestamps) ?? true
+        resetOnClear = try values.decodeIfPresent(Bool.self, forKey: .resetOnClear) ?? false
+        colors = try values.decodeIfPresent([SerialColorRule].self, forKey: .colors) ?? []
+        txColor = try values.decodeIfPresent(String.self, forKey: .txColor) ?? ""
+        hexLineEnding = try values.decodeIfPresent(Bool.self, forKey: .hexLineEnding) ?? false
+        skipPrefix = try values.decodeIfPresent(UInt32.self, forKey: .skipPrefix) ?? 0
+        skipSuffix = try values.decodeIfPresent(UInt32.self, forKey: .skipSuffix) ?? 0
+        framingMode = try values.decodeIfPresent(String.self, forKey: .framingMode) ?? "read"
+        framingValue = try values.decodeIfPresent(String.self, forKey: .framingValue) ?? ""
+        draft = try values.decodeIfPresent(String.self, forKey: .draft) ?? ""
+        history = try values.decodeIfPresent([String].self, forKey: .history) ?? []
         config = try values.decodeIfPresent(SerialConnectionConfig.self, forKey: .config) ?? SerialConnectionConfig()
         selectedPath = try values.decodeIfPresent(String.self, forKey: .selectedPath) ?? ""
+        autoConnect = try values.decodeIfPresent(Bool.self, forKey: .autoConnect) ?? false
+        autoReconnect = try values.decodeIfPresent(Bool.self, forKey: .autoReconnect) ?? false
         displayFormat = try values.decodeIfPresent(SerialDataFormat.self, forKey: .displayFormat) ?? .utf8
         sendFormat = try values.decodeIfPresent(SerialDataFormat.self, forKey: .sendFormat) ?? .utf8
         lineEnding = try values.decodeIfPresent(String.self, forKey: .lineEnding) ?? "none"
@@ -164,6 +219,9 @@ struct SerialProtocolRule: Codable, Identifiable, Sendable, Equatable {
     var response = ""
     var timeout_ms = 1000
     var delimiter = ""
+    var length_field = ""
+    var length_includes_frame = false
+    var trailer = ""
     var id: String { name }
 }
 struct SerialProtocolResult: Decodable, Sendable {
@@ -172,6 +230,14 @@ struct SerialProtocolResult: Decodable, Sendable {
     var records: [SerialProtocolRecord]
     var response: String
     var timeout_ms: Int
+    var layout: [SerialProtocolSpan]?
+}
+
+struct SerialProtocolSpan: Decodable, Sendable {
+    let name: String
+    let start: Int
+    let bytes: Int
+    let hex: String
 }
 struct SerialProtocolRecord: Decodable, Sendable, Identifiable {
     var id = UUID()
@@ -179,11 +245,13 @@ struct SerialProtocolRecord: Decodable, Sendable, Identifiable {
     var hex: String
     var message: String
     var valid: Bool
-    private enum CodingKeys: String, CodingKey { case name, hex, message, valid }
+    var checksumValid: Bool?
+    var payloadHex: String?
+    private enum CodingKeys: String, CodingKey { case name, hex, message, valid, checksumValid, payloadHex }
 }
 
 extension SerialProtocolRule {
-    private enum CodingKeys: String, CodingKey { case name, template, display, receive, checksum_start, checksum_end, response, timeout_ms, delimiter }
+    private enum CodingKeys: String, CodingKey { case name, template, display, receive, checksum_start, checksum_end, response, timeout_ms, delimiter, length_field, length_includes_frame, trailer }
     init(from decoder: Decoder) throws {
         self.init()
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -196,6 +264,9 @@ extension SerialProtocolRule {
         response = try c.decodeIfPresent(String.self, forKey: .response) ?? ""
         timeout_ms = try c.decodeIfPresent(Int.self, forKey: .timeout_ms) ?? 1000
         delimiter = try c.decodeIfPresent(String.self, forKey: .delimiter) ?? ""
+        length_field = try c.decodeIfPresent(String.self, forKey: .length_field) ?? ""
+        length_includes_frame = try c.decodeIfPresent(Bool.self, forKey: .length_includes_frame) ?? false
+        trailer = try c.decodeIfPresent(String.self, forKey: .trailer) ?? ""
     }
 }
 
@@ -241,4 +312,17 @@ enum SerialFrameFragment: String, CaseIterable, Identifiable {
         }
         return tokens.joined(separator: " ")
     }
+}
+
+struct SerialColorRule: Codable, Equatable, Sendable {
+    var pattern: String
+    var regex: Bool
+    var color: String
+
+    static let presets: [(String, [Self])] = [
+        ("ESP-IDF", [.init(pattern: "^[EWe] \\(", regex: true, color: "orange"), .init(pattern: "^[IDV] \\(", regex: true, color: "blue")]),
+        ("日志等级", [.init(pattern: "ERROR|FATAL", regex: true, color: "red"), .init(pattern: "WARN", regex: false, color: "orange"),
+                     .init(pattern: "INFO", regex: false, color: "blue")]),
+        ("AT 响应", [.init(pattern: "ERROR", regex: false, color: "red"), .init(pattern: "OK", regex: false, color: "green")]),
+    ]
 }

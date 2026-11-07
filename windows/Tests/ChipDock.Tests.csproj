@@ -17,7 +17,6 @@
     <Compile Include="../ChipDock/UpdateSource.cs" Link="Linked/UpdateSource.cs" />
     <Compile Include="../ChipDock/NativeWorker.cs" Link="Linked/NativeWorker.cs" />
     <Compile Include="../ChipDock/SerialBackend.cs" Link="Linked/SerialBackend.cs" />
-    <Compile Include="../ChipDock/SerialAutoSender.cs" Link="Linked/SerialAutoSender.cs" />
     <Compile Include="../ChipDock/RustCore.cs" Link="Linked/RustCore.cs" />
     <Compile Include="../ChipDock/RecentFirmwareHistory.cs" Link="Linked/RecentFirmwareHistory.cs" />
     <Compile Include="../ChipDock/ActivityText.cs" Link="Linked/ActivityText.cs" />

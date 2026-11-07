@@ -40,6 +40,16 @@ ARCHITECTURES="$(/usr/bin/lipo -archs "$APP_BUNDLE/Contents/MacOS/ChipDock")"
     echo 'error: Release app must contain both arm64 and x86_64' >&2; exit 1;
 }
 
+for TOOL in chipdock-cli chipdock-mcp; do
+    TOOL_PATH="$APP_BUNDLE/Contents/Helpers/$TOOL"
+    [[ -x "$TOOL_PATH" ]] || { echo "error: Missing bundled helper $TOOL" >&2; exit 1; }
+    TOOL_ARCHS="$(/usr/bin/lipo -archs "$TOOL_PATH")"
+    [[ " $TOOL_ARCHS " == *" arm64 "* && " $TOOL_ARCHS " == *" x86_64 "* ]] || {
+        echo "error: $TOOL must contain both arm64 and x86_64" >&2; exit 1;
+    }
+    /usr/bin/codesign --force --sign - "$TOOL_PATH"
+done
+
 ARCHIVE_NAME="ChipDock-$APP_VERSION-macOS-universal.zip"
 if [[ -n "${RELEASE_NOTES_FILE:-}" ]]; then
     cargo run --quiet --locked --manifest-path "$PROJECT_ROOT/Cargo.toml" -p chipdock-release-notes -- \

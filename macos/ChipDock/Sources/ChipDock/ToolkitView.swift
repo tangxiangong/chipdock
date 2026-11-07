@@ -5,13 +5,13 @@ import UniformTypeIdentifiers
 struct ToolkitView: View {
     @Bindable var toolkit: ToolkitState
     @Bindable var store: WorkbenchStore
-    var serial: SerialStore
+    var serial: SerialWorkbench
 
     var body: some View {
         Group {
             switch toolkit.selectedTool {
             case .flash: FlashWorkbenchView(store: store)
-            case .serial: SerialView(serial: serial)
+            case .serial: SerialWorkbenchView(workbench: serial)
             }
         }
         .navigationTitle(toolkit.selectedTool == .flash ? "固件烧录" : "串口连接")

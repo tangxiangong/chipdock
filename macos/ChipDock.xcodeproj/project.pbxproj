@@ -35,6 +35,8 @@
 		5B10A08161C4B5F39D0C6970 /* SaveProfileSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75AFC1F643B6109060E3B9C6 /* SaveProfileSheet.swift */; };
 		5C75BF8C794B09E549275560 /* FlashView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 745CA52B284E6E963394D3AD /* FlashView.swift */; };
 		5D2CAAFEDFE98AE40F089DEE /* SerialStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B1BC07E33F954D09FE547EA /* SerialStore.swift */; };
+		A1E97A89AF1B41789B9C51EE /* SerialToolsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E97A89AF1B41789B9C51EE /* SerialToolsView.swift */; };
+		A1E97A89AF1B41789B9C51EF /* SerialWorkflowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E97A89AF1B41789B9C51EF /* SerialWorkflowView.swift */; };
 		5FCA3086FB009B44F4828CB3 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 4F07CFCC191CFDD73E81149E /* Sparkle */; };
 		60578E8D7AD3302E737EB94C /* SerialTerminalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 577F22769BF346972C652992 /* SerialTerminalView.swift */; };
 		6B787C81AC7EB993FCCE576C /* WorkbenchPanels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F763DBD61FA6FB45EFCCABF /* WorkbenchPanels.swift */; };
@@ -42,7 +44,6 @@
 		7A1A1DCA77BBC069BC1913DD /* SerialModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3526130316D6A6B88A3AD883 /* SerialModels.swift */; };
 		7CF2F6CC93A2FA1E5B2E3F2A /* LogsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81B03BD0A7D813C4A52F9708 /* LogsView.swift */; };
 		7F904FFAF21A003A61CC1CB1 /* ChipDock.icon in Resources */ = {isa = PBXBuildFile; fileRef = 0EBD0275FF88FD1266BA3A12 /* ChipDock.icon */; };
-		81B997C8669C9E86028D59E9 /* SerialAutoSender.swift in Sources */ = {isa = PBXBuildFile; fileRef = F675B56F6651B43822D59D68 /* SerialAutoSender.swift */; };
 		840E39FCB55E7005FD081F65 /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FEF79C4AA1E9F15775A5934 /* Components.swift */; };
 		8BF7E35708955B5D553BC478 /* TargetConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0EAB345B22F02B45783BE89 /* TargetConfiguration.swift */; };
 		93B6DCCF0CC16FA9018FF044 /* FirmwareDataView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8155FA872DE4EC7D549465DD /* FirmwareDataView.swift */; };
@@ -90,6 +91,8 @@
 		0F763DBD61FA6FB45EFCCABF /* WorkbenchPanels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkbenchPanels.swift; sourceTree = "<group>"; };
 		2170C566ED701E6AB5B2A961 /* WorkbenchCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkbenchCommands.swift; sourceTree = "<group>"; };
 		2B1BC07E33F954D09FE547EA /* SerialStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SerialStore.swift; sourceTree = "<group>"; };
+		B1E97A89AF1B41789B9C51EE /* SerialToolsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SerialToolsView.swift; sourceTree = "<group>"; };
+		B1E97A89AF1B41789B9C51EF /* SerialWorkflowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SerialWorkflowView.swift; sourceTree = "<group>"; };
 		3526130316D6A6B88A3AD883 /* SerialModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SerialModels.swift; sourceTree = "<group>"; };
 		377ECC06F7334DD6EA1B9C9A /* SerialView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SerialView.swift; sourceTree = "<group>"; };
 		3B656F6AE0DF5AC85F2FEBD8 /* SerialComposerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SerialComposerView.swift; sourceTree = "<group>"; };
@@ -125,7 +128,6 @@
 		E126A6DF16F9F3F86A3B2B50 /* ChipDockCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChipDockCore.swift; sourceTree = CHIPDOCK_BINDINGS_DIR; };
 		E17F7EDA72AD6856663FC614 /* ChipDock.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ChipDock.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E8FCE66F9CB69FAED425B222 /* WorkbenchStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkbenchStore.swift; sourceTree = "<group>"; };
-		F675B56F6651B43822D59D68 /* SerialAutoSender.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SerialAutoSender.swift; sourceTree = "<group>"; };
 		F7CF0E6DBACF59D6959CFB50 /* SerialConnectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SerialConnectionView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -252,12 +254,13 @@
 				48EC7E04C963D892D94D620D /* MemoryView.swift */,
 				72CA28131787F327A5FB96A6 /* RustService.swift */,
 				75AFC1F643B6109060E3B9C6 /* SaveProfileSheet.swift */,
-				F675B56F6651B43822D59D68 /* SerialAutoSender.swift */,
 				9933D6ABA1F068AB869FFD5E /* SerialBackend.swift */,
 				3B656F6AE0DF5AC85F2FEBD8 /* SerialComposerView.swift */,
 				F7CF0E6DBACF59D6959CFB50 /* SerialConnectionView.swift */,
 				3526130316D6A6B88A3AD883 /* SerialModels.swift */,
 				2B1BC07E33F954D09FE547EA /* SerialStore.swift */,
+				B1E97A89AF1B41789B9C51EE /* SerialToolsView.swift */,
+				B1E97A89AF1B41789B9C51EF /* SerialWorkflowView.swift */,
 				577F22769BF346972C652992 /* SerialTerminalView.swift */,
 				377ECC06F7334DD6EA1B9C9A /* SerialView.swift */,
 				7A17A9B9BFB6BB039C8E5963 /* SettingsView.swift */,
@@ -316,6 +319,7 @@
 				A67E17B2E745A821AC26750F /* Sources */,
 				48D5448F8519F3D4F0D4DD33 /* Resources */,
 				5D7AF752C1023B88D754B268 /* Frameworks */,
+				C1E97A89AF1B41789B9C51EE /* Embed serial tools */,
 			);
 			buildRules = (
 			);
@@ -410,10 +414,30 @@
 				"$(CHIPDOCK_BINDINGS_DIR)/include/ChipDockCoreFFI.h",
 				"$(CHIPDOCK_BINDINGS_DIR)/include/module.modulemap",
 				"$(CHIPDOCK_BINDINGS_DIR)/libchipdock_ffi.a",
+				"$(CHIPDOCK_BINDINGS_DIR)/chipdock-cli",
+				"$(CHIPDOCK_BINDINGS_DIR)/chipdock-mcp",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "\"${SRCROOT}/build-bindings.sh\"";
+			showEnvVarsInLog = 0;
+		};
+		C1E97A89AF1B41789B9C51EE /* Embed serial tools */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = ();
+			inputPaths = (
+				"$(CHIPDOCK_BINDINGS_DIR)/chipdock-cli",
+				"$(CHIPDOCK_BINDINGS_DIR)/chipdock-mcp",
+			);
+			name = "Embed serial tools";
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Helpers/chipdock-cli",
+				"$(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Helpers/chipdock-mcp",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -eu\ndestination=\"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers\"\nmkdir -p \"$destination\"\nfor tool in chipdock-cli chipdock-mcp; do\n    /usr/bin/install -m 755 \"$CHIPDOCK_BINDINGS_DIR/$tool\" \"$destination/$tool\"\n    if [ \"${CODE_SIGNING_ALLOWED:-YES}\" != NO ]; then\n        /usr/bin/codesign --force --sign \"${EXPANDED_CODE_SIGN_IDENTITY:--}\" \"$destination/$tool\"\n    fi\ndone\n";
 			showEnvVarsInLog = 0;
 		};
 /* End PBXShellScriptBuildPhase section */
@@ -437,12 +461,13 @@
 				F41DECEFF71522D2E32C9FE3 /* MemoryView.swift in Sources */,
 				122CFA785340A213EAF4C103 /* RustService.swift in Sources */,
 				5B10A08161C4B5F39D0C6970 /* SaveProfileSheet.swift in Sources */,
-				81B997C8669C9E86028D59E9 /* SerialAutoSender.swift in Sources */,
 				2DB0892CFC2E3F3551601ABF /* SerialBackend.swift in Sources */,
 				A46057E8328925E07F02EF29 /* SerialComposerView.swift in Sources */,
 				AA815EC6513FE6817C04637B /* SerialConnectionView.swift in Sources */,
 				7A1A1DCA77BBC069BC1913DD /* SerialModels.swift in Sources */,
 				5D2CAAFEDFE98AE40F089DEE /* SerialStore.swift in Sources */,
+				A1E97A89AF1B41789B9C51EE /* SerialToolsView.swift in Sources */,
+				A1E97A89AF1B41789B9C51EF /* SerialWorkflowView.swift in Sources */,
 				60578E8D7AD3302E737EB94C /* SerialTerminalView.swift in Sources */,
 				3AD5E2403D8A29164DF964EA /* SerialView.swift in Sources */,
 				BB52E874039B440B109C7525 /* SettingsView.swift in Sources */,

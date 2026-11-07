@@ -1,14 +1,16 @@
 use anyhow::{Result, bail};
 use encoding_rs::{CoderResult, Decoder, GBK, UTF_8};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use super::types::SendFormat;
 
 #[cfg_attr(feature = "csharp", interoptopus::ffi)]
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DecodedText {
     pub ascii: String,
     pub gbk: String,
+    #[serde(rename = "latin-1")]
+    pub latin1: String,
     #[serde(rename = "utf-8")]
     pub utf8: String,
 }
@@ -55,6 +57,7 @@ impl ReceiveDecoder {
                     }
                 })
                 .collect(),
+            latin1: bytes.iter().copied().map(char::from).collect(),
             gbk: decode_chunk(&mut self.gbk, bytes, last),
             utf8: decode_chunk(&mut self.utf8, bytes, last),
         }
@@ -88,6 +91,13 @@ pub fn encode_text(input: &str, format: SendFormat) -> Result<Vec<u8>> {
             }
             Ok(bytes.into_owned())
         }
+        SendFormat::Latin1 => input
+            .chars()
+            .map(|character| {
+                u8::try_from(character as u32)
+                    .map_err(|_| anyhow::anyhow!("Latin-1 只能发送 U+0000–U+00FF 范围内的字符"))
+            })
+            .collect(),
         SendFormat::Utf8 => Ok(input.as_bytes().to_vec()),
         SendFormat::Hex => bail!("HEX 输入必须按十六进制字节解析"),
     }

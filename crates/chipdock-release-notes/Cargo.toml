@@ -6,7 +6,7 @@ license.workspace = true
 publish = false
 
 [dependencies]
-anyhow = "1"
+anyhow.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

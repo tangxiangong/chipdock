@@ -20,8 +20,15 @@ struct LogsView: View {
     var body: some View {
         LogTextView(entries: entries, followsLatest: $followsLatest)
             .overlay {
-                if entries.isEmpty {
-                    Text(store.logs.isEmpty ? "暂无日志" : "没有匹配的日志").foregroundStyle(.secondary)
+                if store.logs.isEmpty {
+                    ContentUnavailableView("暂无日志", systemImage: "text.alignleft",
+                                           description: Text("连接、烧录和读取内存的过程会记录在这里。"))
+                } else if entries.isEmpty {
+                    if query.isEmpty {
+                        ContentUnavailableView("没有错误", systemImage: "checkmark.circle")
+                    } else {
+                        ContentUnavailableView.search(text: query)
+                    }
                 }
             }
             .navigationSubtitle("\(entries.count) 条日志 · \(store.logs.filter { $0.level == .error }.count) 条错误")

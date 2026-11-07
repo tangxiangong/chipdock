@@ -3,7 +3,10 @@
 pub use chipdock_core::{
     error::{ErrorCode, ErrorResponse},
     models::*,
-    serial::{Direction, PollBatch, SerialFrameEvent, encoding::DecodedText, types::*},
+    serial::{
+        Direction, PollBatch, SerialFrameEvent, encoding::DecodedText,
+        program::Record as ProtocolRecord, types::*,
+    },
 };
 pub use chipdock_service::{
     records::{CoreError, ProgressEvent, RecentFirmware, SavedProfile},
@@ -325,6 +328,8 @@ pub enum Parity {
     None,
     Odd,
     Even,
+    Mark,
+    Space,
 }
 
 #[uniffi::remote(Enum)]
@@ -354,9 +359,31 @@ pub struct PortInfo {
     pub pid: Option<String>,
 }
 
+#[uniffi::remote(Enum)]
+pub enum ControlLine {
+    Rts,
+    Dtr,
+}
+
 #[uniffi::remote(Record)]
 pub struct SerialStatus {
     pub connected: bool,
+    pub selected_protocol: Option<String>,
+    pub job_kind: Option<String>,
+    pub job_done: u64,
+    pub job_total: u64,
+    pub job_error: Option<String>,
+    pub uptime_ms: u64,
+    pub rx_per_second: u64,
+    pub tx_per_second: u64,
+    pub logging: bool,
+    pub capturing: bool,
+    pub capture_error: Option<String>,
+    pub feedback: Option<String>,
+    pub reconnecting: bool,
+    pub generation: u64,
+    pub rts: Option<bool>,
+    pub dtr: Option<bool>,
     pub path: Option<String>,
     pub config: Option<SerialConfig>,
     pub rx_bytes: u64,
@@ -372,6 +399,8 @@ pub enum SendFormat {
     Gbk,
     #[serde(rename = "utf-8")]
     Utf8,
+    #[serde(rename = "latin-1")]
+    Latin1,
 }
 
 #[uniffi::remote(Enum)]
@@ -382,6 +411,9 @@ pub enum ChecksumAlgorithm {
     EvenParity,
     Xor8,
     Crc16Modbus,
+    Crc16Ccitt,
+    Crc32,
+    Lrc,
 }
 
 #[uniffi::remote(Enum)]
@@ -393,9 +425,27 @@ pub enum LineEnding {
 }
 
 #[uniffi::remote(Record)]
+pub struct SendOptions {
+    pub hex_line_ending: bool,
+    pub skip_prefix: u32,
+    pub skip_suffix: u32,
+}
+
+#[uniffi::remote(Record)]
+pub struct ProtocolRecord {
+    pub name: String,
+    pub hex: String,
+    pub message: String,
+    pub valid: bool,
+    pub checksum_valid: Option<bool>,
+    pub payload_hex: String,
+}
+
+#[uniffi::remote(Record)]
 pub struct DecodedText {
     pub ascii: String,
     pub gbk: String,
+    pub latin1: String,
     #[serde(rename = "utf-8")]
     pub utf8: String,
 }
@@ -405,6 +455,8 @@ pub struct PollBatch {
     pub status: SerialStatus,
     pub frames: Vec<SerialFrameEvent>,
     pub dropped_frames: u64,
+    pub next_cursor: u64,
+    pub has_more: bool,
 }
 
 #[uniffi::remote(Enum)]
@@ -420,6 +472,9 @@ pub struct SerialFrameEvent {
     pub hex: String,
     pub text: DecodedText,
     pub timestamp: String,
+    pub source: String,
+    pub sequence: u64,
+    pub parsed: Vec<ProtocolRecord>,
 }
 
 #[uniffi::remote(Error)]

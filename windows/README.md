@@ -44,4 +44,4 @@
 
 如果 ChipDock 在打开窗口前退出，可查看 `%LOCALAPPDATA%\ChipDock\logs\crash.log`。目标配置和最近使用记录位于 `%APPDATA%\ChipDock`，应用设置位于 `%LOCALAPPDATA%\ChipDock\settings.json`。
 
-更多操作见 [ChipDock 使用指南](../README.md) 和 [串口命令与接收解析](../docs/serial-protocol.md)。
+更多操作见 [ChipDock 使用指南](../README.md)。

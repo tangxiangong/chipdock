@@ -2,11 +2,10 @@ using System.Collections.Concurrent;
 
 namespace ChipDock;
 
-/// Each hardware feature owns a serial queue and a dedicated background thread.
+/// Probe operations run in order on a dedicated background thread.
 internal sealed class NativeWorker
 {
     internal static NativeWorker Probe { get; } = new("ChipDock.Probe");
-    internal static NativeWorker Serial { get; } = new("ChipDock.Serial");
     private readonly BlockingCollection<Action> jobs = new();
     private NativeWorker(string name)
     {

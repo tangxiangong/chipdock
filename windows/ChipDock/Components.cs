@@ -1,5 +1,4 @@
 using ChipDock.Core;
-using Microsoft.UI;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
@@ -98,8 +97,7 @@ internal static class Ui
         var button = new Button
         {
             Content = Glyph(glyph, 14),
-            Background = new SolidColorBrush(Colors.Transparent),
-            BorderBrush = new SolidColorBrush(Colors.Transparent),
+            Style = Style("SubtleCommandButtonStyle"),
             Padding = new Thickness(8),
         };
         button.Click += (_, _) => click();

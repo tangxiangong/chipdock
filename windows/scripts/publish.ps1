@@ -50,8 +50,21 @@ foreach ($BundledRuntime in @('coreclr.dll', 'Microsoft.ui.xaml.dll')) {
 }
 $RuntimeConfig = Get-Content -Raw (Join-Path $Publish 'ChipDock.runtimeconfig.json') | ConvertFrom-Json
 if ($RuntimeConfig.runtimeOptions.framework.name -ne 'Microsoft.NETCore.App') { throw 'Expected framework-dependent .NET publish output.' }
-foreach ($Required in @('Microsoft.WindowsAppRuntime.Bootstrap.dll', 'chipdock_csharp.dll', 'Velopack.dll')) {
+foreach ($Required in @('Microsoft.WindowsAppRuntime.Bootstrap.dll', 'chipdock_csharp.dll', 'Velopack.dll', 'chipdock-cli.exe', 'chipdock-mcp.exe')) {
     if (-not (Test-Path (Join-Path $Publish $Required))) { throw "$Required is missing from the publish output." }
+}
+
+$SerialTools = @('chipdock-cli.exe', 'chipdock-mcp.exe')
+$ExpectedMachine = if ($Arch -eq 'arm64') { 0xAA64 } else { 0x8664 }
+foreach ($SerialTool in $SerialTools) {
+    $Reader = [System.IO.BinaryReader]::new([System.IO.File]::OpenRead((Join-Path $Publish $SerialTool)))
+    try {
+        $Reader.BaseStream.Position = 0x3c
+        $Reader.BaseStream.Position = $Reader.ReadUInt32()
+        if ($Reader.ReadUInt32() -ne 0x00004550 -or $Reader.ReadUInt16() -ne $ExpectedMachine) {
+            throw "$SerialTool has the wrong executable architecture for $Rid."
+        }
+    } finally { $Reader.Dispose() }
 }
 
 $Tools = Join-Path $Repo 'target/release-tools'
@@ -85,6 +98,13 @@ $Packages = @(Get-ChildItem $OutputDirectory -File -Filter '*.nupkg')
 if ($Packages.Count -ne 1 -or $Packages[0].Name -ne "ChipDock-$Version-$Rid-full.nupkg") {
     throw "Expected exactly ChipDock-$Version-$Rid-full.nupkg, found: $($Packages.Name -join ', ')"
 }
+$Archive = [System.IO.Compression.ZipFile]::OpenRead($Packages[0].FullName)
+try {
+    foreach ($SerialTool in $SerialTools) {
+        $Entries = @($Archive.Entries | Where-Object { $_.Name -eq $SerialTool })
+        if ($Entries.Count -ne 1 -or $Entries[0].Length -eq 0) { throw "$SerialTool is missing from the update package." }
+    }
+} finally { $Archive.Dispose() }
 if (-not (Test-Path (Join-Path $OutputDirectory $Feed))) { throw "Velopack did not write $Feed." }
 Remove-Item -Recurse -Force $Publish
 if ($ReleaseNotes) { Remove-Item -Force $FilteredNotes }

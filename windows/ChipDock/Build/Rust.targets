@@ -10,10 +10,13 @@
     <RustProfile Condition="'$(RustProfile)' == ''">debug</RustProfile>
     <RustProfileArgument Condition="'$(Configuration)' == 'Release'">--release</RustProfileArgument>
     <RustLibrary Condition="'$(RustLibrary)' == ''">$(RepositoryRoot)/target/$(RustTarget)/$(RustProfile)/chipdock_csharp.dll</RustLibrary>
+    <RustToolsDirectory>$(RepositoryRoot)/target/$(RustTarget)/$(RustProfile)</RustToolsDirectory>
     <GeneratedBindingsDirectory Condition="'$(GeneratedBindingsDirectory)' == ''">$(RepositoryRoot)/bindings/generated/csharp</GeneratedBindingsDirectory>
   </PropertyGroup>
   <ItemGroup>
     <Content Include="$(RustLibrary)" Link="chipdock_csharp.dll" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="$(RustToolsDirectory)/chipdock-cli.exe;$(RustToolsDirectory)/chipdock-mcp.exe"
+             Link="%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Compile Remove="$(GeneratedBindingsDirectory)/**" />
     <_RustBindingInputs Include="$(RepositoryRoot)/crates/**/*.rs;$(RepositoryRoot)/crates/**/Cargo.toml;$(RepositoryRoot)/bindings/csharp-generator/**/*.rs;$(RepositoryRoot)/bindings/csharp-generator/Cargo.toml;$(RepositoryRoot)/Cargo.toml;$(RepositoryRoot)/Cargo.lock;$(RepositoryRoot)/data/usb-device.json" Exclude="$(RepositoryRoot)/**/target/**" />
     <UpToDateCheckInput Include="@(_RustBindingInputs)" />
@@ -55,7 +58,7 @@
 
   <Target Name="BuildRustBackend" DependsOnTargets="ResolveCargo;EnsureRustTargets" Condition="'$(DesignTimeBuild)' != 'true'">
     <Message Importance="High" Text="Building ChipDock Rust Core: $(RustTarget) / $(RustProfile)" />
-    <Exec Command="&quot;$(CargoExecutable)&quot; build --locked --target-dir &quot;$(RepositoryRoot)/target&quot; -p chipdock-csharp --target $(RustTarget) $(RustProfileArgument)"
+    <Exec Command="&quot;$(CargoExecutable)&quot; build --locked --target-dir &quot;$(RepositoryRoot)/target&quot; -p chipdock-csharp -p chipdock-tools --target $(RustTarget) $(RustProfileArgument)"
           WorkingDirectory="$(RepositoryRoot)" IgnoreExitCode="true">
       <Output TaskParameter="ExitCode" PropertyName="_RustBuildExitCode" />
     </Exec>

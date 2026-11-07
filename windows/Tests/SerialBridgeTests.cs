@@ -16,79 +16,33 @@ internal static class SerialBridgeTests
         try
         {
             await entered.Task.WaitAsync(TimeSpan.FromSeconds(3));
-            var batch = await SerialBackend.Poll().WaitAsync(TimeSpan.FromSeconds(3));
+            var batch = await SerialBackend.Poll(1).WaitAsync(TimeSpan.FromSeconds(3));
             Check.That(!batch.status.connected && batch.status.rx_bytes == 0 && batch.status.tx_bytes == 0,
                 "serial bridge polls while the probe worker is blocked");
         }
         finally { release.Set(); }
         Check.That(await probe, "probe worker stays independent until explicitly released");
         var config = new SerialConfig { baud_rate = 115200, data_bits = 8, stop_bits = 1, parity = Parity.None, flow_control = FlowControl.None };
-        try { await SerialBackend.Connect("", config); throw new Exception("Expected empty-port validation"); }
+        try { await SerialBackend.Connect(1, "", config, false); throw new Exception("Expected empty-port validation"); }
         catch (InvalidOperationException error) { Check.That(error.Message.Contains("请选择串口"), "serial configuration validation crosses the bridge"); }
-        try { await SerialBackend.Send("中文", SendFormat.Ascii, LineEnding.Crlf); throw new Exception("Expected ASCII validation"); }
+        try { await SerialBackend.Send(1, "中文", SendFormat.Ascii, LineEnding.Crlf, ChecksumAlgorithm.None); throw new Exception("Expected ASCII validation"); }
         catch (InvalidOperationException error) { Check.That(error.Message.Contains("ASCII"), "serial encoding validation crosses the bridge"); }
-        Check.That(!(await SerialBackend.Disconnect()).connected, "serial disconnect is safe without a device");
-        await ShutdownFollowsQueuedCalls();
-        await AutoSendStopsAndKeepsReplacementRunning();
-    }
-    internal static async Task AutoSendStopsAndKeepsReplacementRunning()
-    {
-        var sender = new SerialAutoSender();
-        try
-        {
-            foreach (var interval in new[] { -1, 0, 9, 3_600_001 })
-                Check.That(!sender.Start(interval, () => Task.FromResult(true)) && !sender.IsRunning, "invalid auto-send intervals never start");
-            var firstEntered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            var releaseFirst = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            var secondEntered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            var releaseSecond = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            var stopped = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            var calls = 0;
-            sender.Changed += () => { if (!sender.IsRunning && calls >= 2) stopped.TrySetResult(true); };
-            sender.Start(10, async () => { Interlocked.Increment(ref calls); firstEntered.TrySetResult(true); return await releaseFirst.Task; });
-            await firstEntered.Task.WaitAsync(TimeSpan.FromSeconds(3));
-            sender.Stop();
-            sender.Start(10, async () => { Interlocked.Increment(ref calls); secondEntered.TrySetResult(true); return await releaseSecond.Task; });
-            await secondEntered.Task.WaitAsync(TimeSpan.FromSeconds(3));
-            releaseFirst.TrySetResult(false);
-            await Task.Delay(30);
-            Check.That(sender.IsRunning, "an old auto-send task cannot clear its replacement");
-            releaseSecond.TrySetResult(false);
-            await stopped.Task.WaitAsync(TimeSpan.FromSeconds(3));
-            Check.That(calls == 2 && !sender.IsRunning, "automatic sending stops after a failure without another send");
-        }
-        finally { sender.Stop(); }
-    }
-    private static async Task ShutdownFollowsQueuedCalls()
-    {
-        var entered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var shutdownStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        using var release = new ManualResetEventSlim();
-        var order = new System.Collections.Concurrent.ConcurrentQueue<string>();
-        var blocked = NativeWorker.Serial.Run(() =>
-        {
-            entered.SetResult(true);
-            return release.Wait(TimeSpan.FromSeconds(5));
-        });
-        await entered.Task.WaitAsync(TimeSpan.FromSeconds(3));
-        var queued = NativeWorker.Serial.Run(() => order.Enqueue("pending serial call"));
-        var shutdown = Task.Run(() =>
-        {
-            shutdownStarted.SetResult(true);
-            SerialBackend.Shutdown();
-            order.Enqueue("shutdown");
-        });
-        bool completedEarly;
-        try
-        {
-            await shutdownStarted.Task.WaitAsync(TimeSpan.FromSeconds(3));
-            completedEarly = await Task.WhenAny(shutdown, Task.Delay(150)) == shutdown;
-        }
-        finally { release.Set(); }
-        await Task.WhenAll(blocked, queued, shutdown);
-        Check.That(await blocked, "serial worker is released before its timeout");
-        Check.That(!completedEarly && order.SequenceEqual(new[] { "pending serial call", "shutdown" }),
-            "shutdown follows pending serial calls instead of allowing them to reopen a closed connection");
+        Check.That(!(await SerialBackend.Disconnect(1)).connected, "serial disconnect is safe without a device");
+        await ClosedSessionCannotBeReopened(config);
     }
 
+    private static async Task ClosedSessionCannotBeReopened(SerialConfig config)
+    {
+        var id = await SerialBackend.Create();
+        await SerialBackend.Close(id);
+        try
+        {
+            await SerialBackend.Connect(id, "VIRTUAL-A", config, false);
+            throw new Exception("Expected closed session validation");
+        }
+        catch (InvalidOperationException error)
+        {
+            Check.That(error.Message.Contains("会话不存在"), "a closed session cannot be reopened by a late connect");
+        }
+    }
 }

@@ -3,13 +3,14 @@
 ## Documentation
 
 - Write README files for users. Use the root README for downloads and common tasks, platform READMEs for installation and platform-specific help, and directory READMEs for a short description and relevant links.
-- Keep implementation notes, build and test commands, and release infrastructure in this file. Document serial command templates and receive rules in [the serial protocol guide](docs/serial-protocol.md).
+- Keep implementation notes, build and test commands, and release infrastructure in this file.
 - Omit legacy upgrade instructions from future release notes. Focus each announcement on the changes in that release.
 
 ## Code layout
 
 - `crates/chipdock-core` handles firmware analysis, probe-rs operations, serial transport, and storage. ESP target and BIN address logic lives in `src/services/esp.rs`. Serial templates and receive parsing live in `src/serial/program.rs`.
-- `crates/chipdock-service` provides the shared application API, structured errors, progress events, and hardware exclusion. Probe operations run serially on a dedicated worker. Serial calls use another worker, with asynchronous receive on a Tokio runtime.
+- `crates/chipdock-service` provides the shared application API, structured errors, progress events, and hardware exclusion. Probe operations run serially on a dedicated worker. Serial sessions use a shared Tokio runtime and independent connection and send locks. Each record reader owns a cursor.
+- `crates/chipdock-control` defines local IPC and the shared client. `crates/chipdock-tools` builds the Rust CLI and stdio MCP server. Only the desktop process owns serial connections.
 - The SwiftUI/AppKit client lives in `macos/ChipDock/Sources/ChipDock`. It uses the UniFFI exports in `crates/chipdock-ffi` through `ChipDockCore` and `ChipDockCoreFFI`.
 - The WinUI client lives in `windows/ChipDock`. Its `RustCore.cs` calls Interoptopus exports from `crates/chipdock-csharp` through `ChipDock.Core` and `chipdock_csharp.dll`. Preserve typed Wire requests and responses, structured errors, and Unix-millisecond timestamps at the boundary.
 - When changing Windows App Runtime, update the package reference in `windows/ChipDock/ChipDock.csproj` and the version, installer URLs, and SHA-256 values in `WindowsRuntime.cs`. `ChipDock.exe --prepare-runtime` prepares the runtime without opening the UI.
@@ -18,6 +19,8 @@
 ## Build and bindings
 
 Run commands from the repository root. Xcode and MSBuild generate their own bindings on a clean checkout. Track the generator and export sources in Git and exclude generated declarations.
+
+Declare dependency versions, sources, and default feature settings in the root `[workspace.dependencies]`. Every member inherits its dependencies with `workspace = true`, adding member-specific features or optionality where needed.
 
 - **macOS.** Use Xcode 26+ and stable Rust from rustup. The app targets macOS 14+. Open `macos/ChipDock.xcodeproj` with the `ChipDock` scheme or run `CONFIGURATION=Debug bash macos/build.sh`. Set `ARCH=universal` for arm64 and x86_64. Set `BUILD_ONLY=0` to copy the bundle to `dist/macos/<arch>/`. `bash macos/run.sh` is the launch entry point.
 - Xcode's `RustBindings` target calls `macos/build-bindings.sh` to build the Rust static library and generate Swift, the C header, and the module map under `$(BUILD_DIR)/ChipDockBindings/$(CONFIGURATION)`. To generate bindings from an existing library, run `bash bindings/generate-swift.sh target/debug/libchipdock_ffi.dylib`.
@@ -32,8 +35,8 @@ Default to native host builds, logic tests, and static checks. Get explicit user
 
   ```sh
   cargo fmt --all -- --check
-  cargo clippy --locked -p chipdock-core -p chipdock-service -p chipdock-release-notes --all-targets -- -D warnings
-  cargo test --locked -p chipdock-core -p chipdock-service -p chipdock-release-notes --all-targets
+  cargo clippy --locked -p chipdock-core -p chipdock-service -p chipdock-control -p chipdock-tools -p chipdock-release-notes --all-targets -- -D warnings
+  cargo test --locked -p chipdock-core -p chipdock-service -p chipdock-control -p chipdock-tools -p chipdock-release-notes --all-targets
   ```
 
 - macOS bridge, serial, and update checks. Resolve Xcode's Sparkle dependency before the mirror policy check.
@@ -43,6 +46,15 @@ Default to native host builds, logic tests, and static checks. Get explicit user
   bash macos/ChipDock/Tests/run-serial-tests.sh
   bash macos/ChipDock/Tests/run-update-tests.sh
   bash macos/ChipDock/Tests/run-update-mirror-tests.sh
+  ```
+
+- Run the app-hosted XCTest suite with the shared scheme. Its Test action uses build-local preferences and disables automatic serial polling, local IPC, and update startup through `CHIPDOCK_TEST_HOST=1`. Keep XCTest focused on logic and bridge behavior; use manual GUI acceptance for window layout.
+
+  ```sh
+  xcodebuild -project macos/ChipDock.xcodeproj -scheme ChipDock \
+    -configuration Debug -destination 'platform=macOS' \
+    -derivedDataPath .build/XCTest -clonedSourcePackagesDirPath .build/XCTest/SourcePackages \
+    SWIFT_TREAT_WARNINGS_AS_ERRORS=YES test
   ```
 
 - Portable Windows logic checks. On Windows, pass the built `chipdock_csharp.dll` path to the test project to exercise the Rust/C# bridge. The full Windows test run includes read-only SetupAPI enumeration and WinUSB preflight checks. Driver installation scenarios use simulations.

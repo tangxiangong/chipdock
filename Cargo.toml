@@ -1,12 +1,14 @@
 [workspace]
 members = [
-    "crates/chipdock-core",
-    "crates/chipdock-service",
-    "crates/chipdock-ffi",
-    "bindings/generator",
-    "crates/chipdock-csharp",
     "bindings/csharp-generator",
+    "bindings/generator",
+    "crates/chipdock-control",
+    "crates/chipdock-core",
+    "crates/chipdock-csharp",
+    "crates/chipdock-ffi",
     "crates/chipdock-release-notes",
+    "crates/chipdock-service",
+    "crates/chipdock-tools",
     "xtask",
 ]
 default-members = ["crates/chipdock-core"]
@@ -19,19 +21,53 @@ license = "MIT OR Apache-2.0"
 authors = ["tangxiangong <tangxiangong@gmail.com>"]
 
 [workspace.dependencies]
-uniffi = "=0.32.2"
+anyhow = "1"
+base64 = "0.23"
+chipdock-control = { path = "crates/chipdock-control" }
+chipdock-core = { path = "crates/chipdock-core" }
+chipdock-csharp = { path = "crates/chipdock-csharp" }
+chipdock-ffi = { path = "crates/chipdock-ffi" }
+chipdock-service = { path = "crates/chipdock-service" }
+chrono = { version = "0.4", features = ["serde"] }
+clap = { version = "4.6", features = ["derive"] }
+ed25519-dalek = "3"
+encoding_rs = "0.8"
+esp-idf-part = "0.6"
+hmac = "0.13"
+ihex = "3.0"
 interoptopus = "0.16"
 interoptopus_csharp = "0.16"
-chipdock-core = { path = "crates/chipdock-core" }
-chipdock-service = { path = "crates/chipdock-service" }
-chipdock-ffi = { path = "crates/chipdock-ffi" }
-chipdock-csharp = { path = "crates/chipdock-csharp" }
-anyhow = "1"
-chrono = { version = "0.4", features = ["serde"] }
-thiserror = "2"
-tokio = { version = "1", features = ["rt-multi-thread", "sync", "io-util", "macros", "time"] }
-uuid = { version = "1", features = ["v4", "serde"] }
+libc = "0.2"
+nusb = "0.2"
+object = "0.40"
+p256 = { version = "0.13", features = ["ecdsa", "pkcs8"] }
+probe-rs = "0.32"
+probe-rs-espressif = "0.32"
+quick-xml = "0.42"
+regex = "1"
+reqwest = { version = "0.13", default-features = false, features = ["blocking", "rustls"] }
+rmcp = { version = "3.9", default-features = false, features = ["server", "macros", "transport-io"] }
+semver = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Match probe-rs USB interface metadata when serialport features are unified.
+serialport = { version = "4.10", default-features = false, features = ["usbportinfo-interface"] }
+sha1 = "0.11"
+sha2 = "0.11"
 tempfile = "3"
+thiserror = "2"
+tokio = { version = "1", features = [
+    "rt-multi-thread",
+    "sync",
+    "io-util",
+    "macros",
+    "time",
+    "fs",
+] }
+tokio-serial = "5.5"
+uniffi = "=0.32.2"
+uuid = { version = "1", features = ["v4", "serde"] }
+windows-sys = "0.61"
 
 [profile.release]
 lto = "thin"

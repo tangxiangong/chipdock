@@ -27,7 +27,7 @@ internal sealed class MainWindow : Window
     private readonly TextBlock titleText = Ui.Text("固件烧录", 12);
     private readonly ActivityView activity;
     private readonly FlashView flash;
-    private readonly SerialView serial;
+    private readonly SerialWorkbench serial;
     private readonly SelectorBar toolsSelector = new();
     private readonly SelectorBarItem flashTool = new() { Text = "固件烧录", Icon = new SymbolIcon(Symbol.Download) };
     private readonly SelectorBarItem serialTool = new() { Text = "串口连接", Icon = new SymbolIcon(Symbol.Link) };
@@ -40,7 +40,7 @@ internal sealed class MainWindow : Window
     private readonly SelectorBarItem logsTab = new() { Text = "日志", Icon = new FontIcon { Glyph = Glyphs.Logs } };
     private readonly SelectorBarItem memoryTab = new() { Text = "内存", Icon = new FontIcon { Glyph = Glyphs.Memory } };
     private readonly Border dropOverlay = new() { Style = Ui.Style("DropOverlayStyle"), Visibility = Visibility.Collapsed, IsHitTestVisible = false };
-    private readonly ToggleButton inspectorButton = new() { Padding = new Thickness(10, 6, 10, 6) };
+    private readonly ToggleButton inspectorButton = new() { Style = Ui.Style("SubtleCommandToggleStyle"), Padding = new Thickness(10, 6, 10, 6) };
     private readonly InfoBadge errorBadge = new() { HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, -6, -8, 0) };
     private readonly DropDownButton profilesButton = new() { Content = Ui.Row(8, Ui.Glyph(Glyphs.Bookmark, 14), Ui.Text("配置")) };
 
@@ -72,7 +72,7 @@ internal sealed class MainWindow : Window
             if (args.DidPositionChange || args.DidSizeChange || args.DidPresenterChange) FitWindow();
         };
 
-        serial = new SerialView();
+        serial = new SerialWorkbench(this);
         serial.ActivityChanged += Update;
         serial.ExportRequested += data => Export(data, "ChipDock-Serial", "JSON 文件", ".json", "导出串口记录");
         Updater = new Updater(Store, root, () => serial.UpdateBlocked);
@@ -182,6 +182,7 @@ internal sealed class MainWindow : Window
         {
             UpdateTitleBarTheme();
             root.XamlRoot.Changed += (_, _) => FitWindow();
+            _ = serial.Start();
             await Store.Start();
             _ = Updater.Start();
         };
@@ -496,6 +497,30 @@ internal sealed class MainWindow : Window
             if (await picker.PickSingleFileAsync() is { } file) OpenFirmware(file.Path);
         }
         catch (Exception error) { Store.Report(error, "打开固件"); }
+    }
+
+    internal async Task<string?> PickSerialExport(string name, string format)
+    {
+        var picker = new FileSavePicker { SuggestedFileName = name, SuggestedStartLocation = PickerLocationId.DocumentsLibrary };
+        picker.FileTypeChoices.Add(format.ToUpperInvariant(), ["." + format]);
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(this));
+        return (await picker.PickSaveFileAsync())?.Path;
+    }
+
+    internal async Task<string?> PickSerialFolder()
+    {
+        var picker = new FolderPicker { SuggestedStartLocation = PickerLocationId.DocumentsLibrary };
+        picker.FileTypeFilter.Add("*");
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(this));
+        return (await picker.PickSingleFolderAsync())?.Path;
+    }
+
+    internal async Task<string?> PickSerialFile()
+    {
+        var picker = new FileOpenPicker { SuggestedStartLocation = PickerLocationId.DocumentsLibrary };
+        picker.FileTypeFilter.Add("*");
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(this));
+        return (await picker.PickSingleFileAsync())?.Path;
     }
 
     internal async Task Export(byte[] data, string name, string kind, string extension, string operation)

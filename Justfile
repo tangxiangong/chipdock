@@ -25,7 +25,7 @@ fmt:
     cargo fmt --all -- --check
 
 test-rust-shared:
-    cargo test --locked -p chipdock-core -p chipdock-service -p chipdock-release-notes --all-targets
+    cargo test --locked -p chipdock-core -p chipdock-service -p chipdock-control -p chipdock-tools -p chipdock-release-notes --all-targets
 
 [macos]
 test-macos:

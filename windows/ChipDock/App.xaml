@@ -70,6 +70,24 @@
     <Setter Property="Background" Value="{ThemeResource SubtleFillColorSecondaryBrush}" />
     <Setter Property="BorderThickness" Value="2" />
    </Style>
+   <!-- Fluent subtle buttons: no fill or stroke at rest, standard hover and press feedback. -->
+   <Style x:Key="SubtleCommandButtonStyle" TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}">
+    <Setter Property="Background" Value="{ThemeResource SubtleFillColorTransparentBrush}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="Padding" Value="8,5" />
+    <Setter Property="FontSize" Value="12" />
+   </Style>
+   <Style x:Key="SubtleCommandToggleStyle" TargetType="ToggleButton" BasedOn="{StaticResource DefaultToggleButtonStyle}">
+    <Setter Property="Background" Value="{ThemeResource SubtleFillColorTransparentBrush}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="Padding" Value="8,5" />
+    <Setter Property="FontSize" Value="12" />
+   </Style>
+   <Style x:Key="StatusBarStyle" TargetType="Border">
+    <Setter Property="BorderBrush" Value="{ThemeResource DividerStrokeColorDefaultBrush}" />
+    <Setter Property="BorderThickness" Value="0,1,0,0" />
+    <Setter Property="Background" Value="{ThemeResource LayerOnMicaBaseAltFillColorDefaultBrush}" />
+   </Style>
    <Style x:Key="ConnectedDotStyle" TargetType="Ellipse">
     <Setter Property="Fill" Value="{ThemeResource SystemFillColorSuccessBrush}" />
    </Style>

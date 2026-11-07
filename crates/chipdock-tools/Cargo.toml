@@ -1,0 +1,20 @@
+[package]
+name = "chipdock-tools"
+description = "Rust CLI and MCP server for ChipDock's serial workbench"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+anyhow.workspace = true
+chipdock-control.workspace = true
+clap.workspace = true
+rmcp.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["process"] }

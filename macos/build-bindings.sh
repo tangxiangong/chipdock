@@ -34,12 +34,14 @@ escape_dependency() {
         printf ' '
         escape_dependency "$INPUT"
     done < <(find "$PROJECT_ROOT/crates/chipdock-core" "$PROJECT_ROOT/crates/chipdock-service" \
-        "$PROJECT_ROOT/crates/chipdock-ffi" "$PROJECT_ROOT/bindings/generator" \
+        "$PROJECT_ROOT/crates/chipdock-ffi" "$PROJECT_ROOT/crates/chipdock-control" \
+        "$PROJECT_ROOT/crates/chipdock-tools" "$PROJECT_ROOT/bindings/generator" \
         -type f \( -name '*.rs' -o -name '*.toml' \) -print0)
     printf '\n'
 } > "$GENERATED_DIR/rust-bindings.d"
 
 LIBRARIES=()
+TOOL_DIRS=()
 FIRST_LIBRARY=""
 for ARCHITECTURE in ${ARCHS:-$(uname -m)}; do
     case "$ARCHITECTURE" in
@@ -51,7 +53,8 @@ for ARCHITECTURE in ${ARCHS:-$(uname -m)}; do
         rustup target add "$RUST_TARGET"
     fi
     cargo build --manifest-path "$PROJECT_ROOT/Cargo.toml" --locked \
-        --package chipdock-ffi --lib --target "$RUST_TARGET" --profile "$CARGO_PROFILE"
+        --package chipdock-ffi --package chipdock-tools --target "$RUST_TARGET" --profile "$CARGO_PROFILE"
+    TOOL_DIRS+=("$RUST_BUILD_DIR/$RUST_TARGET/$RUST_PROFILE")
     LIBRARIES+=("$RUST_BUILD_DIR/$RUST_TARGET/$RUST_PROFILE/libchipdock_ffi.a")
     if [[ -z "$FIRST_LIBRARY" ]]; then
         FIRST_LIBRARY="$RUST_BUILD_DIR/$RUST_TARGET/$RUST_PROFILE/libchipdock_ffi.dylib"
@@ -72,3 +75,16 @@ else
     copy_changed "$GENERATED_DIR/libchipdock_ffi.universal.a" "$GENERATED_DIR/libchipdock_ffi.a"
     rm "$GENERATED_DIR/libchipdock_ffi.universal.a"
 fi
+
+for TOOL in chipdock-cli chipdock-mcp; do
+    if [[ ${#TOOL_DIRS[@]} -eq 1 ]]; then
+        copy_changed "${TOOL_DIRS[0]}/$TOOL" "$GENERATED_DIR/$TOOL"
+    else
+        TOOL_SLICES=()
+        for TOOL_DIR in "${TOOL_DIRS[@]}"; do TOOL_SLICES+=("$TOOL_DIR/$TOOL"); done
+        xcrun lipo -create "${TOOL_SLICES[@]}" -output "$GENERATED_DIR/$TOOL.universal"
+        copy_changed "$GENERATED_DIR/$TOOL.universal" "$GENERATED_DIR/$TOOL"
+        rm "$GENERATED_DIR/$TOOL.universal"
+    fi
+    chmod 755 "$GENERATED_DIR/$TOOL"
+done

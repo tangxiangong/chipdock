@@ -102,10 +102,10 @@ struct WorkbenchCommands: Commands {
             if serialIsActive {
                 Button("刷新串口", systemImage: "arrow.clockwise") { Task { await serial.refreshPorts() } }
                     .keyboardShortcut("r").disabled(serial.refreshing)
-                Button(serial.status.connected ? "断开串口" : "连接串口", systemImage: "cable.connector") { Task { await serial.toggleConnection() } }
-                    .keyboardShortcut("k").disabled(serial.busy || (!serial.status.connected && !serial.canConnect))
-                Button("断开串口") { Task { if serial.status.connected { await serial.toggleConnection() } } }
-                    .keyboardShortcut("k", modifiers: [.command, .shift]).disabled(!serial.status.connected || serial.busy)
+                Button((serial.status.connected || serial.status.reconnecting) ? "断开串口" : "连接串口", systemImage: "cable.connector") { Task { await serial.toggleConnection() } }
+                    .keyboardShortcut("k").disabled(serial.busy || (!serial.status.connected && !serial.status.reconnecting && !serial.canConnect))
+                Button("断开串口") { Task { if serial.status.connected || serial.status.reconnecting { await serial.toggleConnection() } } }
+                    .keyboardShortcut("k", modifiers: [.command, .shift]).disabled((!serial.status.connected && !serial.status.reconnecting) || serial.busy)
             } else {
                 Button("目标配置…", systemImage: "point.3.connected.trianglepath.dotted") { activateFlash(); store.showTargetSetup = true }
                     .disabled(store.isBusy || mainIsModal)
