@@ -6,8 +6,6 @@ struct ToolkitView: View {
     @Bindable var toolkit: ToolkitState
     @Bindable var store: WorkbenchStore
     var serial: SerialStore
-    @Environment(\.openWindow) private var openWindow
-    @Environment(\.dismissWindow) private var dismissWindow
 
     var body: some View {
         Group {
@@ -30,22 +28,38 @@ struct ToolkitView: View {
         }
         .frame(minWidth: 900, minHeight: 600)
         .exportPresentation($store.pendingExport)
-        .alert(store.failure?.message ?? "操作失败", isPresented: Binding(
-            get: { store.failure != nil }, set: { if !$0 { store.failure = nil } }
-        )) {
-            Button("确定", role: .cancel) { store.failure = nil }
-            Button("查看日志") {
-                store.failure = nil
-                WorkbenchPanelActions(store: store, openWindow: openWindow, dismissWindow: dismissWindow).show(.logs)
-            }
-        } message: {
-            Text([store.failure?.detail, store.failure?.recovery].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: "\n\n"))
-        }
+        .modifier(WorkbenchFailureAlert(store: store))
         .confirmationDialog("擦除 \(store.targetName) 的全部 Flash？", isPresented: $store.confirmErase, titleVisibility: .visible) {
             Button("擦除全部 Flash", role: .destructive) { Task { await store.erase() } }
             Button("取消", role: .cancel) {}
         } message: {
             Text("芯片中的固件与数据将被永久删除，此操作无法撤销。")
+        }
+    }
+}
+
+struct WorkbenchFailureAlert: ViewModifier {
+    @Bindable var store: WorkbenchStore
+    var inTargetSetup = false
+    @Environment(\.openWindow) private var openWindow
+    @Environment(\.dismissWindow) private var dismissWindow
+
+    var isPresented: Binding<Bool> {
+        Binding(
+            get: { store.failure != nil && store.showTargetSetup == inTargetSetup },
+            set: { if !$0 && store.showTargetSetup == inTargetSetup { store.failure = nil } }
+        )
+    }
+
+    func body(content: Content) -> some View {
+        content.alert(store.failure?.message ?? "操作失败", isPresented: isPresented, presenting: store.failure) { _ in
+            Button("确定", role: .cancel) { store.failure = nil }
+            Button("查看日志") {
+                store.failure = nil
+                WorkbenchPanelActions(store: store, openWindow: openWindow, dismissWindow: dismissWindow).show(.logs)
+            }
+        } message: { failure in
+            Text([failure.detail, failure.recovery].filter { !$0.isEmpty }.joined(separator: "\n\n"))
         }
     }
 }

@@ -124,7 +124,7 @@ internal sealed class TargetSetupDialog : ContentDialog
                 store.ConnectUnderReset = connectUnderReset.IsChecked == true;
                 store.BinBaseAddress = baseAddress.Text.Trim();
                 await store.Connect();
-                args.Cancel = store.Connection is null && store.TargetCandidates.Count == 0;
+                // Release the modal slot so a queued failure dialog can appear immediately.
             }
             finally { deferral.Complete(); }
         };

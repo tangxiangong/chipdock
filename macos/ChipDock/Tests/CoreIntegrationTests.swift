@@ -24,6 +24,69 @@ final class CoreIntegrationTests: XCTestCase {
         }
     }
 
+    @MainActor
+    func testConnectionFailureIsPresentedInTargetSetupWithoutLosingConfiguration() async throws {
+        let store = WorkbenchStore()
+        store.showTargetSetup = true
+        store.speed = "1000"
+        let mainAlert = WorkbenchFailureAlert(store: store)
+        let setupAlert = WorkbenchFailureAlert(store: store, inTargetSetup: true)
+        let response = ErrorResponse(code: .probeRsFailure, message: "操作失败",
+                                     detail: "Command failed with status SwdDpError.",
+                                     targetCandidates: [], targetInformation: nil, recovery: "检查连接参数后重试。")
+
+        let result: Bool? = await store.perform(.connect) { throw CoreError.Operation(response: response) }
+
+        XCTAssertNil(result)
+        XCTAssertFalse(store.isBusy)
+        XCTAssertTrue(store.showTargetSetup)
+        XCTAssertEqual(store.speed, "1000")
+        XCTAssertEqual(try XCTUnwrap(store.failure).detail, response.detail)
+        XCTAssertTrue(setupAlert.isPresented.wrappedValue)
+        XCTAssertFalse(mainAlert.isPresented.wrappedValue)
+
+        mainAlert.isPresented.wrappedValue = false
+        XCTAssertNotNil(store.failure, "The inactive main-window alert must not consume the sheet's error")
+        setupAlert.isPresented.wrappedValue = false
+        XCTAssertNil(store.failure)
+    }
+
+    @MainActor
+    func testFailedReconnectClearsPreviousConnectionBeforeReportingError() async {
+        let store = WorkbenchStore()
+        store.connection = ConnectionInfo(probe: "test-probe", chip: "STM32F103VE", protocol: .swd,
+                                          speedKhz: 1000, connectUnderReset: false, targetInformation: nil)
+
+        let result: Bool? = await store.perform(.connect) {
+            XCTAssertNil(store.connection, "A previous connection must not survive a new connection attempt")
+            throw NSError(domain: "ConnectionTest", code: 1)
+        }
+
+        XCTAssertNil(result)
+        XCTAssertNil(store.connection)
+        XCTAssertFalse(store.canDisconnect)
+        XCTAssertFalse(store.canErase)
+        XCTAssertNotNil(store.failure)
+    }
+
+    @MainActor
+    func testPendingFailureIsPresentedInMainWindowAfterTargetSetupCloses() {
+        let store = WorkbenchStore()
+        store.showTargetSetup = true
+        store.report(NSError(domain: "ConnectionTest", code: 1), operation: "连接目标")
+        let mainAlert = WorkbenchFailureAlert(store: store)
+        let setupAlert = WorkbenchFailureAlert(store: store, inTargetSetup: true)
+
+        store.showTargetSetup = false
+
+        XCTAssertTrue(mainAlert.isPresented.wrappedValue)
+        XCTAssertFalse(setupAlert.isPresented.wrappedValue)
+        setupAlert.isPresented.wrappedValue = false
+        XCTAssertNotNil(store.failure, "A closing sheet must not discard the main-window error")
+        mainAlert.isPresented.wrappedValue = false
+        XCTAssertNil(store.failure)
+    }
+
     func testBINAnalysisCrossesSwiftRustBoundaryWithoutHardware() throws {
         let directory = try temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }

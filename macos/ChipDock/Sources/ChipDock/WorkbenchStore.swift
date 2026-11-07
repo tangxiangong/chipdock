@@ -228,6 +228,7 @@ final class WorkbenchStore {
 
     func perform<T: Sendable>(_ operation: WorkbenchOperation, body: () async throws -> T) async -> T? {
         guard !isBusy else { return nil }
+        if operation == .connect { invalidateConnection() }
         self.operation = operation
         status = "\(operation.rawValue)…"
         failure = nil

@@ -548,7 +548,11 @@ internal sealed class MainWindow : Window
 
     private async void ShowFailure(UserFacingError error)
     {
-        if (targetDialog is not null) { targetDialog.ShowFailure(error); return; }
+        if (targetDialog is not null && Store.Operation != WorkbenchOperation.Connect)
+        {
+            targetDialog.ShowFailure(error);
+            return;
+        }
         var detail = Ui.Text(string.Join(Environment.NewLine + Environment.NewLine,
             new[] { error.Detail, error.Recovery }.Where(text => text.Length > 0)), wrap: true);
         detail.IsTextSelectionEnabled = true;

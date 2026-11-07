@@ -36,6 +36,7 @@ struct TargetSetupSheet: View {
             }
         }
         .interactiveDismissDisabled(store.isBusy)
+        .modifier(WorkbenchFailureAlert(store: store, inTargetSetup: true))
         .onChange(of: store.showChipPicker) { _, requested in
             if requested { store.showChipPicker = false; selectingChip = true }
         }
