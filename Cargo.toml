@@ -40,7 +40,7 @@ interoptopus_csharp = "0.16"
 libc = "0.2"
 nusb = "0.2"
 object = "0.40"
-p256 = { version = "0.13", features = ["ecdsa", "pkcs8"] }
+p256 = { version = "0.14", features = ["ecdsa", "pkcs8"] }
 probe-rs = "0.32"
 probe-rs-espressif = "0.32"
 quick-xml = "0.42"
