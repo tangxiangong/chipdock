@@ -1,20 +1,6 @@
-# Build and release automation
+# 构建与检查
 
-Native projects own compilation and binding generation. CI checks the same build
-graphs on macOS arm64/x86_64 and Windows x64/ARM64 from checkouts without generated
-bindings. Rust caches do not contain committed Swift or C# declarations.
+此目录包含用于验证和打包 ChipDock 的脚本，覆盖 macOS 和 Windows。
 
-- `.github/workflows/rust.yml` checks the shared core, application service and
-  release-note logic without hardware.
-- `.github/workflows/macos.yml` builds the Xcode project and checks Swift/UniFFI
-  integration, update verification and serial logic on macOS.
-- `.github/workflows/windows.yml` builds the WinUI solution and checks the
-  Interoptopus exports, C# bridge and update verification on Windows.
-- `release-macos.sh` packages, verifies and publishes the macOS release.
-- `release-windows.ps1` signs, verifies and publishes the Windows packages built by
-  `windows/scripts/publish.ps1`.
-- `verify-macos-update.swift` verifies the Sparkle archive and signed metadata.
-- `xtask` verifies immutable release assets and publishes the COS mirror.
-
-Publishing uses the existing release environment secrets and is triggered by a
-published stable release. Ordinary source pushes perform validation only.
+- [在 GitHub Actions 查看构建与检查结果](https://github.com/tangxiangong/chipdock/actions)
+- [下载最新安装包](https://github.com/tangxiangong/chipdock/releases/latest)
