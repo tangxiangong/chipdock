@@ -189,20 +189,19 @@ impl Writer {
 fn configure_windows(stream: &SerialStream, config: &SerialConfig) -> Result<()> {
     use super::types::Parity;
     use std::os::windows::io::AsRawHandle;
-    use windows_sys::Win32::Devices::Communication::*;
+    use windows::Win32::{Devices::Communication::*, Foundation::HANDLE};
 
     if config.stop_bits != 15 && !matches!(config.parity, Parity::Mark | Parity::Space) {
         return Ok(());
     }
-    let handle = stream.as_raw_handle();
+    let handle = HANDLE(stream.as_raw_handle());
     let mut settings = DCB {
         DCBlength: size_of::<DCB>() as u32,
         ..Default::default()
     };
     // The stream owns the live handle and the DCB buffer is initialized and sized above.
-    if unsafe { GetCommState(handle, &mut settings) } == 0 {
-        bail!("读取串口驱动参数失败：{}", std::io::Error::last_os_error());
-    }
+    unsafe { GetCommState(handle, &mut settings) }
+        .map_err(|error| anyhow::anyhow!("读取串口驱动参数失败：{error}"))?;
     if config.stop_bits == 15 {
         settings.StopBits = ONE5STOPBITS;
     }
@@ -217,11 +216,7 @@ fn configure_windows(stream: &SerialStream, config: &SerialConfig) -> Result<()>
         }
         _ => {}
     }
-    if unsafe { SetCommState(handle, &settings) } == 0 {
-        bail!(
-            "驱动不支持所选的校验位或停止位：{}",
-            std::io::Error::last_os_error()
-        );
-    }
+    unsafe { SetCommState(handle, &settings) }
+        .map_err(|error| anyhow::anyhow!("驱动不支持所选的校验位或停止位：{error}"))?;
     Ok(())
 }

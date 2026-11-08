@@ -94,3 +94,45 @@ Preview the selected text locally. For local packaging, pass the complete source
 cargo run --locked -p chipdock-release-notes -- macos ReleaseNotes.md .build/notes-macos.md
 cargo run --locked -p chipdock-release-notes -- windows ReleaseNotes.md .build/notes-windows.md
 ```
+
+
+## GPUI client
+
+- `linux/` is the cross-platform Rust / GPUI client, published as the Linux frontend. `src/ui/` splits state, events, common controls and individual pages. `backend.rs` dispatches probe, serial and update work on independent workers. `platform/windows/` uses the typed `windows` crate for SetupAPI and WinUSB; there is no .NET helper. All direct Windows API dependencies in this workspace use `windows`; transitive dependencies may still contain `windows-sys`.
+- `linux/update/` is a UI-independent update crate. It owns the signed GPUI feed, downloads, portable installation, signing and publishing commands. Keep its public key synchronized with `SPARKLE_PUBLIC_ED_KEY`; private keys remain in the release environment.
+- Build from the root with `bash linux/build.sh` (release) or `PROFILE=debug bash linux/build.sh`. The same `cargo build --locked -p chipdock-gpui --bin chipdock-gpui` entry point builds natively on macOS and Windows. GPUI Kit 0.9 requires macOS 15+; the existing SwiftUI client keeps its own deployment target.
+- Ubuntu build packages: `pkg-config clang cmake libudev-dev libfontconfig-dev libwayland-dev libxkbcommon-x11-dev libx11-xcb-dev libssl-dev libzstd-dev libvulkan1`. Linux runtime acceptance requires a graphical session and working Vulkan driver.
+- Host verification: `cargo clippy --locked -p chipdock-gpui -p chipdock-gpui-update -p xtask --all-targets -- -D warnings`; `cargo test --locked -p chipdock-gpui --lib`; `cargo test --locked -p chipdock-gpui-update -p xtask`. These do not launch the GUI or use physical devices. Use manual GUI acceptance; do not add GUI automation tests.
+- `.github/workflows/linux.yml` builds Linux x86_64 and aarch64, signs `gpui-stable.signed.json`, publishes immutable binaries and advances the `chipdock-updates` feed under the shared concurrency group. `xtask --platform gpui` verifies signed metadata and binary hashes before mirroring. Mirror recovery accepts `gpui` in the existing COS workflow. Existing `all` verification retains its macOS/Windows scope for historical releases; select `gpui` explicitly for the GPUI feed.
+- Release tools: `cargo run --locked -p chipdock-gpui-update --bin sign-gpui-update -- v<VERSION> <DIRECTORY> <NOTES_FILE>` and `cargo run --locked -p chipdock-gpui-update --bin publish-gpui-update -- v<VERSION> <DIRECTORY>`. Signing requires both Linux binaries and `SPARKLE_PRIVATE_ED_KEY`; publishing requires the standard GitHub environment. Neither command runs during local builds.
+- The GPUI feed uses identity `com.xiaoyu.chipdock.gpui` and names `chipdock-gpui-<os>-<arch>[.exe]`. It never installs SwiftUI/WinUI artifacts. Portable updates are supported; do not apply single-binary updates inside signed `.app` bundles or package-manager-owned installations.
+
+### GPUI parity audit (2026-11-07)
+
+This is a source/API and native-host logic audit, not a GUI, hardware, installer or three-platform acceptance certificate. Compare both native clients when changing these paths. GPUI keeps the main sidebar and also exposes independent memory, log and per-session plot windows.
+
+| Capability checked in native clients | GPUI route and audit result |
+| --- | --- |
+| `FlashView.swift`, `MainWindow.cs`: open, drag/drop, launch handoff, close and reveal firmware | `ui/actions.rs`, `ui/flash.rs`, `ui/events.rs`, `instance.rs`; automatic analysis rejects stale results after changing the path or BIN base. |
+| `WorkbenchOperations.swift`, `RecentFirmwareHistory.cs`: recent files and BIN addresses | `model.rs`, `ui/profiles.rs`; preserve each file's base, reopen, reveal, remove, prune missing files and clear history. |
+| `TargetSetupSheet.swift`, `TargetSetupDialog.cs`: scan, chip search, autodetection, SWD/JTAG, speed and reset | Shared typed service requests; reject zero speed before device access and retain structured errors, recovery advice and target candidates. |
+| `FlashView.swift`, `FlashView.cs`: preflight, erase policies, verify and reset | Shared flash engine; explicit erase confirmation names the captured target and locks conflicting form changes. |
+| `MemoryView.swift`, `MemoryView.cs`: regions, address/length, HEX/ASCII, export and erase | `ui/memory.rs`, `ui/auxiliary.rs`; region selection, BIN save dialog and confirmed erase route. |
+| `SaveProfileSheet.swift`, `SaveProfileDialog.cs`: save/apply/delete profiles | `ui/profiles.rs`; blank names fail; a repeated name creates a numbered copy instead of silently overwriting a saved configuration. |
+| `LogsView.swift`, `LogsView.cs`: search, error filter, follow, copy/export, clear and unseen errors | `ui/logs.rs`, `ui/state.rs`; tagged diagnostics, a tracked scroll container and an independent log window. |
+| `SerialStore.swift`, `SerialWorkbench.cs`: sessions and local CLI/MCP | `backend.rs`, `ui/state.rs`; initialize the real default session 1, isolate operation queues by session, restore protocol/framing/replies and prohibit closing the last session. |
+| Native serial connection views: baud, data/stop bits, parity, flow, reconnect and RTS/DTR | Shared serial engine and `ui/polling.rs`; poll every session independently, synchronize port/config changes made by recovery or IPC, and refresh the port list. |
+| Native serial composers: encoding, line endings, checksum range, repeat and history | `serial.rs`, `ui/terminal.rs`; separate normal/command histories and session-owned drafts. |
+| Native terminals: pause, clear, timestamps, mixed HEX/text, autoscroll, search and selection | `presentation.rs`, `ui/terminal_state.rs`; one filter policy for records/terminal, stable clear cursors, selectable monospace editor and byte-range highlights. |
+| Native color rules: literal/regex, priority, named colors and independent TX color | `presentation::Colors`; literal patterns are escaped and case-insensitive, invalid rules are visible, and invalid color saves are rejected. |
+| Native record tools: inspect, copy, locate, JSON/TXT/CSV/BIN exports | `ui/terminal.rs`; direction-aware exports and original-sequence navigation. Workbench exports carry the clear cursor so cleared data cannot reappear. |
+| Native protocol tools: validation, encoding preview, frame layout, RX decode and feedback | `ui/serial.rs`; use the shared protocol compiler and retain command history and per-session results. |
+| `SerialWorkflowView.swift`, `SerialView.Workflow.cs`: packet library, file jobs, macros, replies and cancellation | Shared workbench requests; JSON import/export, packet validation, chunk/interval/cycle controls and macro CSV reports. |
+| Native Modbus tools: encode-only versus send/wait | `serial.rs` must send **`timeout_ms`**, not `timeoutMs`. Regression tests check a disconnected send fails, a virtual transport emits the exact RTU request and another session remains responsive during the timeout. |
+| Native capture tools: log/raw RX, rotation, paths and stop | Shared capture engine with a directory picker and explicit stop actions; UI shutdown/update checks include live captures. |
+| `SerialWorkflowView.swift`, `SerialPlotWindow.cs`: numerical/KV/JSON/binary/template plots | `ui/plot.rs`, `ui/auxiliary.rs`; preview, field filtering, pause/clear, CSV/JSON export, gap count and continued background sampling in inactive sessions. Plot queues never occupy the serial send queue; revisions discard obsolete results. |
+| Native settings and commands: theme, defaults and context-sensitive shortcuts | `ui/settings.rs`, `ui/mod.rs`, `main.rs`; separate new-session verify/reset defaults; refresh/connect/disconnect, save profile, execute, read memory, clear, find and settings shortcuts. |
+| Native updates: source fallback, identity/signature/hash, cancellation and safe installation | `linux/update`; valid primary no-update ends the check; corrupted mirror bytes retry the same signed asset on GitHub; cancellation prevents retry; save failure blocks installation; portable Windows release names are accepted. |
+| Native release verification and COS reservation | Existing `xtask --platform gpui` verification and downgrade protection remain shared; no release or mirror mutation is performed by these host checks. |
+
+The audit adds only logic tests, including virtual serial transport, CSV escaping, rule semantics, configuration preservation, default-session routing and update fallback. `ui/highlights.rs` uses the exact `ropey` version already used by GPUI Kit's public highlighter interface. Do not add GUI automation tests. Actual window layout, keyboard dispatch, dialogs, native Windows driver execution and physical flashing remain manual/platform acceptance tasks. Launching the application performs device discovery; obtain the explicit permissions in Verification before GUI acceptance.

@@ -61,6 +61,7 @@ pub enum Platform {
     All,
     Macos,
     Windows,
+    Gpui,
 }
 
 impl std::str::FromStr for Platform {
@@ -70,7 +71,8 @@ impl std::str::FromStr for Platform {
             "all" => Ok(Self::All),
             "macos" => Ok(Self::Macos),
             "windows" => Ok(Self::Windows),
-            _ => Err("Expected all, macos or windows".into()),
+            "linux" | "gpui" => Ok(Self::Gpui),
+            _ => Err("Expected all, macos, windows or gpui".into()),
         }
     }
 }
@@ -241,6 +243,7 @@ fn appcast_identity(data: &[u8]) -> Result<(Identity, String)> {
 
 fn identity(name: &str, data: &[u8], keys: &UpdateKeys) -> Result<Identity> {
     match name {
+        "gpui-stable.signed.json" => gpui_identity(data, &keys.sparkle),
         "appcast.xml" => Ok(appcast_identity(data)?.0),
         "releases.win-x64.signed.json" => windows_identity(data, "x64", &keys.windows),
         "releases.win-arm64.signed.json" => windows_identity(data, "arm64", &keys.windows),
@@ -330,6 +333,29 @@ pub fn prepare(directory: &Path, tag: &str, platform: Platform, keys: &UpdateKey
             plan.identities.insert(name, identity);
         }
     }
+    if matches!(platform, Platform::Gpui) {
+        let name = "gpui-stable.signed.json";
+        let signed = safe_file(directory, name)?;
+        let bytes = fs::read(&signed)?;
+        let feed =
+            chipdock_gpui_update::verify(&bytes, &keys.sparkle).map_err(|e| e.to_string())?;
+        ensure(feed.version == value, "GPUI update version mismatch")?;
+        for asset in feed.assets.values() {
+            let path = safe_file(directory, &asset.name)?;
+            ensure(
+                fs::metadata(&path)?.len() == asset.size
+                    && hash(&path)? == asset.sha256.to_lowercase(),
+                "GPUI asset size or digest mismatch",
+            )?;
+            plan.assets
+                .insert(format!("releases/{tag}/{}", asset.name), path);
+        }
+        plan.assets
+            .insert(format!("releases/{tag}/{name}"), signed.clone());
+        plan.feeds.insert(name.into(), signed);
+        plan.identities
+            .insert(name.into(), gpui_identity(&bytes, &keys.sparkle)?);
+    }
     Ok(plan)
 }
 
@@ -377,6 +403,16 @@ pub fn download_release(tag: &str, platform: Platform, directory: &Path) -> Resu
             ]);
         }
     }
+    if matches!(platform, Platform::Gpui) {
+        names.push("gpui-stable.signed.json".into());
+        names.extend(
+            assets
+                .iter()
+                .filter_map(|a| a["name"].as_str())
+                .filter(|n| n.starts_with("chipdock-gpui-"))
+                .map(str::to_owned),
+        );
+    }
     for name in names {
         let info = assets
             .iter()
@@ -405,6 +441,18 @@ pub fn download_release(tag: &str, platform: Platform, directory: &Path) -> Resu
         println!("Verified GitHub asset: {name}");
     }
     Ok(())
+}
+
+fn gpui_identity(bytes: &[u8], key: &str) -> Result<Identity> {
+    let feed = chipdock_gpui_update::verify(bytes, key).map_err(|e| e.to_string())?;
+    Ok(Identity {
+        version: feed.version,
+        build: None,
+        signature: None,
+        file: None,
+        size: bytes.len() as u64,
+        sha256: Some(chipdock_gpui_update::digest(bytes)),
+    })
 }
 
 #[cfg(test)]

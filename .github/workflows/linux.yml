@@ -1,0 +1,116 @@
+name: Linux GPUI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: linux-gpui-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'release' }}
+
+jobs:
+  compatibility:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          key: gpui-native
+      - name: Check shared GPUI source on its native platform
+        run: cargo check --locked -p chipdock-gpui --all-targets
+
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: x86_64
+          - runner: ubuntu-24.04-arm
+            arch: aarch64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: swatinem/rust-cache@v2
+        with:
+          key: gpui-${{ matrix.arch }}
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config clang cmake libudev-dev libfontconfig-dev libwayland-dev libxkbcommon-x11-dev libx11-xcb-dev libssl-dev libzstd-dev libvulkan1
+      - name: Check and test without hardware or a graphical session
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --locked -p chipdock-gpui -p chipdock-gpui-update --all-targets -- -D warnings
+          cargo test --locked -p chipdock-gpui --lib
+          cargo test --locked -p chipdock-gpui-update -p xtask
+      - name: Build portable Linux client
+        run: |
+          cargo build --release --locked -p chipdock-gpui --bin chipdock-gpui
+          mkdir -p dist/gpui
+          cp target/release/chipdock-gpui "dist/gpui/chipdock-gpui-linux-${{ matrix.arch }}"
+      - uses: actions/upload-artifact@v6
+        with:
+          name: gpui-linux-${{ matrix.arch }}
+          path: dist/gpui/*
+          if-no-files-found: error
+
+  release:
+    if: github.event_name == 'release' && !github.event.release.prerelease && startsWith(github.event.release.tag_name, 'v')
+    needs: [build, compatibility]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: release
+    permissions:
+      contents: write
+    concurrency:
+      group: chipdock-updates
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: gpui-linux-*
+          merge-multiple: true
+          path: dist/gpui
+      - name: Select Linux release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json body --jq .body > dist/gpui/ReleaseNotes.md
+          cargo run --locked -p chipdock-release-notes -- linux dist/gpui/ReleaseNotes.md dist/gpui/notes-linux.md
+      - name: Sign and publish verified GPUI assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          SPARKLE_PRIVATE_ED_KEY: ${{ secrets.SPARKLE_PRIVATE_ED_KEY }}
+        run: |
+          cargo run --locked -p chipdock-gpui-update --bin sign-gpui-update -- "$RELEASE_TAG" dist/gpui dist/gpui/notes-linux.md
+          cargo run --locked -p chipdock-gpui-update --bin publish-gpui-update -- "$RELEASE_TAG" dist/gpui
+      - name: Verify GitHub assets and mirror to COS
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          COS_SECRET_ID: ${{ secrets.COS_SECRET_ID }}
+          COS_SECRET_KEY: ${{ secrets.COS_SECRET_KEY }}
+        run: cargo run --locked -p xtask -- publish-cos --tag "$RELEASE_TAG" --platform gpui

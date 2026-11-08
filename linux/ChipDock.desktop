@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=ChipDock
+Comment=Firmware programming and serial workbench
+Exec=chipdock-gpui %f
+Terminal=false
+Categories=Development;Electronics;
+StartupNotify=true

@@ -7,6 +7,7 @@ publish = false
 
 [dependencies]
 base64.workspace = true
+chipdock-gpui-update.workspace = true
 ed25519-dalek.workspace = true
 hmac.workspace = true
 p256.workspace = true

@@ -13,6 +13,8 @@ ChipDock 是面向嵌入式开发的桌面工具。用调试探针烧录固件�
 
 平台指南包含应用内更新入口和探针连接说明。
 
+[Linux／跨平台 GPUI 客户端](linux/README.md) 提供独立的使用和更新说明。GPUI 发布文件以 `chipdock-gpui-linux-` 开头；尚未包含这些文件的版本不提供 Linux 下载。
+
 ## 烧录固件
 
 1. 打开“固件烧录”，拖入或打开 ELF、AXF、Intel HEX 或 BIN 文件。使用自定义引导程序或分区表的 ESP-IDF 项目请选择构建生成的合并 BIN。

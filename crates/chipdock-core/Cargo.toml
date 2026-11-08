@@ -23,13 +23,12 @@ serde_json.workspace = true
 serialport.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true
-
 tokio.workspace = true
 tokio-serial.workspace = true
 uuid.workspace = true
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { workspace = true, features = ["Win32_Devices_Communication"] }
+windows = { workspace = true, features = ["Win32_Devices_Communication"] }
 
 [features]
 # Interoptopus type metadata for the Windows C# bindings.

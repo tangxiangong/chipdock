@@ -170,3 +170,55 @@ fn release_uses_the_same_embedded_keys_as_native_clients() {
             .is_ok()
     );
 }
+
+pub(crate) fn gpui_fixture(tag: &str) -> (tempfile::TempDir, UpdateKeys) {
+    let (directory, keys) = fixture(tag);
+    let signing = SigningKey::from_bytes(&[17; 32]);
+    let name = "chipdock-gpui-linux-x86_64";
+    let bytes = b"portable ELF fixture";
+    fs::write(directory.path().join(name), bytes).unwrap();
+    let feed = chipdock_gpui_update::Feed {
+        identity: "com.xiaoyu.chipdock.gpui".into(),
+        version: tag.trim_start_matches('v').into(),
+        notes: "Linux notes".into(),
+        assets: BTreeMap::from([(
+            "linux-x86_64".into(),
+            chipdock_gpui_update::Asset {
+                name: name.into(),
+                size: bytes.len() as u64,
+                sha256: chipdock_gpui_update::digest(bytes),
+            },
+        )]),
+    };
+    let payload = serde_json::to_vec(&feed).unwrap();
+    let signed = chipdock_gpui_update::SignedFeed {
+        payload: STANDARD.encode(&payload),
+        signature: STANDARD.encode(signing.sign(&payload).to_bytes()),
+    };
+    fs::write(
+        directory.path().join("gpui-stable.signed.json"),
+        serde_json::to_vec(&signed).unwrap(),
+    )
+    .unwrap();
+    (directory, keys)
+}
+#[test]
+fn gpui_release_verifies_signature_identity_and_binary_digest() {
+    let (directory, keys) = gpui_fixture("v0.2.5");
+    let plan = prepare(directory.path(), "v0.2.5", Platform::Gpui, &keys).unwrap();
+    assert!(plan.feeds.contains_key("gpui-stable.signed.json"));
+    fs::write(
+        directory.path().join("chipdock-gpui-linux-x86_64"),
+        b"tampered",
+    )
+    .unwrap();
+    assert!(prepare(directory.path(), "v0.2.5", Platform::Gpui, &keys).is_err());
+}
+
+#[test]
+fn gpui_and_sparkle_embed_the_same_release_public_key() {
+    assert_eq!(
+        UpdateKeys::from_project().unwrap().sparkle,
+        chipdock_gpui_update::PUBLIC_KEY
+    );
+}
