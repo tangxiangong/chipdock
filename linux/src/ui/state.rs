@@ -1,25 +1,45 @@
 use super::*;
 
+fn key_bindings(os: OperatingSystem) -> [KeyBinding; 16] {
+    // KeyBinding::new requires explicit modifiers; it cannot resolve `secondary-`.
+    macro_rules! binding {
+        ($key:literal, $action:expr) => {
+            KeyBinding::new(
+                if os == OperatingSystem::Mac {
+                    concat!("cmd-", $key)
+                } else {
+                    concat!("ctrl-", $key)
+                },
+                $action,
+                None,
+            )
+        };
+    }
+
+    [
+        binding!("f", Find),
+        binding!("r", Refresh),
+        binding!("k", ConnectTarget),
+        binding!("shift-k", DisconnectTarget),
+        binding!("shift-s", SaveProfile),
+        binding!("enter", ExecutePrimary),
+        binding!("shift-r", ReadMemory),
+        binding!("l", ClearTerminal),
+        binding!(",", ShowSettings),
+        binding!("o", OpenFirmware),
+        binding!("1", ShowFlash),
+        binding!("2", ShowSerial),
+        binding!("q", Quit),
+        binding!("j", ShowLogs),
+        binding!("alt-m", ShowMemory),
+        binding!("s", SaveSettings),
+    ]
+}
+
 impl Workbench {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        cx.bind_keys([
-            KeyBinding::new("secondary-f", Find, None),
-            KeyBinding::new("secondary-r", Refresh, None),
-            KeyBinding::new("secondary-k", ConnectTarget, None),
-            KeyBinding::new("secondary-shift-k", DisconnectTarget, None),
-            KeyBinding::new("secondary-shift-s", SaveProfile, None),
-            KeyBinding::new("secondary-enter", ExecutePrimary, None),
-            KeyBinding::new("secondary-shift-r", ReadMemory, None),
-            KeyBinding::new("secondary-l", ClearTerminal, None),
-            KeyBinding::new("secondary-,", ShowSettings, None),
-            KeyBinding::new("secondary-o", OpenFirmware, None),
-            KeyBinding::new("secondary-1", ShowFlash, None),
-            KeyBinding::new("secondary-2", ShowSerial, None),
-            KeyBinding::new("secondary-q", Quit, None),
-            KeyBinding::new("secondary-j", ShowLogs, None),
-            KeyBinding::new("secondary-alt-m", ShowMemory, None),
-            KeyBinding::new("secondary-s", SaveSettings, None),
-        ]);
+        let bindings = key_bindings(cx.platform_info().os);
+        cx.bind_keys(bindings);
         let loaded =
             model::preferences_path().and_then(|path| Ok((Preferences::load(&path)?, path)));
         let (mut preferences, path, mut message) = match loaded {
@@ -381,5 +401,34 @@ impl Workbench {
         self.active = Some(id);
 
         self.render_terminal(window, cx);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use core::prelude::v1::test;
+
+    #[test]
+    fn workbench_shortcuts_use_native_modifiers() {
+        for os in [
+            OperatingSystem::Mac,
+            OperatingSystem::Windows,
+            OperatingSystem::Linux,
+        ] {
+            for binding in key_bindings(os) {
+                let [keystroke] = binding.keystrokes() else {
+                    panic!("expected one keystroke for {binding:?}");
+                };
+                assert_eq!(
+                    (
+                        keystroke.modifiers().platform,
+                        keystroke.modifiers().control
+                    ),
+                    (os == OperatingSystem::Mac, os != OperatingSystem::Mac),
+                    "{os:?}: {binding:?}"
+                );
+            }
+        }
     }
 }

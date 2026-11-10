@@ -59,7 +59,7 @@ jobs:
         run: |
           cargo fmt --all -- --check
           cargo clippy --locked -p chipdock-gpui -p chipdock-gpui-update --all-targets -- -D warnings
-          cargo test --locked -p chipdock-gpui --lib
+          cargo test --locked -p chipdock-gpui --all-targets
           cargo test --locked -p chipdock-gpui-update -p xtask
       - name: Build portable Linux client
         run: |
