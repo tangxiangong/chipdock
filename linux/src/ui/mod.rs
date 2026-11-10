@@ -1,5 +1,6 @@
 mod actions;
 mod auxiliary;
+mod chip_picker;
 mod chrome;
 mod colors;
 mod components;
@@ -10,7 +11,10 @@ mod firmware_document;
 mod flash;
 mod highlights;
 mod icons;
-use components::{control_bg, native_button};
+use components::{
+    bordered, borderless, control_bg, dashed_outline, glass, mac_checkbox, native_button,
+    prominent, relative_time, toolbar_icon,
+};
 mod logs;
 mod memory;
 mod plot;
@@ -44,7 +48,7 @@ use gpui_kit::component::{
     button::*,
     checkbox::Checkbox,
     input::{EditorState, Input, InputState, Textarea, TextareaState},
-    menu::{DropdownMenu, PopupMenuItem},
+    menu::{ContextMenuExt, DropdownMenu, PopupMenuItem},
     resizable::{h_resizable, resizable_panel, v_resizable},
     theme::{Theme, ThemeMode},
 };
@@ -101,6 +105,9 @@ pub struct Workbench {
     focus_handle: FocusHandle,
     expanded: std::collections::BTreeSet<&'static str>,
     connected_target: Option<String>,
+    target_info: Option<TargetInformation>,
+    has_scanned: bool,
+    dismissed_serial_error: Option<String>,
     worker: Worker,
     main_window: AnyWindowHandle,
     auxiliary: Vec<(auxiliary::Panel, AnyWindowHandle)>,
@@ -136,6 +143,11 @@ pub struct Workbench {
     terminal_scroll: UniformListScrollHandle,
     terminal_ranges: BTreeMap<u64, std::ops::Range<usize>>,
     selected_record: Option<u64>,
+    selected_recent: Option<String>,
+    /// The probe job behind the primary button title and status capsule.
+    operation: Option<&'static str>,
+    progress: Option<f32>,
+    completed: bool,
     record_sort: usize,
     record_desc: bool,
     poll_pending: std::collections::HashSet<u64>,

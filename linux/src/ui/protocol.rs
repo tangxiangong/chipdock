@@ -84,6 +84,7 @@ impl Workbench {
             })
             .w(px(860.))
             .p_0()
+            .centered()
             .close_button(false)
             .child(editor.clone())
         });
@@ -390,9 +391,7 @@ impl Render for ProtocolEditor {
                                 },
                             )))
                             .child(
-                                native_button("preview")
-                                    .small()
-                                    .label(if receive { "解析" } else { "试算" })
+                                bordered("preview", None, if receive { "解析" } else { "试算" })
                                     .disabled(self.value("sample", cx).is_empty())
                                     .on_click(cx.listener(|s, _, w, cx| s.preview(w, cx))),
                             ),
@@ -414,34 +413,34 @@ impl Render for ProtocolEditor {
                 .flex_col()
                 .items_center()
                 .justify_center()
-                .gap_3()
-                .child(
-                    icons::icon("add-rule")
-                        .size(px(32.))
-                        .text_color(cx.theme().muted_foreground),
-                )
+                .gap(px(8.))
+                .text_color(cx.theme().muted_foreground)
+                .child(icons::icon("add-rule").size(px(44.)).mb(px(4.)))
                 .child(
                     div()
-                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_size(px(15.))
+                        .font_weight(FontWeight::BOLD)
                         .child("添加第一条规则"),
                 )
                 .child(
                     div()
-                        .text_size(px(12.))
-                        .text_color(cx.theme().muted_foreground)
+                        .text_size(px(13.))
                         .child("为常用指令设置名称，或定义接收帧的解析方式。"),
                 )
                 .child(
-                    native_button("add-send-empty")
-                        .small()
-                        .label("新增发送命令")
-                        .on_click(cx.listener(|s, _, w, cx| s.add(false, w, cx))),
-                )
-                .child(
-                    native_button("add-receive-empty")
-                        .small()
-                        .label("新增接收规则")
-                        .on_click(cx.listener(|s, _, w, cx| s.add(true, w, cx))),
+                    div()
+                        .mt(px(8.))
+                        .flex()
+                        .gap(px(8.))
+                        .child(
+                            bordered("add-send-empty", None, "新增发送命令")
+                                .primary()
+                                .on_click(cx.listener(|s, _, w, cx| s.add(false, w, cx))),
+                        )
+                        .child(
+                            bordered("add-receive-empty", None, "新增接收规则")
+                                .on_click(cx.listener(|s, _, w, cx| s.add(true, w, cx))),
+                        ),
                 );
         }
         div()
@@ -452,12 +451,11 @@ impl Render for ProtocolEditor {
             .text_size(px(13.))
             .child(
                 div()
-                    .h(px(78.))
                     .flex_shrink_0()
-                    .px_5()
+                    .p(px(20.))
                     .flex()
                     .items_center()
-                    .gap_4()
+                    .gap(px(12.))
                     .border_b_1()
                     .border_color(cx.theme().border)
                     .child(
@@ -468,8 +466,12 @@ impl Render for ProtocolEditor {
                     .child(
                         div()
                             .flex_1()
+                            .flex()
+                            .flex_col()
+                            .gap(px(4.))
                             .child(
                                 div()
+                                    .text_size(px(15.))
                                     .font_weight(FontWeight::SEMIBOLD)
                                     .child("命令与接收规则"),
                             )
@@ -480,7 +482,12 @@ impl Render for ProtocolEditor {
                                     .child("定义发送指令，解析设备反馈"),
                             ),
                     )
-                    .child(format!("{} 条规则", self.rules.len())),
+                    .child(
+                        div()
+                            .text_size(px(10.))
+                            .text_color(cx.theme().muted_foreground)
+                            .child(format!("{} 条规则", self.rules.len())),
+                    ),
             )
             .child(
                 div()
@@ -552,10 +559,12 @@ impl Render for ProtocolEditor {
                                     .gap_2()
                                     .bg(cx.theme().background)
                                     .child(
-                                        native_button("add-rule")
-                                            .small()
-                                            .icon(icons::icon("plus"))
-                                            .label("新增")
+                                        bordered("add-rule", Some("plus"), "新增")
+                                            .h(px(22.))
+                                            .px(px(8.))
+                                            .child(
+                                                icons::icon("chevron-bold").size(px(8.)).ml(px(6.)),
+                                            )
                                             .dropdown_menu({
                                                 let owner = cx.entity().downgrade();
                                                 move |mut m, _, _| {
@@ -622,17 +631,11 @@ impl Render for ProtocolEditor {
                     .border_t_1()
                     .border_color(cx.theme().border)
                     .child(
-                        native_button("import-rules")
-                            .small()
-                            .icon(icons::icon("import"))
-                            .label("导入")
+                        bordered("import-rules", Some("import"), "导入")
                             .on_click(cx.listener(|s, _, _, cx| s.import(cx))),
                     )
                     .child(
-                        native_button("export-rules")
-                            .small()
-                            .icon(icons::icon("export"))
-                            .label("导出")
+                        bordered("export-rules", Some("export"), "导出")
                             .disabled(self.rules.is_empty())
                             .on_click(cx.listener(|s, _, _, cx| {
                                 match s
@@ -653,15 +656,12 @@ impl Render for ProtocolEditor {
                     )
                     .child(div().flex_1())
                     .child(
-                        native_button("cancel-rules")
-                            .small()
-                            .label("取消")
+                        bordered("cancel-rules", None, "取消")
                             .on_click(|_, w, cx| w.close_dialog(cx)),
                     )
                     .child(
-                        native_button("save-rules")
-                            .small()
-                            .label("保存规则")
+                        bordered("save-rules", None, "保存规则")
+                            .primary()
                             .on_click(cx.listener(|s, _, w, cx| s.save(w, cx))),
                     ),
             )

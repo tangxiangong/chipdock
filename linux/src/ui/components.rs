@@ -53,27 +53,29 @@ impl Workbench {
                     .flex()
                     .gap_2()
                     .child(
-                        native_button(SharedString::from(format!("import-{key}")))
-                            .small()
-                            .label("导入 JSON…")
-                            .disabled(self.is_busy())
-                            .on_click(cx.listener(move |s, _, _, cx| s.import_editor(key, cx))),
+                        bordered(
+                            SharedString::from(format!("import-{key}")),
+                            None,
+                            "导入 JSON…",
+                        )
+                        .disabled(self.is_busy())
+                        .on_click(cx.listener(move |s, _, _, cx| s.import_editor(key, cx))),
                     )
                     .child(
-                        native_button(SharedString::from(format!("export-{key}")))
-                            .small()
-                            .label("导出 JSON…")
-                            .disabled(self.is_busy())
-                            .on_click(cx.listener(move |s, _, _, cx| {
-                                let bytes = s.editors[key].read(cx).value().as_bytes().to_vec();
-                                s.export_bytes(&format!("ChipDock-{key}.json"), bytes, cx);
-                            })),
+                        bordered(
+                            SharedString::from(format!("export-{key}")),
+                            None,
+                            "导出 JSON…",
+                        )
+                        .disabled(self.is_busy())
+                        .on_click(cx.listener(move |s, _, _, cx| {
+                            let bytes = s.editors[key].read(cx).value().as_bytes().to_vec();
+                            s.export_bytes(&format!("ChipDock-{key}.json"), bytes, cx);
+                        })),
                     )
                     .child(
-                        native_button(SharedString::from(format!("save-{key}")))
-                            .small()
-                            .label("保存")
-                            .on_click(cx.listener(move |s, _, w, cx| {
+                        bordered(SharedString::from(format!("save-{key}")), None, "保存").on_click(
+                            cx.listener(move |s, _, w, cx| {
                                 if key == "colors" {
                                     let p = s.snapshot(cx);
                                     if let Err(e) = chipdock_gpui::presentation::Colors::new(
@@ -85,7 +87,8 @@ impl Workbench {
                                     }
                                 }
                                 s.save(w, cx);
-                            })),
+                            }),
+                        ),
                     ),
             )
             .into_any_element()
@@ -158,6 +161,16 @@ impl Workbench {
         options: Vec<(String, String)>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        self.popup_sized(key, options, false, cx)
+    }
+    /// `small` matches AppKit's small control size (20 pt, 12 pt text).
+    pub(super) fn popup_sized(
+        &self,
+        key: &'static str,
+        options: Vec<(String, String)>,
+        small: bool,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let current = self.fields[key].read(cx).value().to_string();
         let selected = options
             .iter()
@@ -188,10 +201,16 @@ impl Workbench {
                     .flex()
                     .items_center()
                     .justify_between()
-                    .child(selected)
-                    .child(icons::icon("select")),
+                    .gap(px(6.))
+                    .text_size(px(if small { 12. } else { 13. }))
+                    .when(!small, |d| d.font_weight(FontWeight::MEDIUM))
+                    .child(div().min_w_0().truncate().child(selected))
+                    .child(icons::icon("select").size(px(12.)).flex_shrink_0()),
             )
             .justify_between()
+            .rounded(px(if small { 5. } else { 7. }))
+            .px(px(if small { 8. } else { 10. }))
+            .when(small, |b| b.h(px(20.)))
             .bg(control_bg(cx))
             .border_0()
             .w_full()
@@ -216,10 +235,126 @@ impl Workbench {
             })
             .into_any_element()
     }
+    /// A sheet-style `.segmented` picker: an accent-filled selection with
+    /// hairline separators between unselected neighbours.
+    pub(super) fn segmented(
+        &self,
+        items: &[(&'static str, &'static str)],
+        selected: &str,
+        width: Option<f32>,
+        cx: &mut Context<Self>,
+        on_select: fn(&mut Self, &'static str, &mut Window, &mut Context<Self>),
+    ) -> Div {
+        let index = items.iter().position(|(key, _)| *key == selected);
+        let rule = cx.theme().foreground.opacity(0.15);
+        div()
+            .flex()
+            .items_center()
+            .p(px(1.))
+            .rounded(px(7.))
+            .bg(control_bg(cx))
+            .children(items.iter().enumerate().flat_map(|(i, (key, label))| {
+                let key = *key;
+                let on = Some(i) == index;
+                let separator = i > 0 && !on && Some(i - 1) != index;
+                [
+                    separator.then(|| div().w(px(1.)).h(px(14.)).bg(rule).into_any_element()),
+                    Some(
+                        Button::new(SharedString::from(format!("segment-{key}")))
+                            .ghost()
+                            .map(|b| match width {
+                                Some(w) => b.w(px(w)),
+                                None => b.px(px(16.)),
+                            })
+                            .h(px(22.))
+                            .rounded(px(6.))
+                            .toggled(on)
+                            .when(on, |b| {
+                                b.bg(cx.theme().primary).text_color(gpui_kit::white())
+                            })
+                            .child(div().text_size(px(13.)).child(*label))
+                            .on_click(cx.listener(move |s, _, w, cx| on_select(s, key, w, cx)))
+                            .into_any_element(),
+                    ),
+                ]
+                .into_iter()
+                .flatten()
+            }))
+    }
+    /// A grouped-form picker: trailing value with a round chevron badge.
+    pub(super) fn form_popup(
+        &self,
+        key: &'static str,
+        options: Vec<(String, String)>,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let current = self.fields[key].read(cx).value().to_string();
+        let label = options
+            .iter()
+            .find(|(v, _)| *v == current)
+            .map(|(_, l)| l.clone())
+            .unwrap_or_else(|| current.clone());
+        let owner = cx.entity().downgrade();
+        let locked = self.installing
+            || (key == "ending"
+                && self.fields["format"].read(cx).value().as_ref() == "hex"
+                && !self.preferences.flag("hex_ending"));
+        Button::new(SharedString::from(format!("form-{key}")))
+            .ghost()
+            .h(px(24.))
+            .px(px(4.))
+            .disabled(locked)
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(8.))
+                    .text_size(px(13.))
+                    .child(label)
+                    .child(
+                        div()
+                            .size(px(20.))
+                            .rounded_full()
+                            .bg(control_bg(cx))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .child(icons::icon("select").size(px(12.)).flex_shrink_0()),
+                    ),
+            )
+            .dropdown_menu(move |mut m, _, _| {
+                for (value, label) in &options {
+                    let value = value.clone();
+                    let owner = owner.clone();
+                    m = m.item(
+                        PopupMenuItem::new(label.clone())
+                            .checked(value == current)
+                            .on_click(move |_, w, cx| {
+                                let _ = owner.update(cx, |s, cx| {
+                                    s.set(key, value.clone(), w, cx);
+                                    s.render_terminal(w, cx);
+                                    cx.notify();
+                                });
+                            }),
+                    );
+                }
+                m
+            })
+            .into_any_element()
+    }
     pub(super) fn target_connected(&self, cx: &App) -> bool {
         self.connected_target
             .as_ref()
             .is_some_and(|key| *key == self.snapshot(cx).target_key())
+    }
+    /// The identified device type, the connected chip, or the configured one.
+    pub(super) fn target_name(&self, cx: &App) -> String {
+        let p = self.snapshot(cx);
+        match &self.target_info {
+            Some(info) if self.target_connected(cx) => info.device_type.clone(),
+            _ if p.get("chip").is_empty() => "自动识别".into(),
+            _ => p.get("chip").into(),
+        }
     }
     pub(super) fn serial_connected(&self) -> bool {
         self.sessions
@@ -234,19 +369,24 @@ impl Workbench {
         label: &'static str,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        Checkbox::new(key)
-            .label(label)
-            .checked(self.preferences.flag(key))
-            .disabled(
-                self.installing
-                    || self.confirmation.is_some()
-                    || (key == "under_reset" && self.busy_lanes.contains(&Lane::Probe)),
-            )
-            .on_click(cx.listener(move |s, v, _, cx| {
-                s.preferences.flags.insert(key.into(), *v);
+        let checked = self.preferences.flag(key);
+        let disabled = self.installing
+            || self.confirmation.is_some()
+            || (key == "under_reset" && self.busy_lanes.contains(&Lane::Probe));
+        mac_checkbox(
+            SharedString::from(format!("flag-{key}")),
+            label,
+            checked,
+            disabled,
+            cx,
+        )
+        .when(!disabled, |d| {
+            d.on_click(cx.listener(move |s, _, _, cx| {
+                s.preferences.flags.insert(key.into(), !checked);
                 cx.notify();
             }))
-            .into_any_element()
+        })
+        .into_any_element()
     }
     pub(super) fn button(
         &self,
@@ -255,13 +395,7 @@ impl Workbench {
         cx: &mut Context<Self>,
         f: impl Fn(&mut Self, &mut Window, &mut Context<Self>) + 'static,
     ) -> Button {
-        native_button(id)
-            .small()
-            .text_size(px(13.))
-            .font_weight(FontWeight::NORMAL)
-            .secondary()
-            .border_0()
-            .label(label)
+        bordered(id, None, label)
             .disabled(
                 (self.is_busy()
                     && !matches!(
@@ -281,7 +415,7 @@ impl Workbench {
     }
 }
 
-fn option_label(value: &str) -> &str {
+pub(super) fn option_label(value: &str) -> &str {
     match value {
         "none" => "无",
         "automatic" => "按需擦除",
@@ -329,9 +463,9 @@ fn field_label(key: &str) -> &str {
 
 pub(super) fn control_bg(cx: &App) -> Hsla {
     rgb(if cx.theme().is_dark() {
-        0x303030
+        0x3a3a3a
     } else {
-        0xeeeeee
+        0xececec
     })
     .into()
 }
@@ -340,7 +474,14 @@ pub(super) fn native_accent(cx: &mut App) {
     let theme = Theme::global_mut(cx);
     theme.primary = rgb(if theme.is_dark() { 0x0a84ff } else { 0x007aff }).into();
     theme.primary_foreground = rgb(0xffffff).into();
-    theme.secondary = rgb(if theme.is_dark() { 0x303030 } else { 0xeeeeee }).into();
+    theme.secondary = rgb(if theme.is_dark() { 0x3a3a3a } else { 0xececec }).into();
+    theme.overlay = hsla(0., 0., 0., if theme.is_dark() { 0.35 } else { 0.18 });
+    theme.muted_foreground = hsla(
+        0.,
+        0.,
+        if theme.is_dark() { 1. } else { 0. },
+        if theme.is_dark() { 0.55 } else { 0.5 },
+    );
     theme.secondary_foreground = theme.foreground;
     theme.button_primary = theme.primary;
     theme.button_primary_hover = theme.primary;
@@ -361,4 +502,200 @@ pub(super) fn native_button(id: impl Into<ElementId>) -> Button {
         .border_0()
         .text_size(px(13.))
         .font_weight(FontWeight::NORMAL)
+}
+
+/// AppKit's regular bordered push button: 24 pt high, 13 pt label.
+pub(super) fn bordered(
+    id: impl Into<ElementId>,
+    icon: Option<&'static str>,
+    label: impl Into<SharedString>,
+) -> Button {
+    let label = label.into();
+    native_button(id)
+        .with_size(gpui_kit::component::Size::Medium)
+        .h(px(24.))
+        .px(px(12.))
+        .rounded(px(7.))
+        .accessibility_label(label.clone())
+        .when_some(icon, |b, icon| b.icon(icons::icon(icon)))
+        .child(div().text_size(px(13.)).child(label))
+}
+
+/// A large `.borderedProminent` button: a 28 pt accent capsule.
+pub(super) fn prominent(
+    id: impl Into<ElementId>,
+    icon: Option<&'static str>,
+    label: impl Into<SharedString>,
+) -> Button {
+    let label = label.into();
+    Button::new(id)
+        .primary()
+        .border_0()
+        .with_size(gpui_kit::component::Size::Medium)
+        .h(px(28.))
+        .px(px(14.))
+        .rounded(px(14.))
+        .accessibility_label(label.clone())
+        .when_some(icon, |b, icon| b.icon(icons::icon(icon)))
+        .child(
+            div()
+                .text_size(px(13.))
+                .font_weight(FontWeight::MEDIUM)
+                .child(label),
+        )
+}
+
+/// A `.borderless` text button, tinted like AppKit's secondary label.
+pub(super) fn borderless(
+    id: impl Into<ElementId>,
+    label: impl Into<SharedString>,
+    cx: &App,
+) -> Button {
+    let label = label.into();
+    Button::new(id)
+        .ghost()
+        .with_size(gpui_kit::component::Size::Small)
+        .px_0()
+        .h(px(18.))
+        .text_color(cx.theme().muted_foreground)
+        .accessibility_label(label.clone())
+        .child(div().text_size(px(13.)).child(label))
+}
+
+/// The Liquid Glass capsule behind toolbar items.
+pub(super) fn glass(cx: &App) -> Div {
+    let dark = cx.theme().is_dark();
+    div()
+        .flex()
+        .items_center()
+        .flex_shrink_0()
+        .h(px(36.))
+        .rounded_full()
+        .bg(rgb(if dark { 0x2b2b2b } else { 0xfcfcfc }))
+        .border(px(0.5))
+        .border_color(hsla(0., 0., if dark { 1. } else { 0. }, 0.13))
+        .shadow(vec![BoxShadow {
+            color: hsla(0., 0., 0., if dark { 0.35 } else { 0.05 }),
+            offset: point(px(0.), px(1.)),
+            blur_radius: px(4.),
+            spread_radius: px(0.),
+            inset: false,
+        }])
+}
+
+/// A 38 × 36 pt icon button inside a toolbar glass capsule.
+pub(super) fn toolbar_icon(id: impl Into<ElementId>, icon: &'static str, cx: &App) -> Button {
+    Button::new(id)
+        .ghost()
+        .w(px(38.))
+        .h(px(34.))
+        .rounded_full()
+        .text_color(cx.theme().foreground.opacity(0.85))
+        .child(icons::icon(icon).size(px(18.)).flex_shrink_0())
+}
+
+/// AppKit's 16 pt checkbox with its label.
+pub(super) fn mac_checkbox(
+    id: impl Into<ElementId>,
+    label: impl Into<SharedString>,
+    checked: bool,
+    disabled: bool,
+    cx: &App,
+) -> Stateful<Div> {
+    div()
+        .id(id)
+        .flex()
+        .items_center()
+        .gap(px(6.))
+        .text_size(px(13.))
+        .when(disabled, |d| d.opacity(0.45))
+        .child(
+            div()
+                .size(px(16.))
+                .flex_shrink_0()
+                .rounded(px(4.))
+                .flex()
+                .items_center()
+                .justify_center()
+                .bg(if checked {
+                    cx.theme().primary
+                } else {
+                    rgb(if cx.theme().is_dark() {
+                        0x3c3c3c
+                    } else {
+                        0xe6e6e6
+                    })
+                    .into()
+                })
+                .when(checked, |b| {
+                    b.child(
+                        icons::icon("check-bold")
+                            .size(px(11.))
+                            .text_color(gpui_kit::white()),
+                    )
+                }),
+        )
+        .child(label.into())
+}
+
+/// SwiftUI's `strokeBorder(style: StrokeStyle(lineWidth:dash:))` over a rounded
+/// rectangle. GPUI's own dashed borders derive the dash from the line width.
+pub(super) fn dashed_outline(color: Hsla, radius: f32, width: f32, dash: [f32; 2]) -> Canvas<()> {
+    canvas(
+        |_, _, _| (),
+        move |bounds, _, window, _| {
+            let inset = width / 2.;
+            let (l, t) = (bounds.left() + px(inset), bounds.top() + px(inset));
+            let (r, b) = (bounds.right() - px(inset), bounds.bottom() - px(inset));
+            let k = px(radius - inset);
+            let mut path = PathBuilder::stroke(px(width)).dash_array(&[px(dash[0]), px(dash[1])]);
+            path.move_to(point(l + k, t));
+            path.line_to(point(r - k, t));
+            path.curve_to(point(r, t + k), point(r, t));
+            path.line_to(point(r, b - k));
+            path.curve_to(point(r - k, b), point(r, b));
+            path.line_to(point(l + k, b));
+            path.curve_to(point(l, b - k), point(l, b));
+            path.line_to(point(l, t + k));
+            path.curve_to(point(l + k, t), point(l, t));
+            if let Ok(path) = path.build() {
+                window.paint_path(path, color);
+            }
+        },
+    )
+    .absolute()
+    .inset_0()
+}
+
+/// Foundation's named relative date style in Chinese ("2小时前").
+pub(super) fn relative_time(seconds: u64) -> String {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs());
+    match now.saturating_sub(seconds) {
+        0..60 => "现在".into(),
+        s @ 60..3600 => format!("{}分钟前", s / 60),
+        s @ 3600..86400 => format!("{}小时前", s / 3600),
+        86400..172800 => "昨天".into(),
+        s @ 172800..604800 => format!("{}天前", s / 86400),
+        604800..1209600 => "上周".into(),
+        s @ 1209600..2592000 => format!("{}周前", s / 604800),
+        s @ 2592000..31536000 => format!("{}个月前", s / 2592000),
+        s => format!("{}年前", s / 31536000),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn relative_time_matches_named_presentation() {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        assert_eq!(super::relative_time(now), "现在");
+        assert_eq!(super::relative_time(now - 2 * 3600), "2小时前");
+        assert_eq!(super::relative_time(now - 90_000), "昨天");
+        assert_eq!(super::relative_time(now - 3 * 86400), "3天前");
+    }
 }

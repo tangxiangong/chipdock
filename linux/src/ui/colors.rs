@@ -64,6 +64,7 @@ impl Workbench {
             })
             .w(px(620.))
             .p_0()
+            .centered()
             .close_button(false)
             .child(editor.clone())
         });
@@ -188,16 +189,14 @@ impl Render for ColorEditor {
                             .child(Input::new(&row.pattern).small().aria_label("匹配关键字")),
                     )
                     .child(
-                        Checkbox::new(("color-regex", id))
-                            .small()
-                            .label("正则")
-                            .checked(row.regex)
-                            .on_click(cx.listener(move |s, v, _, cx| {
+                        mac_checkbox(("color-regex", id), "正则", row.regex, false, cx).on_click(
+                            cx.listener(move |s, _, _, cx| {
                                 if let Some(row) = s.rows.iter_mut().find(|r| r.id == id) {
-                                    row.regex = *v;
+                                    row.regex = !row.regex;
                                 }
                                 cx.notify();
-                            })),
+                            }),
+                        ),
                     )
                     .child(
                         div().size(px(12.)).rounded_full().bg(rgb(PALETTE
@@ -273,9 +272,7 @@ impl Render for ColorEditor {
                     .items_center()
                     .gap_2()
                     .child(
-                        native_button("color-presets")
-                            .small()
-                            .label("预设")
+                        bordered("color-presets", None, "预设")
                             .child(icons::icon("down"))
                             .dropdown_menu({
                                 let owner = cx.entity().downgrade();
@@ -315,10 +312,7 @@ impl Render for ColorEditor {
                             }),
                     )
                     .child(
-                        native_button("color-add")
-                            .small()
-                            .icon(icons::icon("plus"))
-                            .label("添加规则")
+                        bordered("color-add", Some("plus"), "添加规则")
                             .disabled(self.rows.len() >= 32)
                             .on_click(cx.listener(|s, _, w, cx| s.add("", false, "orange", w, cx))),
                     )
@@ -340,16 +334,12 @@ impl Render for ColorEditor {
                     .justify_end()
                     .gap_2()
                     .child(
-                        native_button("colors-cancel")
-                            .small()
-                            .label("取消")
+                        bordered("colors-cancel", None, "取消")
                             .on_click(|_, w, cx| w.close_dialog(cx)),
                     )
                     .child(
-                        native_button("colors-save")
-                            .small()
+                        bordered("colors-save", None, "保存")
                             .primary()
-                            .label("保存")
                             .on_click(cx.listener(|s, _, w, cx| s.save(w, cx))),
                     ),
             )

@@ -83,6 +83,7 @@ impl Workbench {
                     .child(
                         div().flex_1().child(
                             Input::new(&self.fields["address"])
+                                .font_family(cx.theme().mono_font_family.clone())
                                 .small()
                                 .aria_label("起始地址"),
                         ),

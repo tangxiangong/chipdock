@@ -16,6 +16,8 @@ pub struct Preferences {
     pub history: Vec<String>,
     pub command_history: Vec<String>,
     pub recent_bases: BTreeMap<String, String>,
+    /// Unix seconds of each recent file's last use.
+    pub recent_used: BTreeMap<String, u64>,
     pub theme: String,
     pub ipc: u8,
 }
@@ -55,6 +57,7 @@ impl Default for Preferences {
             history: vec![],
             command_history: vec![],
             recent_bases: BTreeMap::new(),
+            recent_used: BTreeMap::new(),
             theme: "system".into(),
             ipc: 0,
         }

@@ -7,18 +7,23 @@ impl Workbench {
             .flex()
             .flex_col()
             .child(
-                gpui_kit::component::TitleBar::new().h(px(32.)).child(
-                    div()
-                        .w_full()
-                        .mr(px(80.))
-                        .text_center()
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .child(if self.settings_tab == "general" {
-                            "通用"
-                        } else {
-                            "关于"
-                        }),
-                ),
+                gpui_kit::component::TitleBar::new()
+                    .h(px(32.))
+                    .bg(cx.theme().background)
+                    .border_0()
+                    .child(
+                        div()
+                            .w_full()
+                            .mr(px(80.))
+                            .text_center()
+                            .font_weight(FontWeight::BOLD)
+                            .text_color(cx.theme().foreground.opacity(0.7))
+                            .child(if self.settings_tab == "general" {
+                                "通用"
+                            } else {
+                                "关于"
+                            }),
+                    ),
             )
             .child(
                 div()
@@ -34,13 +39,24 @@ impl Workbench {
                         [("general", "通用", "gear"), ("about", "关于", "info")]
                             .into_iter()
                             .map(|(tab, label, icon)| {
-                                native_button(tab)
+                                let selected = self.settings_tab == tab;
+                                Button::new(tab)
                                     .tooltip(label)
                                     .ghost()
                                     .w(px(56.))
                                     .h(px(48.))
-                                    .rounded_lg()
-                                    .selected(self.settings_tab == tab)
+                                    .rounded(px(8.))
+                                    .toggled(selected)
+                                    .when(selected, |b| {
+                                        b.bg(rgb(if cx.theme().is_dark() {
+                                            0x3a3a3a
+                                        } else {
+                                            0xececec
+                                        }))
+                                        .border_1()
+                                        .border_color(cx.theme().foreground.opacity(0.1))
+                                    })
+                                    .when(!selected, |b| b.text_color(cx.theme().muted_foreground))
                                     .child(
                                         div()
                                             .flex()
@@ -60,17 +76,133 @@ impl Workbench {
         if self.settings_tab == "general" {
             let owner = cx.entity().downgrade();
             let theme = self.preferences.theme.clone();
-            page=page.child(div().p_5().flex().flex_col().gap_5()
-                .child(div().flex().flex_col().gap_2().child(div().px_2().font_weight(FontWeight::SEMIBOLD).child("外观"))
-                    .child(div().h(px(38.)).px_3().rounded_lg().bg(group_bg(cx)).flex().items_center().justify_between().child("主题")
-                        .child(native_button("theme-menu").small().ghost().label(match theme.as_str(){"light"=>"浅色","dark"=>"深色",_=>"跟随系统"}).child(icons::icon("select")).dropdown_menu(move |mut m,_,_|{
-                            for (mode,label) in [("system","跟随系统"),("light","浅色"),("dark","深色")]{let owner=owner.clone();m=m.item(PopupMenuItem::new(label).checked(theme==mode).on_click(move |_,w,cx|{let _=owner.update(cx,|s,cx|{s.preferences.theme=mode.into();match mode{"light"=>Theme::change(ThemeMode::Light,Some(w),cx),"dark"=>Theme::change(ThemeMode::Dark,Some(w),cx),_=>Theme::sync_system_appearance(Some(w),cx)}components::native_accent(cx);s.save(w,cx);});}));}m
-                        }))))
-                .child(div().flex().flex_col().gap_2().child(div().px_2().font_weight(FontWeight::SEMIBOLD).child("新会话的烧录默认值"))
-                    .child(div().px_3().rounded_lg().bg(group_bg(cx)).children([("default_verify","写入后校验"),("default_reset","完成后复位")].into_iter().map(|(key,label)|{
-                        div().h(px(38.)).flex().items_center().justify_between().child(label)
-                            .child(gpui_kit::component::switch::Switch::new(key).small().checked(self.preferences.flag(key)).on_click(cx.listener(move |s,value,w,cx|{s.preferences.flags.insert(key.into(),*value);s.save(w,cx);})))
-                    })))));
+            let separator = cx.theme().foreground.opacity(0.08);
+            let header = |title: &'static str| {
+                div()
+                    .px(px(10.))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child(title)
+            };
+            let theme_menu = Button::new("theme-menu")
+                .ghost()
+                .h(px(24.))
+                .px(px(4.))
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(8.))
+                        .child(match theme.as_str() {
+                            "light" => "浅色",
+                            "dark" => "深色",
+                            _ => "跟随系统",
+                        })
+                        .child(
+                            div()
+                                .size(px(20.))
+                                .rounded_full()
+                                .bg(control_bg(cx))
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .child(icons::icon("select").size(px(12.)).flex_shrink_0()),
+                        ),
+                )
+                .dropdown_menu(move |mut m, _, _| {
+                    for (mode, label) in
+                        [("system", "跟随系统"), ("light", "浅色"), ("dark", "深色")]
+                    {
+                        let owner = owner.clone();
+                        m = m.item(PopupMenuItem::new(label).checked(theme == mode).on_click(
+                            move |_, w, cx| {
+                                let _ = owner.update(cx, |s, cx| {
+                                    s.preferences.theme = mode.into();
+                                    match mode {
+                                        "light" => Theme::change(ThemeMode::Light, Some(w), cx),
+                                        "dark" => Theme::change(ThemeMode::Dark, Some(w), cx),
+                                        _ => Theme::sync_system_appearance(Some(w), cx),
+                                    }
+                                    components::native_accent(cx);
+                                    s.save(w, cx);
+                                });
+                            },
+                        ));
+                    }
+                    m
+                });
+            page =
+                page.child(
+                    div()
+                        .p_5()
+                        .flex()
+                        .flex_col()
+                        .gap(px(26.))
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .gap(px(10.))
+                                .child(header("外观"))
+                                .child(
+                                    div()
+                                        .h(px(37.))
+                                        .px(px(10.))
+                                        .rounded(px(10.))
+                                        .bg(group_bg(cx))
+                                        .flex()
+                                        .items_center()
+                                        .justify_between()
+                                        .child("主题")
+                                        .child(theme_menu),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .gap(px(10.))
+                                .child(header("新会话的烧录默认值"))
+                                .child(
+                                    div()
+                                        .px(px(10.))
+                                        .rounded(px(10.))
+                                        .bg(group_bg(cx))
+                                        .children(
+                                            [
+                                                ("default_verify", "写入后校验"),
+                                                ("default_reset", "完成后复位"),
+                                            ]
+                                            .into_iter()
+                                            .enumerate()
+                                            .map(
+                                                |(i, (key, label))| {
+                                                    div()
+                                                .h(px(37.))
+                                                .flex()
+                                                .items_center()
+                                                .justify_between()
+                                                .when(i == 0, |d| {
+                                                    d.border_b_1().border_color(separator)
+                                                })
+                                                .child(label)
+                                                .child(
+                                                    gpui_kit::component::switch::Switch::new(key)
+                                                        .checked(self.preferences.flag(key))
+                                                        .on_click(cx.listener(
+                                                            move |s, value, w, cx| {
+                                                                s.preferences
+                                                                    .flags
+                                                                    .insert(key.into(), *value);
+                                                                s.save(w, cx);
+                                                            },
+                                                        )),
+                                                )
+                                                },
+                                            ),
+                                        ),
+                                ),
+                        ),
+                );
         } else {
             let mut about = div()
                 .id("about-scroll")
@@ -81,11 +213,11 @@ impl Workbench {
                 .flex()
                 .flex_col()
                 .items_center()
-                .gap_3()
-                .child(img("app-icon.png").size(px(64.)))
+                .gap(px(14.))
+                .child(img("app-icon.png").size(px(76.)))
                 .child(
                     div()
-                        .text_size(px(18.))
+                        .text_size(px(17.))
                         .font_weight(FontWeight::SEMIBOLD)
                         .child("ChipDock"),
                 )
@@ -96,8 +228,15 @@ impl Workbench {
                 )
                 .child(
                     div()
+                        .text_size(px(10.))
+                        .text_color(cx.theme().muted_foreground)
+                        .child("GPUI · Rust"),
+                )
+                .child(
+                    div()
                         .flex()
-                        .gap_3()
+                        .gap(px(20.))
+                        .mt(px(4.))
                         .items_center()
                         .child(
                             native_button("source")
@@ -128,7 +267,7 @@ impl Workbench {
                 .child(self.flag("auto_install", "下载后空闲时安装并重启", cx))
                 .child(
                     div()
-                        .text_size(px(11.))
+                        .text_size(px(10.))
                         .text_color(cx.theme().muted_foreground)
                         .child("MIT OR Apache-2.0"),
                 );
@@ -153,17 +292,14 @@ impl Workbench {
                         move |s, _, cx| s.request_install(path.clone(), available.clone(), cx),
                     ));
                 }
-                about = about.child(
-                    native_button("cancel-download")
-                        .small()
-                        .label("取消下载")
-                        .on_click(cx.listener(|s, _, _, cx| {
-                            s.worker
-                                .cancel_update
-                                .store(true, std::sync::atomic::Ordering::Relaxed);
-                            s.report("正在取消下载…", cx);
-                        })),
-                );
+                about = about.child(bordered("cancel-download", None, "取消下载").on_click(
+                    cx.listener(|s, _, _, cx| {
+                        s.worker
+                            .cancel_update
+                            .store(true, std::sync::atomic::Ordering::Relaxed);
+                        s.report("正在取消下载…", cx);
+                    }),
+                ));
             }
             page = page.child(about);
         }

@@ -19,7 +19,9 @@ impl Workbench {
                 .as_ref()
                 .or(status.job_error.as_ref())
                 .or(status.capture_error.as_ref())
+                .filter(|e| self.dismissed_serial_error.as_ref() != Some(*e))
             {
+                let dismissed = error.clone();
                 content = div()
                     .flex_1()
                     .min_h_0()
@@ -27,10 +29,33 @@ impl Workbench {
                     .flex_col()
                     .child(
                         div()
-                            .px_3()
-                            .py_2()
-                            .text_color(cx.theme().danger)
-                            .child(error.clone()),
+                            .p(px(12.))
+                            .flex()
+                            .items_start()
+                            .gap(px(10.))
+                            .bg(rgba(0xff950014))
+                            .border_b_1()
+                            .border_color(cx.theme().foreground.opacity(0.1))
+                            .text_size(px(12.))
+                            .child(
+                                icons::icon("warning")
+                                    .size(px(14.))
+                                    .flex_shrink_0()
+                                    .text_color(rgb(0xff9500)),
+                            )
+                            .child(div().flex_1().child(error.clone()))
+                            .child(
+                                Button::new("dismiss-serial-error")
+                                    .ghost()
+                                    .size(px(18.))
+                                    .p_0()
+                                    .tooltip("关闭错误提示")
+                                    .child(icons::icon("close").size(px(12.)).flex_shrink_0())
+                                    .on_click(cx.listener(move |s, _, _, cx| {
+                                        s.dismissed_serial_error = Some(dismissed.clone());
+                                        cx.notify();
+                                    })),
+                            ),
                     )
                     .child(content);
             }
@@ -42,7 +67,7 @@ impl Workbench {
         if !self.expanded.contains("hide-connection") {
             workspace = workspace.child(
                 resizable_panel()
-                    .size(px(320.))
+                    .size(px(252.))
                     .size_range(px(220.)..px(340.))
                     .child(self.connection_panel(window, cx)),
             );
@@ -60,43 +85,99 @@ impl Workbench {
                 div()
                     .h(px(32.))
                     .flex_shrink_0()
-                    .px_3()
+                    .px(px(10.))
                     .flex()
                     .items_center()
-                    .gap_2()
+                    .gap(px(8.))
                     .border_b_1()
-                    .border_color(cx.theme().border)
-                    .child(div().flex_1().min_w_0().flex().gap_1().children(
+                    .border_color(cx.theme().foreground.opacity(0.1))
+                    .text_size(px(12.))
+                    .child(div().flex_1().min_w_0().flex().gap(px(4.)).children(
                         self.sessions.iter().map(|session| {
                             let id = session.id;
-                            native_button(("session", id as usize))
-                                .small()
-                                .ghost()
-                                .label(format!("会话 {id}"))
-                                .selected(Some(id) == self.active)
-                                .on_click(
-                                    cx.listener(move |s, _, w, cx| s.switch_session(id, w, cx)),
+                            let selected = Some(id) == self.active;
+                            let connected = session.status.as_ref().is_some_and(|s| s.connected);
+                            let title = session
+                                .status
+                                .as_ref()
+                                .and_then(|s| s.path.clone())
+                                .unwrap_or_else(|| format!("会话 {id}"));
+                            div()
+                                .flex()
+                                .items_center()
+                                .child(
+                                    Button::new(("session", id as usize))
+                                        .ghost()
+                                        .h(px(22.))
+                                        .px(px(8.))
+                                        .rounded(px(6.))
+                                        .toggled(selected)
+                                        .when(selected, |b| {
+                                            b.bg(rgb(if cx.theme().is_dark() {
+                                                0x484848
+                                            } else {
+                                                0xdfdfdf
+                                            }))
+                                        })
+                                        .tooltip(title.clone())
+                                        .child(
+                                            div()
+                                                .max_w(px(200.))
+                                                .flex()
+                                                .items_center()
+                                                .gap(px(5.))
+                                                .text_size(px(12.))
+                                                .child(div().size(px(6.)).rounded_full().bg(
+                                                    if connected {
+                                                        rgb(0x34c759).into()
+                                                    } else {
+                                                        cx.theme().muted_foreground.opacity(0.4)
+                                                    },
+                                                ))
+                                                .child(div().truncate().child(title)),
+                                        )
+                                        .on_click(cx.listener(move |s, _, w, cx| {
+                                            s.switch_session(id, w, cx)
+                                        })),
                                 )
+                                .when(selected && id != 1, |d| {
+                                    d.child(
+                                        Button::new(("close-session", id as usize))
+                                            .ghost()
+                                            .size(px(18.))
+                                            .p_0()
+                                            .mx(px(2.))
+                                            .text_color(cx.theme().muted_foreground)
+                                            .child(
+                                                icons::icon("close").size(px(11.)).flex_shrink_0(),
+                                            )
+                                            .tooltip("关闭会话")
+                                            .disabled(self.busy_lanes.contains(&Lane::Serial))
+                                            .on_click(cx.listener(move |s, _, _, cx| {
+                                                s.submit(Command::CloseSession(id), cx)
+                                            })),
+                                    )
+                                })
                         }),
                     ))
-                    .when(self.sessions.len() > 1, |v| {
-                        v.child(
-                            self.button("close-session", "关闭会话", cx, |s, _, cx| {
-                                if let Some(id) = s.active {
-                                    s.submit(Command::CloseSession(id), cx)
-                                }
-                            })
-                            .ghost()
-                            .icon(icons::icon("close")),
-                        )
-                    })
                     .child(
-                        native_button("local-control")
-                            .small()
+                        Button::new("local-control")
                             .ghost()
-                            .icon(icons::icon("terminal"))
-                            .label("本地控制")
-                            .child(icons::icon("down"))
+                            .h(px(22.))
+                            .px(px(4.))
+                            .tooltip("为当前登录用户的 Rust CLI 和 MCP 设置访问权限")
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(5.))
+                                    .text_size(px(12.))
+                                    .child(icons::icon("terminal").size(px(14.)).flex_shrink_0())
+                                    .child("本地控制")
+                                    .child(
+                                        icons::icon("chevron-bold").size(px(8.)).flex_shrink_0(),
+                                    ),
+                            )
                             .dropdown_menu({
                                 let owner = cx.entity().downgrade();
                                 let current = self.preferences.ipc;
@@ -119,11 +200,23 @@ impl Workbench {
                             }),
                     )
                     .child(
-                        native_button("new-session")
-                            .small()
+                        div()
+                            .w(px(1.))
+                            .h(px(16.))
+                            .bg(cx.theme().foreground.opacity(0.12)),
+                    )
+                    .child(
+                        Button::new("new-session")
                             .ghost()
-                            .icon(icons::icon("plus"))
+                            .size(px(22.))
+                            .p_0()
+                            .text_color(cx.theme().foreground.opacity(0.7))
+                            .child(icons::icon("plus").size(px(14.)).flex_shrink_0())
                             .tooltip("新建串口会话")
+                            .disabled(
+                                self.busy_lanes.contains(&Lane::Serial)
+                                    || self.sessions.len() >= 16,
+                            )
                             .on_click(cx.listener(|s, _, _, cx| {
                                 s.submit(Command::NewSession(s.snapshot(cx)), cx)
                             })),
@@ -163,6 +256,7 @@ impl Workbench {
             dialog
                 .when(!tools && !workflow && !records, |d| d.title(title))
                 .p_0()
+                .centered()
                 .close_button(!tools && !workflow && !records)
                 .w(px(if tools {
                     540.

@@ -2,9 +2,8 @@ use super::*;
 impl Workbench {
     pub(super) fn form_group(&self, cx: &App) -> Div {
         div()
-            .px_3()
-            .py_1()
-            .rounded_lg()
+            .px(px(10.))
+            .rounded(px(10.))
             .bg(rgb(if cx.theme().is_dark() {
                 0x252525
             } else {
@@ -49,9 +48,23 @@ impl Workbench {
             .border_color(cx.theme().border)
             .child(div().flex_1().child(label))
             .child(
-                div()
-                    .w(px(160.))
-                    .child(self.compact_choice(key, values, cx)),
+                self.form_popup(
+                    key,
+                    values
+                        .iter()
+                        .map(|v| {
+                            (
+                                v.to_string(),
+                                if key == "checksum" {
+                                    super::composer::checksum_title(v).to_string()
+                                } else {
+                                    super::components::option_label(v).to_string()
+                                },
+                            )
+                        })
+                        .collect(),
+                    cx,
+                ),
             )
     }
     pub(super) fn form_switch(
@@ -61,14 +74,13 @@ impl Workbench {
         cx: &mut Context<Self>,
     ) -> Div {
         div()
-            .min_h(px(38.))
+            .min_h(px(40.))
             .flex()
             .items_center()
             .justify_between()
             .child(label)
             .child(
                 gpui_kit::component::switch::Switch::new(key)
-                    .small()
                     .checked(self.preferences.flag(key))
                     .on_click(cx.listener(move |s, v, _, cx| {
                         s.preferences.flags.insert(key.into(), *v);
@@ -254,6 +266,7 @@ impl Workbench {
         body: AnyElement,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        let workflow = tabs.first().is_some_and(|(key, _)| *key == "packets");
         let mut panel = div()
             .flex()
             .flex_col()
@@ -262,22 +275,20 @@ impl Workbench {
             .child(
                 div()
                     .flex()
-                    .pb_3()
-                    .border_b_1()
-                    .border_color(cx.theme().border)
-                    .children(tabs.iter().map(|(key, title)| {
-                        let key = *key;
-                        native_button(key)
-                            .small()
-                            .w(px(103.))
-                            .label(*title)
-                            .when(self.serial_page == key, |b| b.primary())
-                            .on_click(cx.listener(move |s, _, w, cx| {
-                                s.serial_page = key;
-                                s.show_text(String::new(), w, cx);
-                                cx.notify();
-                            }))
-                    })),
+                    .when(!workflow, |d| {
+                        d.pb_3().border_b_1().border_color(cx.theme().border)
+                    })
+                    .child(self.segmented(
+                        tabs,
+                        self.serial_page,
+                        (!workflow).then_some(94.),
+                        cx,
+                        |s, key, w, cx| {
+                            s.serial_page = key;
+                            s.show_text(String::new(), w, cx);
+                            cx.notify();
+                        },
+                    )),
             )
             .child(
                 div()
@@ -293,14 +304,9 @@ impl Workbench {
             panel = panel.child(Textarea::new(&self.output).readonly(true).h(px(100.)));
         }
         panel
-            .child(
-                div().flex().justify_end().child(
-                    native_button("close-tools")
-                        .small()
-                        .label("完成")
-                        .on_click(|_, w, cx| w.close_dialog(cx)),
-                ),
-            )
+            .child(div().flex().justify_end().child(
+                bordered("close-tools", None, "完成").on_click(|_, w, cx| w.close_dialog(cx)),
+            ))
             .into_any_element()
     }
 }

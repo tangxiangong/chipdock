@@ -76,7 +76,7 @@ fn main() {
                 }),
                 window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
                     None,
-                    size(px(900.), px(850.)),
+                    size(px(1160.), px(780.)),
                     cx,
                 ))),
                 window_min_size: Some(size(px(900.), px(600.))),

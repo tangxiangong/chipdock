@@ -2,6 +2,44 @@ use gpui_kit::{AssetSource, SharedString};
 use std::borrow::Cow;
 
 const ICONS: &[(&str, &[u8])] = &[
+    ("cpu", include_bytes!("../assets/icons/cpu.svg")),
+    ("bolt", include_bytes!("../assets/icons/bolt.svg")),
+    ("cable", include_bytes!("../assets/icons/cable.svg")),
+    ("antenna", include_bytes!("../assets/icons/antenna.svg")),
+    (
+        "arrow-down-left",
+        include_bytes!("../assets/icons/arrow-down-left.svg"),
+    ),
+    (
+        "arrow-up-right",
+        include_bytes!("../assets/icons/arrow-up-right.svg"),
+    ),
+    ("stop", include_bytes!("../assets/icons/stop.svg")),
+    (
+        "paperplane",
+        include_bytes!("../assets/icons/paperplane.svg"),
+    ),
+    (
+        "xmark-circle",
+        include_bytes!("../assets/icons/xmark-circle.svg"),
+    ),
+    (
+        "ellipsis-circle",
+        include_bytes!("../assets/icons/ellipsis-circle.svg"),
+    ),
+    ("drop-doc", include_bytes!("../assets/icons/drop-doc.svg")),
+    (
+        "check-bold",
+        include_bytes!("../assets/icons/check-bold.svg"),
+    ),
+    (
+        "chevron-bold",
+        include_bytes!("../assets/icons/chevron-bold.svg"),
+    ),
+    (
+        "auto-detect",
+        include_bytes!("../assets/icons/auto-detect.svg"),
+    ),
     ("table", include_bytes!("../assets/icons/table.svg")),
     ("palette", include_bytes!("../assets/icons/palette.svg")),
     ("filter", include_bytes!("../assets/icons/filter.svg")),

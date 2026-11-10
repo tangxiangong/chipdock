@@ -160,43 +160,27 @@ impl Workbench {
         Ok(())
     }
     pub(super) fn open_save_profile(&mut self, w: &mut Window, cx: &mut Context<Self>) {
+        let p = self.snapshot(cx);
+        let name = if p.get("chip").is_empty() {
+            "烧录配置".to_owned()
+        } else {
+            p.get("chip").to_owned()
+        };
+        self.set("profile", name, w, cx);
         let owner = cx.entity().downgrade();
         if !w.has_active_dialog(cx) {
             self.focus_handle.focus(w, cx);
         }
         w.open_dialog(cx, move |d, _, cx| {
             let body = owner
-                .update(cx, |s, cx| {
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap_4()
-                        .child(s.field("profile"))
-                        .child(
-                            div()
-                                .flex()
-                                .justify_end()
-                                .gap_2()
-                                .child(
-                                    native_button("cancel-profile")
-                                        .label("取消")
-                                        .on_click(|_, w, cx| w.close_dialog(cx)),
-                                )
-                                .child(
-                                    s.button("save-profile", "存储", cx, |s, w, cx| {
-                                        match s.store_profile(w, cx) {
-                                            Ok(()) => w.close_dialog(cx),
-                                            Err(e) => s.report_error(e.to_string(), cx),
-                                        }
-                                    })
-                                    .primary(),
-                                ),
-                        )
-                })
+                .update(cx, |s, cx| s.save_profile_sheet(cx))
                 .unwrap_or_else(|_| div());
             let saving = owner.clone();
-            d.title("存储当前配置")
+            d.p_0()
+                .centered()
+                .close_button(false)
                 .w(px(400.))
+                .rounded(px(16.))
                 .child(body)
                 .on_ok(move |_, w, cx| {
                     saving
@@ -210,5 +194,91 @@ impl Workbench {
                         .unwrap_or(false)
                 })
         });
+        let field = self.fields["profile"].clone();
+        w.defer(cx, move |w, cx| {
+            field.update(cx, |f, cx| f.focus(w, cx));
+            w.dispatch_action(Box::new(gpui_kit::component::input::SelectAll), cx);
+        });
+    }
+    fn save_profile_sheet(&self, cx: &mut Context<Self>) -> Div {
+        let p = self.snapshot(cx);
+        let blank = p.get("profile").trim().is_empty();
+        let secondary = cx.theme().muted_foreground;
+        let fact = |label: &'static str, value: String| {
+            div()
+                .flex()
+                .gap(px(14.))
+                .child(div().w(px(26.)).text_color(secondary).child(label))
+                .child(value)
+        };
+        div()
+            .p(px(24.))
+            .flex()
+            .flex_col()
+            .gap(px(18.))
+            .text_size(px(13.))
+            .line_height(relative(1.2))
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(3.))
+                    .child(div().font_weight(FontWeight::BOLD).child("保存烧录配置"))
+                    .child(
+                        div()
+                            .text_size(px(12.))
+                            .text_color(secondary)
+                            .child("保存探针、目标芯片、连接参数与烧录选项。"),
+                    ),
+            )
+            .child(
+                Input::new(&self.fields["profile"])
+                    .small()
+                    .aria_label("配置名称"),
+            )
+            .child(
+                div()
+                    .p(px(12.))
+                    .rounded(px(8.))
+                    .bg(cx.theme().foreground.opacity(0.05))
+                    .flex()
+                    .flex_col()
+                    .gap(px(6.))
+                    .text_size(px(12.))
+                    .child(fact("目标", self.target_name(cx)))
+                    .child(fact(
+                        "接口",
+                        format!("{} · {} kHz", p.get("wire").to_uppercase(), p.get("speed")),
+                    ))
+                    .child(fact(
+                        "擦除",
+                        match p.get("erase") {
+                            "full" => "整片擦除",
+                            "skip" => "跳过擦除",
+                            _ => "按需擦除",
+                        }
+                        .into(),
+                    )),
+            )
+            .child(
+                div()
+                    .flex()
+                    .justify_end()
+                    .gap(px(8.))
+                    .child(
+                        bordered("cancel-profile", None, "取消")
+                            .on_click(|_, w, cx| w.close_dialog(cx)),
+                    )
+                    .child(
+                        self.button("save-profile", "保存", cx, |s, w, cx| {
+                            match s.store_profile(w, cx) {
+                                Ok(()) => w.close_dialog(cx),
+                                Err(e) => s.report_error(e.to_string(), cx),
+                            }
+                        })
+                        .primary()
+                        .disabled(blank || self.is_busy()),
+                    ),
+            )
     }
 }

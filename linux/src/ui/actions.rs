@@ -30,6 +30,7 @@ impl Workbench {
 
     pub(super) fn disconnect_target(&mut self, w: &mut Window, cx: &mut Context<Self>) {
         self.connected_target = None;
+        self.target_info = None;
         self.memory = None;
         self.chips.clear();
         self.layout.clear();

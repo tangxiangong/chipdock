@@ -66,13 +66,15 @@ impl Workbench {
             .find(|r| Some(r.0) == selected)
             .map(|r| r.2.clone());
         let owner = cx.entity().downgrade();
-        let widths = [64., 140., 60., 100., 64., 220., 220., 80.];
+        let widths = [110.; 8];
+        let rule = cx.theme().foreground.opacity(0.1);
+        let (sort, desc) = (self.record_sort, self.record_desc);
         div()
             .h(px(480.))
-            .p_3()
+            .p(px(20.))
             .flex()
             .flex_col()
-            .gap_3()
+            .gap(px(12.))
             .child(
                 div()
                     .flex()
@@ -82,28 +84,27 @@ impl Workbench {
                         div().flex_1().child(
                             Input::new(&self.fields["filter"])
                                 .small()
+                                .rounded_full()
                                 .aria_label("筛选文本、HEX 或来源")
                                 .prefix(icons::icon("search")),
                         ),
                     )
+                    .child(self.segmented(
+                        &[("all", "全部"), ("receive", "接收"), ("send", "发送")],
+                        p.get("direction"),
+                        None,
+                        cx,
+                        |s, key, w, cx| {
+                            s.set("direction", key, w, cx);
+                            s.render_terminal(w, cx);
+                            cx.notify();
+                        },
+                    ))
                     .child(
-                        div().flex().children(
-                            [("all", "全部"), ("receive", "接收"), ("send", "发送")]
-                                .into_iter()
-                                .map(|(value, label)| {
-                                    native_button(value)
-                                        .small()
-                                        .ghost()
-                                        .label(label)
-                                        .selected(p.get("direction") == value)
-                                        .on_click(cx.listener(move |s, _, w, cx| {
-                                            s.set("direction", value, w, cx);
-                                            cx.notify();
-                                        }))
-                                }),
-                        ),
-                    )
-                    .child(format!("{count} 条")),
+                        div()
+                            .text_color(cx.theme().muted_foreground)
+                            .child(format!("{count} 条")),
+                    ),
             )
             .child(
                 div()
@@ -113,7 +114,8 @@ impl Workbench {
                     .overflow_x_scroll()
                     .child(
                         div()
-                            .w(px(948.))
+                            .min_w(px(880.))
+                            .w_full()
                             .h_full()
                             .flex()
                             .flex_col()
@@ -123,7 +125,7 @@ impl Workbench {
                                     .flex_shrink_0()
                                     .flex()
                                     .border_b_1()
-                                    .border_color(cx.theme().border)
+                                    .border_color(rule)
                                     .children(
                                         [
                                             "序号", "时间", "方向", "来源", "长度", "HEX", "文本",
@@ -133,11 +135,26 @@ impl Workbench {
                                         .enumerate()
                                         .map(
                                             |(i, name)| {
-                                                native_button(("record-column", i))
-                                                    .small()
-                                                    .ghost()
-                                                    .w(px(widths[i]))
-                                                    .label(name)
+                                                div()
+                                                    .id(("record-column", i))
+                                                    .flex_1()
+                                                    .min_w(px(widths[i]))
+                                                    .h_full()
+                                                    .px(px(8.))
+                                                    .flex()
+                                                    .items_center()
+                                                    .justify_between()
+                                                    .border_r_1()
+                                                    .border_color(rule)
+                                                    .text_size(px(12.))
+                                                    .child(name)
+                                                    .when(sort == i, |d| {
+                                                        d.child(
+                                                            icons::icon(if desc { "down" } else { "up" })
+                                                                .size(px(10.))
+                                                                .text_color(cx.theme().muted_foreground),
+                                                        )
+                                                    })
                                                     .on_click(cx.listener(move |s, _, _, cx| {
                                                         s.record_desc =
                                                             s.record_sort == i && !s.record_desc;
@@ -153,9 +170,9 @@ impl Workbench {
                                     range
                                         .map(|i| {
                                             let mut line =
-                                                div().id(("record-row", i)).h(px(24.)).flex().bg(
+                                                div().id(("record-row", i)).h(px(24.)).flex().items_center().bg(
                                                     if i % 2 == 0 {
-                                                        rgba(0x8888880d).into()
+                                                        cx.theme().foreground.opacity(0.04)
                                                     } else {
                                                         cx.theme().background
                                                     },
@@ -166,17 +183,19 @@ impl Workbench {
                                                 let owner = owner.clone();
                                                 line = line
                                                     .bg(if selected == Some(sequence) {
-                                                        cx.theme().accent
+                                                        cx.theme().foreground.opacity(0.14)
                                                     } else if i % 2 == 0 {
-                                                        rgba(0x8888880d).into()
+                                                        cx.theme().foreground.opacity(0.04)
                                                     } else {
                                                         cx.theme().background
                                                     })
                                                     .children(columns.iter().enumerate().map(
                                                         |(c, value)| {
                                                             div()
-                                                                .w(px(widths[c]))
-                                                                .px_2()
+                                                                .flex_1()
+                                                                .min_w(px(widths[c]))
+                                                                .px(px(8.))
+                                                                .truncate()
                                                                 .overflow_hidden()
                                                                 .text_size(px(12.))
                                                                 .child(value.clone())
@@ -205,9 +224,7 @@ impl Workbench {
                     .items_center()
                     .gap_2()
                     .child(
-                        native_button("record-copy")
-                            .small()
-                            .label("复制")
+                        bordered("record-copy", None, "复制")
                             .disabled(copy.is_none())
                             .on_click(move |_, _, cx| {
                                 if let Some(text) = &copy {
@@ -236,9 +253,7 @@ impl Workbench {
                     )
                     .child(div().flex_1())
                     .child(
-                        native_button("records-done")
-                            .small()
-                            .label("完成")
+                        bordered("records-done", None, "完成")
                             .on_click(|_, w, cx| w.close_dialog(cx)),
                     ),
             )

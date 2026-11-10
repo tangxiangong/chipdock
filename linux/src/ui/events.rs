@@ -52,9 +52,18 @@ impl Workbench {
                 ),
                 cx,
             );
+            self.message = event.message;
+            self.progress = event.progress;
+            self.completed = matches!(event.stage, JobStage::Completed);
         }
         while let Ok((lane, result)) = self.worker.receiver.try_recv() {
             self.busy_lanes.retain(|l| *l != lane);
+            let job = if lane == Lane::Probe {
+                self.progress = None;
+                self.operation.take()
+            } else {
+                None
+            };
             let was_installing = self.installing && lane == Lane::Update;
             if lane == Lane::Update {
                 self.installing = false;
@@ -85,8 +94,22 @@ impl Workbench {
                             self.logs.push_back(format!("[错误] {detail}"));
                         }
                         self.report_error(message, cx);
+                        if job.is_some() {
+                            let detail = [
+                                response.detail.clone().unwrap_or_default(),
+                                response.recovery.clone(),
+                            ]
+                            .into_iter()
+                            .filter(|s| !s.is_empty())
+                            .collect::<Vec<_>>()
+                            .join("\n\n");
+                            self.present_failure(response.message.clone(), detail, window, cx);
+                        }
                     } else {
                         self.report_error(format!("{e:#}"), cx);
+                        if job.is_some() {
+                            self.present_failure("操作失败".into(), format!("{e:#}"), window, cx);
+                        }
                     }
                 }
                 Ok(out) => {
@@ -179,10 +202,14 @@ impl Workbench {
                             self.show_text(s.clone(), window, cx);
                             self.report(s, cx);
                         }
-                        Output::Probes(v) => self.probes = v,
+                        Output::Probes(v) => {
+                            self.probes = v;
+                            self.has_scanned = true;
+                        }
                         Output::Chips(v) => self.chips = v,
                         Output::Ports(v) => self.ports = v,
                         Output::Connected(info) => {
+                            self.target_info = info.target_information.clone();
                             self.set("chip", info.chip.clone(), window, cx);
                             self.set("probe", info.probe, window, cx);
                             self.set(
@@ -221,12 +248,22 @@ impl Workbench {
                                 s.set_value(model::hex_dump(p.start_address, &p.bytes), window, cx)
                             });
                             self.preview = Some(p);
+                            self.preferences.recent_used.insert(
+                                path.clone(),
+                                std::time::SystemTime::now()
+                                    .duration_since(std::time::UNIX_EPOCH)
+                                    .map_or(0, |d| d.as_secs()),
+                            );
                             self.preferences.recent.retain(|p| p != &path);
                             self.preferences.recent.insert(0, path);
                             self.preferences.recent.truncate(12);
+                            let recent = &self.preferences.recent;
                             self.preferences
                                 .recent_bases
-                                .retain(|k, _| self.preferences.recent.contains(k));
+                                .retain(|k, _| recent.contains(k));
+                            self.preferences
+                                .recent_used
+                                .retain(|k, _| recent.contains(k));
                         }
                         Output::Memory(m) => {
                             match memory_text(&m) {

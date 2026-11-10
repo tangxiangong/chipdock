@@ -60,10 +60,11 @@ impl Workbench {
             Panel::Plot(_) => "实时曲线".into(),
         };
         let (width, height) = match panel {
-            Panel::Memory => (560., 600.),
+            // Native-titlebar windows add 32 pt above this content size.
+            Panel::Memory => (560., 568.),
             Panel::Logs => (720., 440.),
             Panel::Settings => (480., 420.),
-            Panel::Plot(_) => (800., 500.),
+            Panel::Plot(_) => (820., 488.),
         };
         let custom_title = matches!(panel, Panel::Settings | Panel::Logs);
         // Opening a window draws it immediately. Release the Workbench update
@@ -74,6 +75,8 @@ impl Workbench {
                 WindowOptions {
                     titlebar: Some(TitlebarOptions {
                         title: Some(title.into()),
+                        traffic_light_position: (panel == Panel::Logs)
+                            .then(|| point(px(19.), px(19.))),
                         ..if custom_title {
                             gpui_kit::component::TitleBar::title_bar_options()
                         } else {
@@ -308,29 +311,27 @@ impl Auxiliary {
                             .child(format!("会话 {id}")),
                     )
                     .child(
-                        native_button("plot-pause")
-                            .small()
-                            .icon(icons::icon("pause"))
-                            .label(if paused { "继续" } else { "暂停" })
-                            .on_click(cx.listener(move |s, _, _, cx| {
-                                s.owner.update(cx, |o, cx| {
-                                    if Some(id) == o.active {
-                                        o.plotting = !o.plotting;
-                                    } else if let Some(session) =
-                                        o.sessions.iter_mut().find(|s| s.id == id)
-                                    {
-                                        session.plotting = !session.plotting;
-                                    }
-                                    cx.notify();
-                                })
-                            })),
+                        bordered(
+                            "plot-pause",
+                            Some("pause"),
+                            if paused { "继续" } else { "暂停" },
+                        )
+                        .on_click(cx.listener(move |s, _, _, cx| {
+                            s.owner.update(cx, |o, cx| {
+                                if Some(id) == o.active {
+                                    o.plotting = !o.plotting;
+                                } else if let Some(session) =
+                                    o.sessions.iter_mut().find(|s| s.id == id)
+                                {
+                                    session.plotting = !session.plotting;
+                                }
+                                cx.notify();
+                            })
+                        })),
                     )
                     .child(
-                        native_button("plot-clear")
-                            .small()
-                            .icon(icons::icon("trash"))
-                            .label("清空")
-                            .on_click(cx.listener(move |s, _, _, cx| {
+                        bordered("plot-clear", Some("trash"), "清空").on_click(cx.listener(
+                            move |s, _, _, cx| {
                                 s.owner.update(cx, |o, cx| {
                                     if Some(id) == o.active {
                                         o.plot_revision += 1;
@@ -345,13 +346,11 @@ impl Auxiliary {
                                     }
                                     cx.notify();
                                 })
-                            })),
+                            },
+                        )),
                     )
                     .child(
-                        native_button("plot-export")
-                            .small()
-                            .icon(icons::icon("export"))
-                            .label("导出 CSV…")
+                        bordered("plot-export", Some("export"), "导出 CSV…")
                             .disabled(empty)
                             .on_click(cx.listener(move |s, _, _, cx| {
                                 s.owner.update(cx, |o, cx| {
@@ -409,9 +408,7 @@ impl Auxiliary {
                     )
                     .child(div().flex_1().child(Input::new(&self.template).small()))
                     .child(
-                        native_button("plot-apply")
-                            .small()
-                            .label("应用")
+                        bordered("plot-apply", None, "应用")
                             .disabled(self.busy)
                             .on_click(cx.listener(|s, _, w, cx| s.configure(false, w, cx))),
                     ),
@@ -430,9 +427,7 @@ impl Auxiliary {
                     .gap_2()
                     .child(div().flex_1().child(Input::new(&self.sample).small()))
                     .child(
-                        native_button("plot-preview")
-                            .small()
-                            .label("试算")
+                        bordered("plot-preview", None, "试算")
                             .disabled(self.busy || self.sample.read(cx).value().is_empty())
                             .on_click(cx.listener(|s, _, w, cx| s.configure(true, w, cx))),
                     )
@@ -495,24 +490,25 @@ impl Auxiliary {
                         .flex_col()
                         .items_center()
                         .justify_center()
-                        .gap_3()
+                        .gap(px(8.))
                         .text_color(cx.theme().muted_foreground)
                         .child(
                             icons::icon("plot")
-                                .size(px(38.))
+                                .size(px(44.))
+                                .mb(px(4.))
                                 .text_color(cx.theme().muted_foreground.opacity(0.5)),
                         )
                         .child(
                             div()
-                                .text_size(px(15.))
-                                .font_weight(FontWeight::SEMIBOLD)
+                                .text_size(px(17.))
+                                .font_weight(FontWeight::BOLD)
                                 .child("暂无曲线数据"),
                         )
-                        .child(if paused {
+                        .child(div().text_size(px(13.)).child(if paused {
                             "已暂停采样。"
                         } else {
                             "收到可解析的数值后会实时绘制。"
-                        }),
+                        })),
                 )
                 .child(
                     div()

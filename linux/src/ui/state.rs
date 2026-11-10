@@ -89,7 +89,12 @@ impl Workbench {
                     (*key).into(),
                     cx.new(|cx| {
                         InputState::new(window, cx)
-                            .placeholder(if *key == "filter" { "搜索数据" } else { "" })
+                            .placeholder(match *key {
+                                "filter" => "搜索数据",
+                                "base" => "自动识别",
+                                "log_search" => "筛选日志",
+                                _ => "",
+                            })
                             .default_value(preferences.get(key).to_owned())
                     }),
                 )
@@ -102,11 +107,6 @@ impl Workbench {
                     (*key).into(),
                     cx.new(|cx| {
                         TextareaState::new(window, cx)
-                            .placeholder(if *key == "send" {
-                                "输入要发送的数据…"
-                            } else {
-                                ""
-                            })
                             .default_value(preferences.get(key).to_owned())
                     }),
                 )
@@ -129,7 +129,6 @@ impl Workbench {
             .sender
             .send(Command::InitializeSession(preferences.clone()))
             .is_ok();
-        let scanning = worker.sender.send(Command::Scan).is_ok();
         let _ = worker.sender.send(Command::Ports);
         let firmware_output = cx.new(|cx| TextareaState::new(window, cx));
         let memory_output = cx.new(|cx| TextareaState::new(window, cx));
@@ -203,13 +202,7 @@ impl Workbench {
             main_window: window.window_handle(),
             auxiliary: vec![],
             installing: false,
-            busy_lanes: [
-                initializing.then_some(Lane::Serial),
-                scanning.then_some(Lane::Probe),
-            ]
-            .into_iter()
-            .flatten()
-            .collect(),
+            busy_lanes: initializing.then_some(Lane::Serial).into_iter().collect(),
             preferences,
             path,
             fields,
@@ -217,6 +210,9 @@ impl Workbench {
             focus_handle,
             expanded: std::collections::BTreeSet::new(),
             connected_target: None,
+            target_info: None,
+            has_scanned: false,
+            dismissed_serial_error: None,
             settings_tab: "general",
             page: "flash",
             serial_page: "terminal",
@@ -243,6 +239,10 @@ impl Workbench {
             terminal_scroll: UniformListScrollHandle::new(),
             terminal_ranges: BTreeMap::new(),
             selected_record: None,
+            selected_recent: None,
+            operation: None,
+            progress: None,
+            completed: false,
             record_sort: 0,
             record_desc: false,
             poll_pending: std::collections::HashSet::new(),
@@ -295,6 +295,7 @@ impl Workbench {
     }
     pub(super) fn report(&mut self, text: impl Into<String>, cx: &mut Context<Self>) {
         self.message = text.into();
+        self.completed = false;
         self.logs.push_back(format!(
             "{}  {}",
             chrono::Local::now().format("%H:%M:%S"),
@@ -335,6 +336,13 @@ impl Workbench {
             return;
         }
         let installing = matches!(&command, Command::InstallUpdate(..));
+        let operation = match &command {
+            Command::Connect(_) => Some("connect"),
+            Command::Flash(p) if p.flag("dry_run") => Some("dry_run"),
+            Command::Flash(_) => Some("flash"),
+            Command::Erase(_) => Some("erase"),
+            _ => None,
+        };
         let lane = command.lane();
         if self.busy_lanes.contains(&lane) {
             self.report("请等待当前操作完成", cx);
@@ -349,6 +357,10 @@ impl Workbench {
             Ok(()) => {
                 self.busy_lanes.push(lane);
                 self.installing = installing;
+                if operation.is_some() {
+                    self.operation = operation;
+                    self.progress = None;
+                }
                 if !lane.background() {
                     self.message = "正在处理…".into();
                 }

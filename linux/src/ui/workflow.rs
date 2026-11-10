@@ -18,7 +18,7 @@ impl Workbench {
                     .child(self.button("apply-replies","应用应答规则",cx,|s,_,cx|s.serial_action("replies",cx)))),
             _=>group.child(div().text_size(px(11.)).text_color(cx.theme().muted_foreground).child("每个包可设置 name、group、note、order、enabled、text、format。format 使用 hex 或 utf-8。"))
                 .child(Textarea::new(&self.editors["packets"]).h(px(170.)).font_family(cx.theme().mono_font_family.clone()).text_size(px(13.)))
-                .child(self.form_input("selected","发送顺序（包名，逗号分隔）",cx)).child(self.form_input("interval","包间隔 (ms)",cx))
+                .child(self.form_input("selected","按发送顺序填写包名（逗号分隔，留空发送全部启用包）",cx)).child(self.form_input("interval","包间隔 (ms)",cx))
                 .child(div().py_3().flex().gap_2()
                     .child(self.button("packet-example","示例",cx,|s,w,cx|s.set("packets",r#"[{"name":"读状态","group":"调试","note":"","order":0,"enabled":true,"text":"AA 01","format":"hex"}]"#,w,cx)))
                     .child(self.button("import-packets","导入 JSON…",cx,|s,_,cx|s.import_editor("packets",cx)))
