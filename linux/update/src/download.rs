@@ -43,6 +43,10 @@ pub fn download(
     cancelled: &AtomicBool,
     progress: impl Fn(u64, u64),
 ) -> Result<PathBuf> {
+    ensure!(
+        super::can_self_update(),
+        "请通过包管理器或完整安装包更新此安装"
+    );
     let client = client()?;
     let mirror = format!(
         "{MIRROR}/releases/v{}/{}",
@@ -79,12 +83,6 @@ pub fn download(
         load(if fallback { &github } else { &mirror })
     })?;
     let executable = std::env::current_exe()?;
-    ensure!(
-        !executable
-            .ancestors()
-            .any(|p| p.extension().is_some_and(|v| v == "app")),
-        "应用包应通过完整安装包更新"
-    );
     // Keep staging on the same volume so promotion is atomic on Unix.
     let parent = executable.parent().context("无法定位安装目录")?;
     let path = parent.join(format!(".chipdock-gpui-{}.pending", update.version));

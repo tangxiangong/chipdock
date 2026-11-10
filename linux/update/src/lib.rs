@@ -3,7 +3,7 @@ mod install;
 #[cfg(test)]
 mod tests;
 pub use download::{check, download};
-pub use install::{finish_update, install};
+pub use install::{can_self_update, finish_update, install};
 // Signed portable-client updates never select SwiftUI/WinUI packages.
 use anyhow::{Context, Result, bail, ensure};
 use base64::{Engine, engine::general_purpose::STANDARD};
@@ -32,6 +32,13 @@ pub struct Feed {
     pub version: String,
     pub notes: String,
     pub assets: BTreeMap<String, Asset>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub packages: Vec<Asset>,
+}
+impl Feed {
+    pub fn release_assets(&self) -> impl Iterator<Item = &Asset> {
+        self.assets.values().chain(self.packages.iter())
+    }
 }
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Asset {
@@ -66,7 +73,10 @@ pub fn verify(bytes: &[u8], key: &str) -> Result<Feed> {
         "更新包不属于 GPUI 客户端"
     );
     let version = semver::Version::parse(&feed.version)?;
-    ensure!(version.pre.is_empty(), "稳定频道不能安装预发布版本");
+    ensure!(
+        version.pre.is_empty() && version.build.is_empty() && version.to_string() == feed.version,
+        "稳定频道需要规范的正式版本号"
+    );
     for (target, asset) in &feed.assets {
         ensure!(
             [
@@ -100,6 +110,22 @@ pub fn verify(bytes: &[u8], key: &str) -> Result<Feed> {
                     .all(|b| b.is_ascii_alphanumeric() || b"-_.".contains(&b)),
             "更新文件名无效"
         );
+    }
+    let mut names = std::collections::BTreeSet::new();
+    for package in &feed.packages {
+        ensure!(
+            ["x86_64", "aarch64"].iter().any(|arch| {
+                feed.assets.contains_key(&format!("linux-{arch}"))
+                    && ["tar.gz", "deb", "rpm"].iter().any(|extension| {
+                        package.name
+                            == format!("chipdock-gpui-{}-linux-{arch}.{extension}", feed.version)
+                    })
+            }),
+            "安装包与版本或平台不匹配"
+        );
+    }
+    for asset in feed.release_assets() {
+        ensure!(names.insert(&asset.name), "发布文件名重复");
         ensure!(
             asset.size > 0 && asset.size <= 1024 * 1024 * 1024,
             "更新文件大小无效"

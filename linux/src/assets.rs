@@ -1,6 +1,17 @@
 use gpui_kit::{AssetSource, SharedString};
 use std::borrow::Cow;
 
+pub const APP_ID: &str = "com.xiaoyu.chipdock.gpui";
+const APP_ICON: &[u8] = include_bytes!("../../windows/ChipDock/Assets/ChipDock.png");
+
+pub fn window_options(mut options: gpui_kit::WindowOptions) -> gpui_kit::WindowOptions {
+    options.app_id = Some(APP_ID.into());
+    options.icon = image::load_from_memory(APP_ICON)
+        .map(|image| std::sync::Arc::new(image.into_rgba8()))
+        .ok();
+    options
+}
+
 const ICONS: &[(&str, &[u8])] = &[
     ("cpu", include_bytes!("../assets/icons/cpu.svg")),
     ("bolt", include_bytes!("../assets/icons/bolt.svg")),
@@ -142,9 +153,7 @@ fn symbol(name: &str) -> &str {
 impl AssetSource for Assets {
     fn load(&self, path: &str) -> anyhow::Result<Option<Cow<'static, [u8]>>> {
         if path == "app-icon.png" {
-            return Ok(Some(Cow::Borrowed(include_bytes!(
-                "../../windows/ChipDock/Assets/ChipDock.png"
-            ))));
+            return Ok(Some(Cow::Borrowed(APP_ICON)));
         }
         if path.is_empty() {
             return Ok(None);
@@ -168,5 +177,16 @@ impl AssetSource for Assets {
             .filter(|name| name.starts_with(path))
             .map(Into::into)
             .collect())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn desktop_windows_share_the_application_identity_and_a_decodable_icon() {
+        let options = super::window_options(gpui_kit::WindowOptions::default());
+        assert_eq!(options.app_id.as_deref(), Some(super::APP_ID));
+        let icon = options.icon.unwrap();
+        assert_eq!(icon.dimensions(), (256, 256));
     }
 }

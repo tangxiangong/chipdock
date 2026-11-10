@@ -1,3 +1,5 @@
+#![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
+
 use chipdock_gpui::{backend, model, serial, update};
 mod assets;
 mod ui;
@@ -34,6 +36,7 @@ fn main() {
     gpui_kit::application()
         .with_assets(assets::Assets)
         .run(|cx| {
+            cx.set_app_identity(assets::APP_ID, "ChipDock");
             gpui_kit::init(cx);
             cx.set_menus([
                 Menu::new("ChipDock").items([
@@ -80,7 +83,7 @@ fn main() {
                     cx,
                 ))),
                 window_min_size: Some(size(px(900.), px(600.))),
-                ..gpui_kit::component::TitleBar::window_options()
+                ..assets::window_options(gpui_kit::component::TitleBar::window_options())
             };
             if let Err(error) = gpui_kit::open_window(options, cx, |window, cx| {
                 cx.new(|cx| ui::Workbench::new(window, cx))

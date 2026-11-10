@@ -34,11 +34,13 @@ chipdock-service = { path = "crates/chipdock-service" }
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4.6", features = ["derive"] }
 ed25519-dalek = "3"
+embed-resource = "3"
 encoding_rs = "0.8"
 esp-idf-part = "0.6"
 gpui-kit = "0.9"
 hmac = "0.13"
 ihex = "3.0"
+image = { version = "0.25", default-features = false, features = ["png"] }
 interoptopus = "0.16"
 interoptopus_csharp = "0.16"
 libc = "0.2"

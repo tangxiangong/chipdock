@@ -189,6 +189,21 @@ pub(crate) fn gpui_fixture(tag: &str) -> (tempfile::TempDir, UpdateKeys) {
                 sha256: chipdock_gpui_update::digest(bytes),
             },
         )]),
+        packages: ["tar.gz", "deb", "rpm"]
+            .map(|extension| {
+                let name = format!(
+                    "chipdock-gpui-{}-linux-x86_64.{extension}",
+                    tag.trim_start_matches('v')
+                );
+                let bytes = format!("{extension} package fixture").into_bytes();
+                fs::write(directory.path().join(&name), &bytes).unwrap();
+                chipdock_gpui_update::Asset {
+                    name,
+                    size: bytes.len() as u64,
+                    sha256: chipdock_gpui_update::digest(&bytes),
+                }
+            })
+            .into(),
     };
     let payload = serde_json::to_vec(&feed).unwrap();
     let signed = chipdock_gpui_update::SignedFeed {
@@ -221,4 +236,21 @@ fn gpui_and_sparkle_embed_the_same_release_public_key() {
         UpdateKeys::from_project().unwrap().sparkle,
         chipdock_gpui_update::PUBLIC_KEY
     );
+}
+
+#[test]
+fn all_platforms_include_linux_packages_and_reject_altered_installers() {
+    let (directory, keys) = gpui_fixture("v0.2.5");
+    let plan = prepare(directory.path(), "v0.2.5", Platform::All, &keys).unwrap();
+    assert!(plan.feeds.contains_key("gpui-stable.signed.json"));
+    for extension in ["tar.gz", "deb", "rpm"] {
+        let name = format!("chipdock-gpui-0.2.5-linux-x86_64.{extension}");
+        assert!(plan.assets.contains_key(&format!("releases/v0.2.5/{name}")));
+        let path = directory.path().join(&name);
+        let original = fs::read(&path).unwrap();
+        fs::write(&path, b"tampered installer").unwrap();
+        assert!(prepare(directory.path(), "v0.2.5", Platform::Gpui, &keys).is_err());
+        fs::write(path, original).unwrap();
+    }
+    assert!("linux".parse::<Platform>().unwrap() == Platform::Gpui);
 }

@@ -12,8 +12,11 @@ fn main() -> Result<()> {
     );
     let version = semver::Version::parse(args[0].trim_start_matches('v'))?;
     ensure!(
-        version.pre.is_empty(),
-        "Only stable releases can advance the GPUI feed"
+        args[0] == format!("v{version}")
+            && version.pre.is_empty()
+            && version.build.is_empty()
+            && version.to_string() == env!("CARGO_PKG_VERSION"),
+        "Release tag must match the canonical stable package version"
     );
     let directory = Path::new(&args[1]);
     let secret = STANDARD.decode(
@@ -66,11 +69,25 @@ fn main() -> Result<()> {
         assets.contains_key("linux-x86_64") && assets.contains_key("linux-aarch64"),
         "Both Linux architectures must be present before signing"
     );
+    let mut packages = Vec::new();
+    for arch in ["x86_64", "aarch64"] {
+        for extension in ["tar.gz", "deb", "rpm"] {
+            let name = format!("chipdock-gpui-{version}-linux-{arch}.{extension}");
+            let bytes = std::fs::read(directory.join(&name))
+                .with_context(|| format!("Missing Linux package: {name}"))?;
+            packages.push(Asset {
+                name,
+                size: bytes.len() as u64,
+                sha256: digest(&bytes),
+            });
+        }
+    }
     let feed = Feed {
         identity: "com.xiaoyu.chipdock.gpui".into(),
         version: version.to_string(),
         notes: std::fs::read_to_string(&args[2])?,
         assets,
+        packages,
     };
     let payload = serde_json::to_vec(&feed)?;
     let signed = SignedFeed {

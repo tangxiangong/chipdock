@@ -54,18 +54,20 @@ jobs:
       - name: Install Linux build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y pkg-config clang cmake libudev-dev libfontconfig-dev libwayland-dev libxkbcommon-x11-dev libx11-xcb-dev libssl-dev libzstd-dev libvulkan1
+          sudo apt-get install -y pkg-config clang cmake libudev-dev libfontconfig-dev libwayland-dev libxkbcommon-x11-dev libx11-xcb-dev libssl-dev libzstd-dev libvulkan1 dpkg-dev rpm cpio desktop-file-utils shellcheck
       - name: Check and test without hardware or a graphical session
         run: |
+          for script in linux/*.sh linux/tests/*.sh; do bash -n "$script"; done
+          shellcheck linux/*.sh linux/tests/*.sh
+          bash linux/tests/packaging.sh
           cargo fmt --all -- --check
           cargo clippy --locked -p chipdock-gpui -p chipdock-gpui-update --all-targets -- -D warnings
           cargo test --locked -p chipdock-gpui --all-targets
           cargo test --locked -p chipdock-gpui-update -p xtask
-      - name: Build portable Linux client
-        run: |
-          cargo build --release --locked -p chipdock-gpui --bin chipdock-gpui
-          mkdir -p dist/gpui
-          cp target/release/chipdock-gpui "dist/gpui/chipdock-gpui-linux-${{ matrix.arch }}"
+      - name: Build Linux DEB, RPM and portable packages
+        run: bash linux/build.sh
+      - name: Verify package metadata and extracted desktop resources
+        run: bash linux/tests/packaging.sh dist/gpui "${{ matrix.arch }}"
       - uses: actions/upload-artifact@v6
         with:
           name: gpui-linux-${{ matrix.arch }}
@@ -87,6 +89,15 @@ jobs:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: swatinem/rust-cache@v2
+      - name: Require release credentials
+        env:
+          SPARKLE_PRIVATE_ED_KEY: ${{ secrets.SPARKLE_PRIVATE_ED_KEY }}
+          COS_SECRET_ID: ${{ secrets.COS_SECRET_ID }}
+          COS_SECRET_KEY: ${{ secrets.COS_SECRET_KEY }}
+        run: |
+          test -n "$SPARKLE_PRIVATE_ED_KEY"
+          test -n "$COS_SECRET_ID"
+          test -n "$COS_SECRET_KEY"
       - uses: actions/download-artifact@v7
         with:
           pattern: gpui-linux-*

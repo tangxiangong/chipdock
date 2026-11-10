@@ -72,7 +72,7 @@ impl std::str::FromStr for Platform {
             "macos" => Ok(Self::Macos),
             "windows" => Ok(Self::Windows),
             "linux" | "gpui" => Ok(Self::Gpui),
-            _ => Err("Expected all, macos, windows or gpui".into()),
+            _ => Err("Expected all, macos, windows or linux (gpui alias)".into()),
         }
     }
 }
@@ -333,14 +333,16 @@ pub fn prepare(directory: &Path, tag: &str, platform: Platform, keys: &UpdateKey
             plan.identities.insert(name, identity);
         }
     }
-    if matches!(platform, Platform::Gpui) {
+    if matches!(platform, Platform::Gpui)
+        || (platform == Platform::All && directory.join("gpui-stable.signed.json").is_file())
+    {
         let name = "gpui-stable.signed.json";
         let signed = safe_file(directory, name)?;
         let bytes = fs::read(&signed)?;
         let feed =
             chipdock_gpui_update::verify(&bytes, &keys.sparkle).map_err(|e| e.to_string())?;
         ensure(feed.version == value, "GPUI update version mismatch")?;
-        for asset in feed.assets.values() {
+        for asset in feed.release_assets() {
             let path = safe_file(directory, &asset.name)?;
             ensure(
                 fs::metadata(&path)?.len() == asset.size
@@ -403,7 +405,12 @@ pub fn download_release(tag: &str, platform: Platform, directory: &Path) -> Resu
             ]);
         }
     }
-    if matches!(platform, Platform::Gpui) {
+    if matches!(platform, Platform::Gpui)
+        || (platform == Platform::All
+            && assets
+                .iter()
+                .any(|asset| asset["name"] == "gpui-stable.signed.json"))
+    {
         names.push("gpui-stable.signed.json".into());
         names.extend(
             assets

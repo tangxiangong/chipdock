@@ -39,24 +39,33 @@ fn main() -> Result<()> {
         "Expected a published stable release"
     );
     let existing = published["assets"].as_array().context("Missing assets")?;
-    let mut files: Vec<_> = feed.assets.values().map(|a| a.name.as_str()).collect();
+    let mut files: Vec<_> = feed.release_assets().map(|a| a.name.as_str()).collect();
     files.push("gpui-stable.signed.json");
-    for name in files {
+    // Validate the complete release before making any immutable uploads.
+    for name in &files {
         let path = directory.join(name);
+        ensure!(
+            path.is_file() && !path.is_symlink(),
+            "Missing or unsafe asset: {name}"
+        );
         let data = std::fs::read(&path)?;
-        if let Some(asset) = feed.assets.values().find(|a| a.name == name) {
+        if let Some(asset) = feed.release_assets().find(|a| a.name == *name) {
             ensure!(
                 asset.size == data.len() as u64 && asset.sha256 == digest(&data),
                 "Local asset differs from signed feed"
             );
         }
-        if let Some(asset) = existing.iter().find(|a| a["name"] == name) {
+        if let Some(asset) = existing.iter().find(|a| a["name"] == *name) {
             ensure!(
                 asset["size"].as_u64() == Some(data.len() as u64)
                     && asset["digest"] == format!("sha256:{}", digest(&data)),
                 "Immutable release asset differs: {name}"
             );
-        } else {
+        }
+    }
+    for name in files {
+        if !existing.iter().any(|a| a["name"] == name) {
+            let path = directory.join(name);
             gh(&[
                 "release",
                 "upload",

@@ -1,4 +1,5 @@
 use super::*;
+use chipdock_gpui::update;
 
 impl Workbench {
     pub(super) fn settings_page(&self, cx: &mut Context<Self>) -> AnyElement {
@@ -263,8 +264,14 @@ impl Workbench {
                         })),
                 )
                 .child(self.flag("auto_update", "自动检查更新", cx))
-                .child(self.flag("auto_download", "自动下载更新", cx))
-                .child(self.flag("auto_install", "下载后空闲时安装并重启", cx))
+                .when(update::can_self_update(), |about| {
+                    about
+                        .child(self.flag("auto_download", "自动下载更新", cx))
+                        .child(self.flag("auto_install", "下载后空闲时安装并重启", cx))
+                })
+                .when(!update::can_self_update(), |about| {
+                    about.child("请从发布页面下载完整安装包，并通过包管理器或替换应用包更新。")
+                })
                 .child(
                     div()
                         .text_size(px(10.))
@@ -275,6 +282,9 @@ impl Workbench {
                 about = about
                     .child(format!("新版本 {}", update.version))
                     .child(update.notes.clone());
+                if !update::can_self_update() {
+                    return page.child(about).into_any_element();
+                }
                 let available = update.clone();
                 about = about.child(self.button(
                     "download-update",

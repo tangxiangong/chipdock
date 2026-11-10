@@ -1,4 +1,5 @@
 use super::*;
+use chipdock_gpui::update;
 
 impl Workbench {
     pub(super) fn tick(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -133,6 +134,7 @@ impl Workbench {
                                 cx,
                             );
                             if self.preferences.flag("auto_download")
+                                && update::can_self_update()
                                 && let Some(update) = self.update.clone()
                             {
                                 self.submit(Command::DownloadUpdate(update), cx);
@@ -142,6 +144,7 @@ impl Workbench {
                             self.downloaded = Some(path);
                             self.report("更新已下载并校验，安装前请断开串口", cx);
                             if self.preferences.flag("auto_install")
+                                && update::can_self_update()
                                 && self.sessions.iter().all(|s| {
                                     s.status.as_ref().is_none_or(|s| {
                                         !s.connected
@@ -358,6 +361,7 @@ impl Workbench {
             cx.notify();
         }
         if self.preferences.flag("auto_install")
+            && update::can_self_update()
             && self.busy_lanes.iter().all(|l| l.background())
             && self.sessions.iter().all(|s| {
                 s.status.as_ref().is_some_and(|v| {

@@ -1,8 +1,12 @@
 [Desktop Entry]
 Type=Application
 Name=ChipDock
+Name[zh_CN]=ChipDock
 Comment=Firmware programming and serial workbench
+Comment[zh_CN]=固件烧录与串口调试工作台
 Exec=chipdock-gpui %f
+Icon=com.xiaoyu.chipdock.gpui
+StartupWMClass=com.xiaoyu.chipdock.gpui
 Terminal=false
 Categories=Development;Electronics;
 StartupNotify=true

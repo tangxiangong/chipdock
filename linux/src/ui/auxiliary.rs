@@ -90,7 +90,7 @@ impl Workbench {
                     ))),
                     window_min_size: Some(size(px(width.min(640.)), px(height.min(420.)))),
                     app_owns_titlebar_drag: custom_title,
-                    ..Default::default()
+                    ..crate::assets::window_options(WindowOptions::default())
                 },
                 cx,
                 |w, cx| {

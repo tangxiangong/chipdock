@@ -33,6 +33,7 @@ fn never_offers_downgrades_or_other_platform_assets() {
         version: "1.0.0".into(),
         notes: String::new(),
         assets: BTreeMap::new(),
+        packages: Vec::new(),
     };
     assert!(
         select(feed.clone(), "1.1.0", "linux-x86_64")
@@ -51,6 +52,63 @@ fn rejects_partial_binary() {
     assert!(verify_asset(b"o", &asset).is_err());
     assert!(verify_asset(b"no", &asset).is_err());
     assert!(verify_asset(b"ok", &asset).is_ok());
+}
+
+#[test]
+fn signed_linux_packages_are_validated_without_becoming_portable_updates() {
+    let key = SigningKey::from_bytes(&[11; 32]);
+    let asset = Asset {
+        name: "chipdock-gpui-linux-x86_64".into(),
+        size: 2,
+        sha256: digest(b"ok"),
+    };
+    let mut feed = Feed {
+        identity: "com.xiaoyu.chipdock.gpui".into(),
+        version: "1.0.0".into(),
+        notes: String::new(),
+        assets: BTreeMap::from([("linux-x86_64".into(), asset)]),
+        packages: ["deb", "rpm", "tar.gz"]
+            .map(|extension| Asset {
+                name: format!("chipdock-gpui-1.0.0-linux-x86_64.{extension}"),
+                size: 2,
+                sha256: digest(b"ok"),
+            })
+            .into(),
+    };
+    let verify_feed = |feed: &Feed| {
+        let payload = serde_json::to_vec(feed).unwrap();
+        let signed = SignedFeed {
+            payload: STANDARD.encode(&payload),
+            signature: STANDARD.encode(key.sign(&payload).to_bytes()),
+        };
+        verify(
+            &serde_json::to_vec(&signed).unwrap(),
+            &STANDARD.encode(key.verifying_key().as_bytes()),
+        )
+    };
+    let verified = verify_feed(&feed).unwrap();
+    assert_eq!(verified.release_assets().count(), 4);
+    assert_eq!(
+        select(verified, "0.9.0", "linux-x86_64")
+            .unwrap()
+            .unwrap()
+            .asset
+            .name,
+        "chipdock-gpui-linux-x86_64"
+    );
+    let valid_name = feed.packages[0].name.clone();
+    for name in [
+        "../chipdock-gpui-1.0.0-linux-x86_64.deb",
+        "chipdock-gpui-2.0.0-linux-x86_64.deb",
+        "chipdock-gpui-1.0.0-linux-aarch64.deb",
+        "chipdock-gpui-1.0.0-linux-x86_64.exe",
+    ] {
+        feed.packages[0].name = name.into();
+        assert!(verify_feed(&feed).is_err(), "{name}");
+    }
+    feed.packages[0].name = valid_name;
+    feed.packages.push(feed.packages[0].clone());
+    assert!(verify_feed(&feed).is_err());
 }
 
 #[cfg(not(windows))]
@@ -113,6 +171,7 @@ fn valid_primary_without_update_ends_the_check() {
         version: "1.0.0".into(),
         notes: String::new(),
         assets: BTreeMap::new(),
+        packages: Vec::new(),
     })
     .unwrap();
     let signed = serde_json::to_vec(&SignedFeed {
