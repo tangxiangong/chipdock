@@ -132,10 +132,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: release
-    # Serialize both platforms and COS publication for the ChipDock identity.
+    # Serialize update feeds and COS publication across platforms.
     concurrency:
       group: chipdock-updates
-      cancel-in-progress: false
+      queue: max
     permissions:
       contents: write
     steps:

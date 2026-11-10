@@ -75,10 +75,10 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 45
     environment: release
-    # Serialize both platforms and COS publication for the ChipDock identity.
+    # Serialize update feeds and COS publication across platforms.
     concurrency:
       group: chipdock-updates
-      cancel-in-progress: false
+      queue: max
     permissions:
       contents: write
     steps:

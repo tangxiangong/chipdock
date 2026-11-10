@@ -84,7 +84,7 @@ jobs:
       contents: write
     concurrency:
       group: chipdock-updates
-      cancel-in-progress: false
+      queue: max
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
