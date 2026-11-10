@@ -2,13 +2,6 @@ use super::*;
 
 impl Workbench {
     pub(super) fn poll_serial(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if !self.installing
-            && std::time::Instant::now() >= self.next_port_scan
-            && !self.busy_lanes.contains(&Lane::Discovery)
-        {
-            self.next_port_scan = std::time::Instant::now() + Duration::from_secs(1);
-            self.submit(Command::Ports, cx);
-        }
         while let Ok((id, result)) = self.poll_rx.try_recv() {
             self.poll_pending.remove(&id);
             if !self.sessions.iter().any(|s| s.id == id) {

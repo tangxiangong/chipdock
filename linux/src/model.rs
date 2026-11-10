@@ -103,6 +103,7 @@ pub const FIELDS: &[(&str, &str, &str)] = &[
     ("capture_path", "采集文件路径", ""),
     ("capture_format", "采集格式", "csv"),
     ("roll", "轮转字节数", "10485760"),
+    ("roll_mib", "按大小滚动 (MiB)", "10"),
     ("export", "导出路径", ""),
     ("tx_color", "TX 颜色（名称或 #RRGGBB）", "default"),
     ("plot_sample", "曲线试算样例", ""),
@@ -112,6 +113,8 @@ pub const FIELDS: &[(&str, &str, &str)] = &[
     ("protocol_sample", "接收样例 HEX", ""),
 ];
 pub const EDITORS: &[(&str, &str, &str)] = &[
+    ("checksum_input", "试算内容", ""),
+    ("send", "发送内容", ""),
     (
         "packets",
         "常用包库",
@@ -128,6 +131,18 @@ pub const EDITORS: &[(&str, &str, &str)] = &[
     ("plot", "曲线解析配置", r#"{"mode":"numbers","fields":[]}"#),
 ];
 impl Preferences {
+    /// The UI must require identification again after changing any target setting.
+    pub fn target_key(&self) -> String {
+        serde_json::json!([
+            self.get("chip"),
+            self.get("probe"),
+            self.get("wire"),
+            self.get("speed"),
+            self.flag("under_reset")
+        ])
+        .to_string()
+    }
+
     pub fn load(path: &Path) -> Result<Self> {
         match std::fs::read(path) {
             Ok(bytes) => Ok(serde_json::from_slice(&bytes).context("设置文件无效，原文件未覆盖")?),
@@ -392,5 +407,28 @@ mod parity_tests {
         std::fs::create_dir(&target).unwrap();
         assert!(write_atomic(&target, b"data").is_err());
         assert!(target.is_dir());
+    }
+}
+
+#[cfg(test)]
+mod target_identity_tests {
+    use super::*;
+    #[test]
+    fn target_configuration_changes_invalidate_identification_but_firmware_does_not() {
+        let p = Preferences::default();
+        let key = p.target_key();
+        for name in ["chip", "probe", "wire", "speed"] {
+            let mut changed = p.clone();
+            changed.fields.insert(name.into(), "changed".into());
+            assert_ne!(key, changed.target_key());
+        }
+        let mut changed = p.clone();
+        changed
+            .flags
+            .insert("under_reset".into(), !p.flag("under_reset"));
+        assert_ne!(key, changed.target_key());
+        changed = p;
+        changed.fields.insert("firmware".into(), "new.bin".into());
+        assert_eq!(key, changed.target_key());
     }
 }

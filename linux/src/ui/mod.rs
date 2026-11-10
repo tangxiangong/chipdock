@@ -1,19 +1,33 @@
 mod actions;
 mod auxiliary;
+mod chrome;
+mod colors;
 mod components;
+mod composer;
+mod connection;
 mod events;
+mod firmware_document;
 mod flash;
 mod highlights;
+mod icons;
+use components::{control_bg, native_button};
 mod logs;
 mod memory;
 mod plot;
+mod plot_surface;
 mod polling;
 mod profiles;
+mod protocol;
+mod records;
 mod serial;
+mod serial_forms;
 mod settings;
 mod state;
+mod target;
 mod terminal;
 mod terminal_state;
+mod terminal_table;
+mod workflow;
 
 use crate::{
     backend::{Command, Lane, Output, Worker, memory_text},
@@ -26,12 +40,15 @@ use chipdock_core::{
 };
 use chipdock_service::serial as service;
 use gpui_kit::component::{
-    ActiveTheme, Disableable, Selectable, Sizable,
+    ActiveTheme, Disableable, Selectable, Sizable, WindowExt,
     button::*,
     checkbox::Checkbox,
-    input::{Editor, EditorState, Input, InputState, Textarea, TextareaState},
+    input::{EditorState, Input, InputState, Textarea, TextareaState},
+    menu::{DropdownMenu, PopupMenuItem},
+    resizable::{h_resizable, resizable_panel, v_resizable},
     theme::{Theme, ThemeMode},
 };
+use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use serde_json::{Value, json};
 gpui_kit::actions!(
@@ -44,12 +61,14 @@ gpui_kit::actions!(
         ShowFlash,
         ShowSerial,
         Quit,
+        CloseWindow,
         Find,
         Refresh,
         ConnectTarget,
         DisconnectTarget,
         SaveProfile,
         ExecutePrimary,
+        ToggleAutoSend,
         ReadMemory,
         ClearTerminal,
         ShowSettings
@@ -79,6 +98,9 @@ struct Session {
     result: String,
 }
 pub struct Workbench {
+    focus_handle: FocusHandle,
+    expanded: std::collections::BTreeSet<&'static str>,
+    connected_target: Option<String>,
     worker: Worker,
     main_window: AnyWindowHandle,
     auxiliary: Vec<(auxiliary::Panel, AnyWindowHandle)>,
@@ -88,6 +110,7 @@ pub struct Workbench {
     path: Option<PathBuf>,
     fields: BTreeMap<String, Entity<InputState>>,
     editors: BTreeMap<String, Entity<TextareaState>>,
+    settings_tab: &'static str,
     page: &'static str,
     serial_page: &'static str,
     message: String,
@@ -109,10 +132,13 @@ pub struct Workbench {
     active: Option<u64>,
     paused: bool,
     terminal_style: String,
+    terminal_rows: std::rc::Rc<Vec<terminal_table::Row>>,
+    terminal_scroll: UniformListScrollHandle,
     terminal_ranges: BTreeMap<u64, std::ops::Range<usize>>,
     selected_record: Option<u64>,
+    record_sort: usize,
+    record_desc: bool,
     poll_pending: std::collections::HashSet<u64>,
-    next_port_scan: std::time::Instant,
     poll_tx: mpsc::Sender<(u64, u64)>,
     poll_rx: mpsc::Receiver<(u64, Result<chipdock_core::serial::PollBatch>)>,
     update: Option<crate::update::Available>,
@@ -139,6 +165,7 @@ impl Render for Workbench {
         };
         div()
             .size_full()
+            .track_focus(&self.focus_handle)
             .flex()
             .flex_col()
             .on_action(cx.listener(|s, _: &Find, w, cx| {
@@ -154,8 +181,8 @@ impl Render for Workbench {
                 s.fields[key].update(cx, |field, cx| field.focus(w, cx));
                 cx.notify();
             }))
-            .on_action(cx.listener(|s, _: &Refresh, _, cx| {
-                if s.confirmation.is_none() {
+            .on_action(cx.listener(|s, _: &Refresh, w, cx| {
+                if s.confirmation.is_none() && !s.is_busy() && !w.has_active_dialog(cx) {
                     s.submit(
                         if s.page == "serial" {
                             Command::Ports
@@ -166,8 +193,8 @@ impl Render for Workbench {
                     );
                 }
             }))
-            .on_action(cx.listener(|s, _: &ConnectTarget, _, cx| {
-                if s.confirmation.is_some() {
+            .on_action(cx.listener(|s, _: &ConnectTarget, w, cx| {
+                if s.confirmation.is_some() || s.is_busy() || w.has_active_dialog(cx) {
                     return;
                 }
                 if s.page == "serial" {
@@ -192,7 +219,7 @@ impl Render for Workbench {
                 }
             }))
             .on_action(cx.listener(|s, _: &DisconnectTarget, w, cx| {
-                if s.confirmation.is_some() {
+                if s.confirmation.is_some() || s.is_busy() || w.has_active_dialog(cx) {
                     return;
                 }
                 if s.page == "serial" {
@@ -204,30 +231,43 @@ impl Render for Workbench {
                 }
             }))
             .on_action(cx.listener(|s, _: &SaveProfile, w, cx| {
-                if !s.is_busy() {
+                if !s.is_busy() && !w.has_active_dialog(cx) {
                     s.confirmation = None;
-                    s.page = "profiles";
-                    s.fields["profile"].update(cx, |s, cx| s.focus(w, cx));
-                    cx.notify();
+                    s.open_save_profile(w, cx);
                 }
             }))
-            .on_action(cx.listener(|s, _: &ExecutePrimary, _, cx| {
-                if s.confirmation.is_some() {
+            .on_action(cx.listener(|s, _: &ExecutePrimary, w, cx| {
+                if s.confirmation.is_some() || s.is_busy() || w.has_active_dialog(cx) {
                     return;
                 }
                 if s.page == "serial" {
-                    if s.serial_page == "protocol" {
+                    if !s.serial_connected() {
+                        return;
+                    }
+                    if s.preferences.flag("command_mode") {
                         s.serial_action("command", cx);
                     } else if let Some(id) = s.active {
                         s.submit(Command::Send(id, s.snapshot(cx)), cx);
                     }
-                } else {
+                } else if s.target_connected(cx) && !s.snapshot(cx).get("firmware").is_empty() {
                     s.submit(Command::Flash(s.snapshot(cx)), cx);
                 }
             }))
-            .on_action(cx.listener(|s, _: &ReadMemory, _, cx| {
-                if s.confirmation.is_none() {
-                    s.page = "memory";
+            .on_action(cx.listener(|s, _: &ToggleAutoSend, w, cx| {
+                if s.page == "serial" && !w.has_active_dialog(cx) {
+                    s.toggle_auto_send(cx);
+                }
+            }))
+            .on_action(cx.listener(|s, _: &ReadMemory, w, cx| {
+                if s.confirmation.is_none()
+                    && !s.is_busy()
+                    && s.target_connected(cx)
+                    && !w.has_active_dialog(cx)
+                {
+                    if let Err(e) = s.open_panel(auxiliary::Panel::Memory, cx) {
+                        s.report_error(e.to_string(), cx);
+                        return;
+                    }
                     s.submit(Command::Memory(s.snapshot(cx)), cx);
                 }
             }))
@@ -237,9 +277,9 @@ impl Render for Workbench {
                 }
             }))
             .on_action(cx.listener(|s, _: &ShowSettings, _, cx| {
-                s.confirmation = None;
-                s.page = "settings";
-                cx.notify();
+                if let Err(e) = s.open_panel(auxiliary::Panel::Settings, cx) {
+                    s.report_error(e.to_string(), cx);
+                }
             }))
             .on_action(cx.listener(|s, _: &ShowFlash, _, cx| {
                 s.page = "flash";
@@ -249,6 +289,13 @@ impl Render for Workbench {
                 s.confirmation = None;
                 s.page = "serial";
                 cx.notify();
+            }))
+            .on_action(cx.listener(|_, _: &CloseWindow, w, cx| {
+                if w.has_active_dialog(cx) {
+                    w.close_dialog(cx);
+                } else {
+                    w.dispatch_action(Box::new(Quit), cx);
+                }
             }))
             .on_action(cx.listener(|s, _: &Quit, w, cx| {
                 if s.busy_lanes.iter().all(|l| l.background())
@@ -267,15 +314,14 @@ impl Render for Workbench {
             }))
             .on_action(cx.listener(|s, _: &OpenFirmware, _, cx| s.pick("firmware", cx)))
             .on_action(cx.listener(|s, _: &ShowLogs, _, cx| {
-                s.confirmation = None;
-                s.unseen_errors = 0;
-                s.page = "logs";
-                cx.notify();
+                if let Err(e) = s.open_panel(auxiliary::Panel::Logs, cx) {
+                    s.report_error(e.to_string(), cx);
+                }
             }))
             .on_action(cx.listener(|s, _: &ShowMemory, _, cx| {
-                s.confirmation = None;
-                s.page = "memory";
-                cx.notify();
+                if let Err(e) = s.open_panel(auxiliary::Panel::Memory, cx) {
+                    s.report_error(e.to_string(), cx);
+                }
             }))
             .on_action(cx.listener(|s, _: &SaveSettings, w, cx| s.save(w, cx)))
             .on_drop(cx.listener(|s, paths: &ExternalPaths, w, cx| {
@@ -289,70 +335,25 @@ impl Render for Workbench {
             }))
             .bg(cx.theme().background)
             .text_color(cx.theme().foreground)
-            .child(
+            .text_size(px(13.))
+            .line_height(relative(1.2))
+            .child(self.toolbar(window, cx))
+            .child(if matches!(self.page, "flash" | "serial") {
                 div()
-                    .h(px(48.))
-                    .px_4()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .border_b_1()
-                    .border_color(cx.theme().border)
-                    .child(div().font_weight(FontWeight::SEMIBOLD).child("ChipDock"))
-                    .child(div().text_sm().child(self.message.clone())),
-            )
-            .child(
-                div()
-                    .flex()
                     .flex_1()
                     .min_h_0()
-                    .child(
-                        div()
-                            .w(px(168.))
-                            .flex_shrink_0()
-                            .p_3()
-                            .flex()
-                            .flex_col()
-                            .gap_2()
-                            .bg(cx.theme().sidebar)
-                            .children(
-                                [
-                                    ("flash", "固件烧录"),
-                                    ("serial", "串口调试"),
-                                    ("memory", "目标内存"),
-                                    ("profiles", "配置与历史"),
-                                    ("logs", "操作日志"),
-                                    ("settings", "设置"),
-                                ]
-                                .into_iter()
-                                .map(|(page, label)| {
-                                    Button::new(page)
-                                        .label(if page == "logs" && self.unseen_errors > 0 {
-                                            format!("{label} ({})", self.unseen_errors)
-                                        } else {
-                                            label.to_owned()
-                                        })
-                                        .selected(self.page == page)
-                                        .on_click(cx.listener(move |s, _, _, cx| {
-                                            s.confirmation = None;
-                                            if page == "logs" {
-                                                s.unseen_errors = 0;
-                                            }
-                                            s.page = page;
-                                            cx.notify();
-                                        }))
-                                }),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .id("content")
-                            .flex_1()
-                            .min_w_0()
-                            .overflow_y_scroll()
-                            .p_6()
-                            .child(body),
-                    ),
-            )
+                    .overflow_hidden()
+                    .child(body)
+                    .into_any_element()
+            } else {
+                div()
+                    .id("content")
+                    .flex_1()
+                    .min_h_0()
+                    .overflow_y_scroll()
+                    .p_6()
+                    .child(body)
+                    .into_any_element()
+            })
     }
 }

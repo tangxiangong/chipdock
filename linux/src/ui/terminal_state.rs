@@ -20,6 +20,7 @@ impl Workbench {
                     return;
                 }
             };
+        let mut rows = Vec::new();
         let mut text = String::new();
         let mut highlights = Vec::new();
         self.terminal_ranges.clear();
@@ -29,6 +30,17 @@ impl Workbench {
                     continue;
                 }
                 let value = chipdock_gpui::presentation::display_text(frame, &p);
+                rows.push(super::terminal_table::Row {
+                    sequence: frame.sequence,
+                    timestamp: frame.timestamp.clone(),
+                    direction: match frame.direction {
+                        Direction::Receive => "RX",
+                        Direction::Send => "TX",
+                    },
+                    bytes: frame.bytes.len(),
+                    text: value.replace('\n', " ↵ "),
+                    color: colors.for_frame(frame, &value),
+                });
                 let start = text.len();
                 if p.flag("timestamps") {
                     text.push_str(&frame.timestamp);
@@ -53,6 +65,11 @@ impl Workbench {
                 text.push('\n');
             }
         }
+        if p.flag("auto_scroll") && !rows.is_empty() {
+            self.terminal_scroll
+                .scroll_to_item(rows.len() - 1, ScrollStrategy::Bottom);
+        }
+        self.terminal_rows = std::rc::Rc::new(rows);
         let style = format!("{}:{}", p.get("colors"), p.get("tx_color"));
         let style_changed = style != self.terminal_style;
         self.terminal_style = style;

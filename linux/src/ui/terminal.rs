@@ -1,255 +1,236 @@
 use super::*;
-
+use gpui_kit::component::input::Editor;
 impl Workbench {
-    pub(super) fn terminal_page(&self, window: &mut Window, cx: &mut Context<Self>) -> Div {
-        div()
-            .flex()
-            .flex_col()
-            .gap_3()
-            .child(self.row(&["filter"]))
-            .child(
-                div()
-                    .flex()
-                    .gap_3()
-                    .child(self.flag("search_regex", "正则表达式", cx))
-                    .child(self.flag("search_case", "区分大小写", cx)),
-            )
-            .child(self.choice("direction", &["all", "receive", "send"], window, cx))
-            .child(self.choice(
-                "display",
-                &["utf-8", "hex", "ascii", "gbk", "latin-1"],
-                window,
-                cx,
-            ))
-            .child(
-                div()
-                    .flex()
-                    .gap_3()
-                    .child(self.flag("auto_scroll", "自动滚动", cx))
-                    .child(self.flag("timestamps", "时间戳", cx))
-                    .child(self.flag("mixed", "文本与 HEX", cx))
-                    .child(self.flag("reset_on_clear", "清空时重置计数", cx)),
-            )
-            .child(
-                Editor::new(&self.terminal)
-                    .font_family(cx.theme().mono_font_family.clone())
-                    .h(px(240.))
-                    .readonly(true),
-            )
-            .child(
-                div()
-                    .flex()
-                    .gap_2()
-                    .child(self.button("pause", "暂停／继续显示", cx, |s, _, cx| {
-                        s.paused = !s.paused;
-                        cx.notify();
-                    }))
-                    .child(self.button("clear", "清空显示", cx, |s, w, cx| {
-                        s.clear_terminal(w, cx)
-                    }))
-                    .child(self.button("copy-terminal", "复制终端", cx, |s, _, cx| {
-                        cx.write_to_clipboard(ClipboardItem::new_string(
-                            s.terminal.read(cx).value().to_string(),
-                        ))
-                    }))
-                    .child(self.button("reset-count", "重置计数", cx, |s, _, cx| {
-                        s.serial_action("resetCounters", cx)
-                    })),
-            )
-            .child(self.field("send"))
-            .child(
-                div().flex().flex_wrap().gap_1().children(
-                    self.preferences
-                        .history
-                        .iter()
-                        .take(12)
-                        .enumerate()
-                        .map(|(index, text)| {
-                            let text = text.clone();
-                            Button::new(("history", index))
-                                .small()
-                                .label(text.clone())
-                                .on_click(cx.listener(move |s, _, w, cx| {
-                                    s.set("send", text.clone(), w, cx)
-                                }))
-                        }),
-                ),
-            )
-            .child(self.choice(
-                "format",
-                &["utf-8", "hex", "ascii", "gbk", "latin-1"],
-                window,
-                cx,
-            ))
-            .child(self.choice("ending", &["none", "lf", "cr", "crlf"], window, cx))
-            .child(self.choice(
-                "checksum",
-                &[
-                    "none",
-                    "sum8",
-                    "xor8",
-                    "oddParity",
-                    "evenParity",
-                    "crc16Modbus",
-                    "crc16Ccitt",
-                    "crc32",
-                    "lrc",
-                ],
-                window,
-                cx,
-            ))
-            .child(self.row(&["prefix", "suffix", "interval"]))
-            .child(self.flag("hex_ending", "HEX 发送附加行尾", cx))
-            .child(
-                div()
-                    .flex()
-                    .gap_2()
-                    .child(
-                        self.button("send", "发送", cx, |s, _, cx| {
-                            if let Some(id) = s.active {
-                                s.submit(Command::Send(id, s.snapshot(cx)), cx)
-                            }
-                        })
-                        .primary(),
-                    )
-                    .child(self.button("repeat", "循环发送", cx, |s, _, cx| {
-                        s.serial_action("repeat", cx)
-                    })),
-            )
-    }
-}
-
-impl Workbench {
-    pub(super) fn records_page(&self, cx: &mut Context<Self>) -> Div {
-        let p = self.snapshot(cx);
-        let filtered = self
+    pub(super) fn terminal_page(&self, w: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+        let total = self
             .sessions
             .iter()
             .find(|s| Some(s.id) == self.active)
-            .map(|s| chipdock_gpui::presentation::filtered(s.frames.iter(), &p))
-            .transpose();
-        let frames = match filtered {
-            Ok(frames) => frames.unwrap_or_default(),
-            Err(error) => return div().child(format!("搜索表达式无效：{error}")),
-        };
-        let rules =
-            match chipdock_gpui::presentation::Colors::new(p.get("colors"), p.get("tx_color")) {
-                Ok(rules) => rules,
-                Err(error) => {
-                    return div()
-                        .flex()
-                        .flex_col()
-                        .gap_3()
-                        .child(format!("着色规则无效：{error}"))
-                        .child(self.field("tx_color"))
-                        .child(self.editor("colors", cx));
-                }
-            };
-        let export = frames.iter().map(|f| (*f).clone()).collect::<Vec<_>>();
-        let rows = frames
-            .into_iter()
-            .map(|frame| {
-                let text = crate::serial::frame_text(frame, p.get("display"));
-                (
-                    format!(
-                        "#{}  {}  {:?}  {}",
-                        frame.sequence,
-                        frame.timestamp,
-                        frame.direction,
-                        text.replace('\n', " ↵ ")
-                    ),
-                    rules.for_frame(frame, text),
-                    serde_json::to_string_pretty(frame).unwrap_or_default(),
-                    frame.sequence,
+            .map_or(0, |s| s.frames.len());
+        let mut terminal = div().size_full().flex().flex_col();
+        if self.expanded.contains("terminal-text") {
+            terminal = terminal.child(
+                Editor::new(&self.terminal)
+                    .font_family(cx.theme().mono_font_family.clone())
+                    .flex_1()
+                    .min_h_0()
+                    .readonly(true),
+            );
+        } else {
+            terminal = terminal.child(self.terminal_table(cx));
+        }
+        terminal = terminal.child(
+            div()
+                .h(px(32.))
+                .flex_shrink_0()
+                .px_3()
+                .flex()
+                .items_center()
+                .gap_2()
+                .border_t_1()
+                .border_color(cx.theme().border)
+                .child(div().w(px(82.)).child(self.compact_choice(
+                    "display",
+                    &["utf-8", "hex", "ascii", "gbk", "latin-1"],
+                    cx,
+                )))
+                .child(
+                    div()
+                        .text_size(px(11.))
+                        .text_color(cx.theme().muted_foreground)
+                        .child(format!("{total} 条")),
                 )
-            })
-            .collect::<Vec<_>>();
-        let view = cx.entity().downgrade();
-        div()
-            .flex()
-            .flex_col()
-            .gap_3()
-            .child(self.field("filter"))
-            .child(div().h(px(280.)).child(uniform_list(
-                "serial-records",
-                rows.len(),
-                move |range, _, cx| {
-                    range
-                        .map(|index| {
-                            let (label, color, detail, sequence) = &rows[index];
-                            let sequence = *sequence;
-                            let detail = detail.clone();
-                            let view = view.clone();
-                            div()
-                                .id(("record", index))
-                                .h(px(28.))
-                                .px_2()
-                                .text_sm()
-                                .overflow_hidden()
-                                .text_color(
-                                    color
-                                        .map(rgb)
-                                        .map(Into::into)
-                                        .unwrap_or(cx.theme().foreground),
-                                )
-                                .child(label.clone())
-                                .on_click(move |_, w, cx| {
-                                    let _ = view.update(cx, |s, cx| {
-                                        s.selected_record = Some(sequence);
-                                        s.show_text(detail.clone(), w, cx)
-                                    });
-                                })
-                        })
-                        .collect()
-                },
-            )))
-            .child(
-                div()
-                    .flex()
-                    .gap_2()
-                    .children(["json", "txt", "csv", "bin"].into_iter().map(|format| {
-                        let frames = export.clone();
-                        let encoding = p.get("display").to_owned();
-                        Button::new(SharedString::from(format!("records-export-{format}")))
-                            .label(format!("导出 {format}…"))
-                            .on_click(cx.listener(move |s, _, _, cx| {
-                                match chipdock_gpui::presentation::records(
-                                    &frames.iter().collect::<Vec<_>>(),
-                                    format,
-                                    &encoding,
-                                ) {
-                                    Ok(bytes) => s.export_bytes(
-                                        &format!("ChipDock-records.{format}"),
-                                        bytes,
-                                        cx,
-                                    ),
-                                    Err(e) => s.report_error(e.to_string(), cx),
+                .child(div().flex_1())
+                .child(
+                    native_button("auto-scroll")
+                        .small()
+                        .ghost()
+                        .icon(icons::icon("arrow-down"))
+                        .tooltip("自动滚动")
+                        .selected(self.preferences.flag("auto_scroll"))
+                        .on_click(cx.listener(|s, _, _, cx| {
+                            s.preferences
+                                .flags
+                                .insert("auto_scroll".into(), !s.preferences.flag("auto_scroll"));
+                            cx.notify();
+                        })),
+                )
+                .child(
+                    native_button("pause-display")
+                        .small()
+                        .ghost()
+                        .icon(icons::icon("pause"))
+                        .tooltip("暂停显示")
+                        .selected(self.paused)
+                        .on_click(cx.listener(|s, _, w, cx| {
+                            s.paused = !s.paused;
+                            if !s.paused {
+                                s.render_terminal(w, cx);
+                            }
+                            cx.notify();
+                        })),
+                )
+                .child(div().w(px(1.)).h(px(14.)).bg(cx.theme().border))
+                .child(
+                    native_button("display-options")
+                        .small()
+                        .ghost()
+                        .icon(icons::icon("settings"))
+                        .tooltip("显示选项")
+                        .dropdown_menu({
+                            let owner = cx.entity().downgrade();
+                            let flags = self.preferences.flags.clone();
+                            move |mut m, _, _| {
+                                for (key, label) in [
+                                    ("mixed", "文本与 HEX 混显"),
+                                    ("timestamps", "显示时间戳"),
+                                    ("reset_on_clear", "清屏时重置计数"),
+                                ] {
+                                    let checked = flags.get(key).copied().unwrap_or(false);
+                                    let owner = owner.clone();
+                                    m = m.item(
+                                        PopupMenuItem::new(label).checked(checked).on_click(
+                                            move |_, w, cx| {
+                                                let _ = owner.update(cx, |s, cx| {
+                                                    s.preferences
+                                                        .flags
+                                                        .insert(key.into(), !checked);
+                                                    s.render_terminal(w, cx);
+                                                    cx.notify();
+                                                });
+                                            },
+                                        ),
+                                    );
                                 }
-                            }))
-                    })),
+                                let colors = owner.clone();
+                                m = m.item(
+                                    PopupMenuItem::new("着色规则…")
+                                        .icon(icons::icon("palette"))
+                                        .on_click(move |_, w, cx| {
+                                            let _ = colors.update(cx, |s, cx| s.open_colors(w, cx));
+                                        }),
+                                );
+                                let reset = owner.clone();
+                                m = m.item(PopupMenuItem::new("重置计数").on_click(
+                                    move |_, _, cx| {
+                                        let _ = reset.update(cx, |s, cx| {
+                                            s.serial_action("resetCounters", cx)
+                                        });
+                                    },
+                                ));
+                                let text = owner.clone();
+                                m = m.item(PopupMenuItem::new("切换可选中文本视图").on_click(
+                                    move |_, _, cx| {
+                                        let _ = text.update(cx, |s, cx| {
+                                            if !s.expanded.remove("terminal-text") {
+                                                s.expanded.insert("terminal-text");
+                                            }
+                                            cx.notify();
+                                        });
+                                    },
+                                ));
+                                let owner = owner.clone();
+                                m.item(PopupMenuItem::new("复制终端").on_click(move |_, _, cx| {
+                                    let _ = owner.update(cx, |s, cx| {
+                                        cx.write_to_clipboard(ClipboardItem::new_string(
+                                            s.terminal.read(cx).value().to_string(),
+                                        ))
+                                    });
+                                }))
+                            }
+                        }),
+                )
+                .child(
+                    native_button("records")
+                        .small()
+                        .ghost()
+                        .icon(icons::icon("table"))
+                        .tooltip("记录表")
+                        .on_click(cx.listener(|s, _, w, cx| {
+                            s.open_serial_tool("records", "记录表", w, cx)
+                        })),
+                )
+                .child(
+                    native_button("terminal-export")
+                        .small()
+                        .ghost()
+                        .icon(icons::icon("export"))
+                        .tooltip("导出记录")
+                        .disabled(total == 0)
+                        .dropdown_menu({
+                            let owner = cx.entity().downgrade();
+                            move |mut m, _, _| {
+                                for format in ["json", "txt", "csv", "bin"] {
+                                    let owner = owner.clone();
+                                    m = m.item(PopupMenuItem::new(format.to_uppercase()).on_click(
+                                        move |_, _, cx| {
+                                            let _ = owner.update(cx, |s, cx| {
+                                                if let Some(session) = s
+                                                    .sessions
+                                                    .iter()
+                                                    .find(|v| Some(v.id) == s.active)
+                                                {
+                                                    match chipdock_gpui::presentation::records(
+                                                        &session.frames.iter().collect::<Vec<_>>(),
+                                                        format,
+                                                        s.snapshot(cx).get("display"),
+                                                    ) {
+                                                        Ok(bytes) => s.export_bytes(
+                                                            &format!("ChipDock-records.{format}"),
+                                                            bytes,
+                                                            cx,
+                                                        ),
+                                                        Err(e) => s.report_error(e.to_string(), cx),
+                                                    }
+                                                }
+                                            });
+                                        },
+                                    ));
+                                }
+                                m
+                            }
+                        }),
+                )
+                .child(
+                    native_button("clear")
+                        .small()
+                        .ghost()
+                        .icon(icons::icon("trash"))
+                        .tooltip("清屏")
+                        .disabled(total == 0)
+                        .on_click(cx.listener(|s, _, w, cx| s.clear_terminal(w, cx))),
+                )
+                .child(div().w(px(1.)).h(px(14.)).bg(cx.theme().border))
+                .child(
+                    native_button("composer-toggle")
+                        .small()
+                        .ghost()
+                        .icon(icons::icon("composer"))
+                        .tooltip("发送区")
+                        .selected(!self.expanded.contains("hide-composer"))
+                        .on_click(cx.listener(|s, _, _, cx| {
+                            if !s.expanded.remove("hide-composer") {
+                                s.expanded.insert("hide-composer");
+                            }
+                            cx.notify();
+                        })),
+                ),
+        );
+        if self.expanded.contains("hide-composer") {
+            return terminal.into_any_element();
+        }
+        v_resizable("terminal-composer")
+            .child(
+                resizable_panel()
+                    .size_range(px(180.)..px(1800.))
+                    .child(terminal),
             )
-            .child(self.button(
-                "locate-record",
-                "在终端定位选中记录",
-                cx,
-                |s, w, cx| {
-                    if let Some(id) = s.selected_record {
-                        s.set("filter", "", w, cx);
-                        s.set("direction", "all", w, cx);
-                        s.paused = true;
-                        s.serial_page = "terminal";
-                        s.preferences.flags.insert("auto_scroll".into(), false);
-                        s.render_terminal(w, cx);
-                        if let Some(range) = s.terminal_ranges.get(&id).cloned() {
-                            s.terminal
-                                .update(cx, |t, cx| t.set_selected_range(range, cx));
-                        } else {
-                            s.report("该记录已超出显示保留范围", cx);
-                        }
-                    }
-                },
-            ))
-            .child(self.field("tx_color"))
-            .child(self.editor("colors", cx))
+            .child(
+                resizable_panel()
+                    .size(px(190.))
+                    .size_range(px(164.)..px(320.))
+                    .child(self.composer(w, cx)),
+            )
+            .into_any_element()
     }
 }

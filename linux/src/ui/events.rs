@@ -90,8 +90,12 @@ impl Workbench {
                     }
                 }
                 Ok(out) => {
-                    if !lane.background() {
-                        self.message = "已完成".into();
+                    if let Some(message) = completion_status(
+                        lane,
+                        &out,
+                        self.busy_lanes.iter().all(|l| l.background()),
+                    ) {
+                        self.message = message.into();
                     }
                     match out {
                         Output::Update(update) => {
@@ -180,8 +184,23 @@ impl Workbench {
                         Output::Ports(v) => self.ports = v,
                         Output::Connected(info) => {
                             self.set("chip", info.chip.clone(), window, cx);
-                            self.firmware_output
-                                .update(cx, |s, cx| s.set_value(format!("{info:#?}"), window, cx));
+                            self.set("probe", info.probe, window, cx);
+                            self.set(
+                                "wire",
+                                match info.protocol {
+                                    WireProtocol::Swd => "swd",
+                                    WireProtocol::Jtag => "jtag",
+                                },
+                                window,
+                                cx,
+                            );
+                            if let Some(speed) = info.speed_khz {
+                                self.set("speed", speed.to_string(), window, cx);
+                            }
+                            self.preferences
+                                .flags
+                                .insert("under_reset".into(), info.connect_under_reset);
+                            self.connected_target = Some(self.snapshot(cx).target_key());
                         }
                         Output::Preview(p, input) => {
                             let current = self.snapshot(cx).firmware();
@@ -321,5 +340,43 @@ impl Workbench {
     pub(super) fn show_text(&mut self, text: String, window: &mut Window, cx: &mut Context<Self>) {
         self.output
             .update(cx, |s, cx| s.set_value(text, window, cx));
+    }
+}
+
+fn completion_status(lane: Lane, out: &Output, idle: bool) -> Option<&'static str> {
+    if lane.background() || !idle {
+        return None;
+    }
+    Some(
+        if matches!(
+            out,
+            Output::Probes(_)
+                | Output::Ports(_)
+                | Output::Session(..)
+                | Output::Chips(_)
+                | Output::Preview(..)
+        ) {
+            "准备就绪"
+        } else {
+            "已完成"
+        },
+    )
+}
+#[cfg(test)]
+mod status_tests {
+    use super::*;
+    use core::prelude::v1::test;
+    #[test]
+    fn discovery_and_overlapping_work_do_not_replace_foreground_status() {
+        let probes = Output::Probes(Vec::new());
+        assert_eq!(
+            completion_status(Lane::Probe, &probes, true),
+            Some("准备就绪")
+        );
+        assert_eq!(completion_status(Lane::Probe, &probes, false), None);
+        assert_eq!(
+            completion_status(Lane::Discovery, &Output::Ports(Vec::new()), true),
+            None
+        );
     }
 }

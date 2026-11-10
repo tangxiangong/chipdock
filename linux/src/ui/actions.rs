@@ -29,16 +29,13 @@ impl Workbench {
     }
 
     pub(super) fn disconnect_target(&mut self, w: &mut Window, cx: &mut Context<Self>) {
-        self.set("firmware", "", w, cx);
-        self.preview = None;
+        self.connected_target = None;
         self.memory = None;
         self.chips.clear();
         self.layout.clear();
-        self.firmware_output
-            .update(cx, |s, cx| s.set_value("", w, cx));
         self.memory_output
             .update(cx, |s, cx| s.set_value("", w, cx));
-        self.report("已清除目标连接", cx);
+        self.report("已断开", cx);
     }
     pub(super) fn clear_terminal(&mut self, w: &mut Window, cx: &mut Context<Self>) {
         if let Some(session) = self.sessions.iter_mut().find(|s| Some(s.id) == self.active) {

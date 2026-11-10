@@ -1,6 +1,6 @@
 use super::*;
 
-fn key_bindings(os: OperatingSystem) -> [KeyBinding; 16] {
+fn key_bindings(os: OperatingSystem) -> [KeyBinding; 18] {
     // KeyBinding::new requires explicit modifiers; it cannot resolve `secondary-`.
     macro_rules! binding {
         ($key:literal, $action:expr) => {
@@ -23,6 +23,7 @@ fn key_bindings(os: OperatingSystem) -> [KeyBinding; 16] {
         binding!("shift-k", DisconnectTarget),
         binding!("shift-s", SaveProfile),
         binding!("enter", ExecutePrimary),
+        binding!("alt-enter", ToggleAutoSend),
         binding!("shift-r", ReadMemory),
         binding!("l", ClearTerminal),
         binding!(",", ShowSettings),
@@ -30,6 +31,7 @@ fn key_bindings(os: OperatingSystem) -> [KeyBinding; 16] {
         binding!("1", ShowFlash),
         binding!("2", ShowSerial),
         binding!("q", Quit),
+        binding!("w", CloseWindow),
         binding!("j", ShowLogs),
         binding!("alt-m", ShowMemory),
         binding!("s", SaveSettings),
@@ -38,12 +40,14 @@ fn key_bindings(os: OperatingSystem) -> [KeyBinding; 16] {
 
 impl Workbench {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let focus_handle = cx.focus_handle();
+        focus_handle.focus(window, cx);
         let bindings = key_bindings(cx.platform_info().os);
         cx.bind_keys(bindings);
         let loaded =
             model::preferences_path().and_then(|path| Ok((Preferences::load(&path)?, path)));
         let (mut preferences, path, mut message) = match loaded {
-            Ok((p, path)) => (p, Some(path), "就绪".into()),
+            Ok((p, path)) => (p, Some(path), "准备就绪".into()),
             Err(e) => (Preferences::default(), None, format!("{e:#}")),
         };
         preferences
@@ -52,6 +56,14 @@ impl Workbench {
         preferences
             .flags
             .insert("reset".into(), preferences.flag("default_reset"));
+        if !preferences.fields.contains_key("roll_mib")
+            && let Ok(bytes) = preferences.number("roll")
+        {
+            preferences.fields.insert(
+                "roll_mib".into(),
+                (bytes as f64 / (1024. * 1024.)).to_string(),
+            );
+        }
         for (key, _, default) in model::FIELDS.iter().chain(model::EDITORS.iter()) {
             preferences
                 .fields
@@ -76,7 +88,9 @@ impl Workbench {
                 (
                     (*key).into(),
                     cx.new(|cx| {
-                        InputState::new(window, cx).default_value(preferences.get(key).to_owned())
+                        InputState::new(window, cx)
+                            .placeholder(if *key == "filter" { "搜索数据" } else { "" })
+                            .default_value(preferences.get(key).to_owned())
                     }),
                 )
             })
@@ -88,6 +102,11 @@ impl Workbench {
                     (*key).into(),
                     cx.new(|cx| {
                         TextareaState::new(window, cx)
+                            .placeholder(if *key == "send" {
+                                "输入要发送的数据…"
+                            } else {
+                                ""
+                            })
                             .default_value(preferences.get(key).to_owned())
                     }),
                 )
@@ -111,6 +130,7 @@ impl Workbench {
             .send(Command::InitializeSession(preferences.clone()))
             .is_ok();
         let scanning = worker.sender.send(Command::Scan).is_ok();
+        let _ = worker.sender.send(Command::Ports);
         let firmware_output = cx.new(|cx| TextareaState::new(window, cx));
         let memory_output = cx.new(|cx| TextareaState::new(window, cx));
         let (poll_tx, requests) = mpsc::channel::<(u64, u64)>();
@@ -168,6 +188,16 @@ impl Workbench {
             "light" => Theme::change(ThemeMode::Light, Some(window), cx),
             _ => {}
         }
+        super::components::native_accent(cx);
+        if cfg!(target_os = "macos")
+            && cx
+                .text_system()
+                .all_font_names()
+                .iter()
+                .any(|name| name == ".SF NS Mono")
+        {
+            Theme::global_mut(cx).mono_font_family = ".SF NS Mono".into();
+        }
         Self {
             worker,
             main_window: window.window_handle(),
@@ -184,6 +214,10 @@ impl Workbench {
             path,
             fields,
             editors,
+            focus_handle,
+            expanded: std::collections::BTreeSet::new(),
+            connected_target: None,
+            settings_tab: "general",
             page: "flash",
             serial_page: "terminal",
             message,
@@ -205,10 +239,13 @@ impl Workbench {
             active: None,
             paused: false,
             terminal_style: String::new(),
+            terminal_rows: std::rc::Rc::new(Vec::new()),
+            terminal_scroll: UniformListScrollHandle::new(),
             terminal_ranges: BTreeMap::new(),
             selected_record: None,
+            record_sort: 0,
+            record_desc: false,
             poll_pending: std::collections::HashSet::new(),
-            next_port_scan: std::time::Instant::now(),
             poll_tx,
             poll_rx,
             update: None,
@@ -242,8 +279,12 @@ impl Workbench {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let value = value.into();
         if let Some(field) = self.fields.get(key) {
-            field.update(cx, |field, cx| field.set_value(value.into(), window, cx));
+            field.update(cx, |field, cx| field.set_value(value.clone(), window, cx));
+        }
+        if let Some(editor) = self.editors.get(key) {
+            editor.update(cx, |editor, cx| editor.set_value(value, window, cx));
         }
     }
     pub(super) fn report_error(&mut self, text: impl Into<String>, cx: &mut Context<Self>) {
@@ -381,6 +422,7 @@ impl Workbench {
             self.preferences.command_history = p.command_history.clone();
             for key in [
                 "reconnect",
+                "command_mode",
                 "hex_ending",
                 "auto_scroll",
                 "timestamps",

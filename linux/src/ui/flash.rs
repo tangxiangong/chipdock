@@ -2,175 +2,268 @@ use super::*;
 
 impl Workbench {
     pub(super) fn flash_page(&self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
-        let mut page = div()
+        let p = self.snapshot(cx);
+        let margin = (window.viewport_size().width * 0.05).max(px(32.));
+        let document = self.firmware_document(margin, cx);
+        let mut settings = div()
+            .id("flash-settings")
+            .size_full()
+            .overflow_y_scroll()
+            .px(margin)
+            .py_5()
             .flex()
             .flex_col()
-            .gap_4()
-            .child(div().text_xl().child("固件烧录"))
-            .child(self.row(&["firmware", "base"]))
-            .child(
-                div()
-                    .flex()
-                    .gap_2()
-                    .child(self.button("pick-firmware", "选择固件…", cx, |s, _, cx| {
-                        s.pick("firmware", cx)
-                    }))
-                    .child(self.button("preview", "分析固件", cx, |s, _, cx| {
-                        s.submit(Command::Preview(s.snapshot(cx)), cx)
-                    })),
-            )
-            .child(
-                div()
-                    .flex()
-                    .gap_2()
-                    .child(
-                        self.button("reveal-firmware", "显示固件文件", cx, |s, _, cx| {
-                            let p = s.snapshot(cx);
-                            if !p.get("firmware").is_empty() {
-                                cx.reveal_path(std::path::Path::new(p.get("firmware")));
-                            }
-                        }),
+            .gap_4();
+        settings = settings.child(
+            div()
+                .flex()
+                .items_center()
+                .gap_4()
+                .child(
+                    div()
+                        .w(px(52.))
+                        .text_right()
+                        .text_color(cx.theme().muted_foreground)
+                        .child("目标"),
+                )
+                .child(
+                    div()
+                        .flex_1()
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap_2()
+                                .child(div().size(px(7.)).rounded_full().bg(
+                                    if self.target_connected(cx) {
+                                        rgb(0x34C759).into()
+                                    } else {
+                                        cx.theme().muted_foreground.opacity(0.4)
+                                    },
+                                ))
+                                .child(div().font_weight(FontWeight::SEMIBOLD).child(
+                                    if p.get("chip").is_empty() {
+                                        "自动识别".to_owned()
+                                    } else {
+                                        p.get("chip").to_owned()
+                                    },
+                                ))
+                                .child(div().text_color(cx.theme().muted_foreground).child(
+                                    if self.target_connected(cx) {
+                                        "已连接"
+                                    } else {
+                                        "未连接"
+                                    },
+                                )),
+                        )
+                        .child(
+                            div()
+                                .text_size(px(12.))
+                                .text_color(cx.theme().muted_foreground)
+                                .child(format!(
+                                    "{} · {} kHz · {}",
+                                    p.get("wire").to_uppercase(),
+                                    p.get("speed"),
+                                    if p.get("probe").is_empty() {
+                                        "自动选择探针"
+                                    } else {
+                                        p.get("probe")
+                                    }
+                                )),
+                        ),
+                )
+                .when(self.target_connected(cx), |v| {
+                    v.child(
+                        native_button("disconnect-target")
+                            .small()
+                            .ghost()
+                            .icon(icons::icon("unlink"))
+                            .tooltip("断开目标")
+                            .disabled(self.is_busy())
+                            .on_click(cx.listener(|s, _, w, cx| s.disconnect_target(w, cx))),
                     )
-                    .child(self.button("clear-firmware", "关闭固件", cx, |s, w, cx| {
-                        s.set("firmware", "", w, cx);
-                        s.preview = None;
-                        s.firmware_output.update(cx, |s, cx| s.set_value("", w, cx));
-                        cx.notify();
-                    })),
-            )
-            .child(self.row(&["chip", "probe", "speed"]))
-            .child(
-                div()
-                    .flex()
-                    .gap_2()
-                    .child(self.button("scan", "刷新探针", cx, |s, _, cx| {
-                        s.submit(Command::Scan, cx)
-                    }))
-                    .child(self.button("search", "搜索芯片", cx, |s, _, cx| {
-                        s.submit(Command::Search(s.snapshot(cx).get("chip").into()), cx)
-                    }))
-                    .child(self.button("connect", "连接识别", cx, |s, _, cx| {
-                        s.submit(Command::Connect(s.snapshot(cx)), cx)
-                    }))
-                    .child(
-                        self.button("disconnect-target", "断开目标", cx, |s, w, cx| {
-                            s.disconnect_target(w, cx)
-                        }),
-                    )
-                    .child(self.button("layout", "读取芯片布局", cx, |s, _, cx| {
-                        s.submit(Command::Layout(s.snapshot(cx)), cx)
-                    })),
-            )
-            .child(self.choice("wire", &["swd", "jtag"], window, cx))
-            .child(self.choice("erase", &["automatic", "full", "skip"], window, cx))
+                })
+                .child(
+                    self.button("target-setup", "更改…", cx, |s, w, cx| {
+                        s.open_target_setup(w, cx)
+                    })
+                    .icon(icons::icon("settings")),
+                ),
+        );
+        settings = settings
             .child(
                 div()
                     .flex()
                     .gap_4()
-                    .child(self.flag("under_reset", "复位下连接", cx))
-                    .child(self.flag("verify", "写入后校验", cx))
-                    .child(self.flag("reset", "完成后复位", cx))
-                    .child(self.flag("dry_run", "仅预检查", cx)),
+                    .items_start()
+                    .child(
+                        div()
+                            .w(px(52.))
+                            .flex_shrink_0()
+                            .text_right()
+                            .text_color(cx.theme().muted_foreground)
+                            .child("擦除"),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_1()
+                            .child(div().w(px(100.)).child(self.compact_choice(
+                                "erase",
+                                &["automatic", "full", "skip"],
+                                cx,
+                            )))
+                            .child(
+                                div()
+                                    .text_size(px(12.))
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child(match p.get("erase") {
+                                        "full" => "擦除芯片中的全部 Flash",
+                                        "skip" => "保留现有 Flash，不执行擦除",
+                                        _ => "仅擦除固件覆盖的扇区",
+                                    }),
+                            ),
+                    ),
             )
             .child(
                 div()
                     .flex()
-                    .gap_2()
+                    .gap_4()
+                    .items_start()
                     .child(
-                        self.button("flash", "烧录固件", cx, |s, _, cx| {
-                            s.submit(Command::Flash(s.snapshot(cx)), cx)
-                        })
-                        .primary(),
+                        div()
+                            .w(px(52.))
+                            .flex_shrink_0()
+                            .text_right()
+                            .text_color(cx.theme().muted_foreground)
+                            .child("完成后"),
                     )
-                    .child(self.button("erase", "整片擦除…", cx, |s, _, cx| {
-                        s.confirmation = Some(s.snapshot(cx));
-                        cx.notify();
-                    })),
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_2()
+                            .child(self.flag("verify", "校验写入的数据", cx))
+                            .child(self.flag("reset", "复位并运行程序", cx))
+                            .child(self.flag("dry_run", "仅预检查，不写入芯片", cx)),
+                    ),
             );
-        if cfg!(windows) {
-            page = page.child(self.button(
-                "repair-driver",
-                "检查／修复所选探针驱动",
-                cx,
-                |s, _, cx| s.submit(Command::RepairProbe(s.snapshot(cx).get("probe").into()), cx),
-            ));
-        }
-        if let Some(p) = &self.confirmation {
-            let request = p.clone();
-            page = page.child(
+        if let Some(request) = &self.confirmation {
+            let request = request.clone();
+            settings = settings.child(
                 div()
                     .p_3()
+                    .rounded_md()
                     .border_1()
                     .border_color(cx.theme().danger)
-                    .rounded_md()
                     .child(format!(
-                        "确认整片擦除？探针：{}；芯片：{}。全部 Flash 数据将丢失。",
-                        p.get("probe"),
-                        p.get("chip")
+                        "确认擦除 {} 的全部 Flash 数据？",
+                        request.get("chip")
                     ))
                     .child(
-                        self.button("confirm-erase", "确认擦除", cx, move |s, _, cx| {
-                            s.confirmation = None;
-                            s.submit(Command::Erase(request.clone()), cx);
+                        div()
+                            .flex()
+                            .gap_2()
+                            .mt_2()
+                            .child(self.button("cancel-erase", "取消", cx, |s, _, cx| {
+                                s.confirmation = None;
+                                cx.notify();
+                            }))
+                            .child(self.button(
+                                "confirm-erase",
+                                "确认擦除",
+                                cx,
+                                move |s, _, cx| {
+                                    s.confirmation = None;
+                                    s.submit(Command::Erase(request.clone()), cx);
+                                },
+                            )),
+                    ),
+            );
+        }
+        settings = settings.child(
+            div()
+                .flex()
+                .items_center()
+                .gap_3()
+                .child(
+                    div()
+                        .flex_1()
+                        .text_size(px(12.))
+                        .text_color(cx.theme().muted_foreground)
+                        .child(if self.target_connected(cx) {
+                            if p.get("firmware").is_empty() {
+                                "选择固件后即可烧录"
+                            } else if cx.platform_info().os == OperatingSystem::Mac {
+                                "按 ⌘↩ 开始"
+                            } else {
+                                "按 Ctrl+Enter 开始"
+                            }
+                        } else {
+                            if cx.platform_info().os == OperatingSystem::Mac {
+                                "连接后即可烧录（⌘K）"
+                            } else {
+                                "连接后即可烧录（Ctrl+K）"
+                            }
                         }),
+                )
+                .child(
+                    self.button("erase", "擦除芯片…", cx, |s, _, cx| {
+                        s.confirmation = Some(s.snapshot(cx));
+                        cx.notify();
+                    })
+                    .icon(icons::icon("erase"))
+                    .disabled(
+                        !self.target_connected(cx) || self.is_busy() || self.confirmation.is_some(),
+                    ),
+                )
+                .child(
+                    self.button(
+                        "flash",
+                        if self.target_connected(cx) {
+                            "烧录固件"
+                        } else {
+                            "连接目标"
+                        },
+                        cx,
+                        |s, _, cx| {
+                            s.submit(
+                                if s.target_connected(cx) {
+                                    Command::Flash(s.snapshot(cx))
+                                } else {
+                                    Command::Connect(s.snapshot(cx))
+                                },
+                                cx,
+                            )
+                        },
                     )
-                    .child(self.button("cancel-erase", "取消", cx, |s, _, cx| {
-                        s.confirmation = None;
-                        cx.notify();
-                    })),
-            );
-        }
-        for (index, probe) in self.probes.iter().enumerate() {
-            let id = probe.identifier.clone();
-            let label = format!("{} · {}", probe.product.as_deref().unwrap_or("探针"), id);
-            page = page.child(
-                Button::new(("probe", index))
-                    .small()
-                    .label(label)
-                    .on_click(cx.listener(move |s, _, w, cx| s.set("probe", id.clone(), w, cx))),
-            );
-        }
-        for (index, chip) in self.chips.iter().enumerate() {
-            let chip = chip.clone();
-            page = page.child(
-                Button::new(("chip", index))
-                    .small()
-                    .label(chip.clone())
-                    .on_click(cx.listener(move |s, _, w, cx| {
-                        s.set("chip", chip.clone(), w, cx);
-                        s.chips.clear();
-                        cx.notify();
-                    })),
-            );
-        }
-        if let Some(p) = &self.preview {
-            page = page.child(div().text_sm().child(format!(
-                "{:?} · 已用 {} 字节 · 地址跨度 {} 字节",
-                p.usage.format, p.usage.used_bytes, p.usage.span_bytes
-            )));
-            for segment in &p.usage.segments {
-                page = page.child(format!(
-                    "0x{:08X} — 0x{:08X}    {} 字节",
-                    segment.start, segment.end, segment.size
-                ));
-            }
-        }
-        for region in &self.layout {
-            page = page.child(format!(
-                "{:?}  {}  0x{:08X} — 0x{:08X}  {} 字节",
-                region.kind,
-                region.name.as_deref().unwrap_or(""),
-                region.start,
-                region.end,
-                region.size
-            ));
-        }
-        page.child(
-            Textarea::new(&self.firmware_output)
-                .font_family(cx.theme().mono_font_family.clone())
-                .h(px(220.))
-                .readonly(true),
-        )
-        .into_any_element()
+                    .icon(icons::icon(if self.target_connected(cx) {
+                        "send"
+                    } else {
+                        "link"
+                    }))
+                    .rounded_full()
+                    .primary()
+                    .disabled(
+                        self.is_busy()
+                            || self.confirmation.is_some()
+                            || (self.target_connected(cx) && p.get("firmware").is_empty()),
+                    ),
+                ),
+        );
+        v_resizable("firmware-split")
+            .child(
+                resizable_panel()
+                    .size_range(px(220.)..px(1400.))
+                    .child(document),
+            )
+            .child(
+                resizable_panel()
+                    .size(px(300.))
+                    .size_range(px(260.)..px(420.))
+                    .child(settings),
+            )
+            .into_any_element()
     }
 }

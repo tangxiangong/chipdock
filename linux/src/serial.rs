@@ -23,7 +23,7 @@ pub fn request(p: &Preferences, action: &str) -> Result<Value> {
         "command" => json!({"action":"command","input":p.get("command")}),
         "validatePackets" => json!({"action":action,"packets":data("packets")?}),
         "checksum" => {
-            json!({"action":action,"input":p.get("send"),"format":p.get("format"),"algorithm":p.get("checksum"),"options":crate::backend::send_options(p)?})
+            json!({"action":action,"input":p.get("checksum_input"),"format":p.get("format"),"algorithm":p.get("checksum"),"options":crate::backend::send_options(p)?})
         }
         "framing" => {
             let mode = p.get("frame_mode");
@@ -40,7 +40,7 @@ pub fn request(p: &Preferences, action: &str) -> Result<Value> {
             json!({"action":"modbus","request":{"station":p.number("station")?,"function":p.number("function")?,"address":p.number("register")?,"quantity":p.number("quantity")?,"values":p.get("values").split(',').filter(|s|!s.trim().is_empty()).map(model::number).collect::<Result<Vec<_>>>()?},"timeout_ms":if action=="modbusSend" {p.number("timeout")?}else{0}})
         }
         "capture" | "raw" => {
-            json!({"action":"capture","raw":action=="raw","settings":{"path":p.get("capture_path"),"format":p.get("capture_format"),"rollBytes":p.number("roll")?}})
+            json!({"action":"capture","raw":action=="raw","settings":{"path":p.get("capture_path"),"format":p.get("capture_format"),"rollBytes":capture_roll_bytes(p)?}})
         }
         "stopCapture" | "stopRaw" => {
             json!({"action":"capture","raw":action=="stopRaw","settings":null})
@@ -85,7 +85,8 @@ mod tests {
     #[test]
     fn checksum_uses_the_shared_serial_engine() {
         let mut p = Preferences::default();
-        p.fields.insert("send".into(), "01 02 FF".into());
+        p.fields.insert("checksum_input".into(), "01 02 FF".into());
+        p.fields.insert("send".into(), "unrelated draft".into());
         p.fields.insert("format".into(), "hex".into());
         p.fields.insert("checksum".into(), "sum8".into());
         let id = chipdock_service::serial::serial_create_session().unwrap();
@@ -130,5 +131,35 @@ mod modbus_tests {
         let result = chipdock_service::serial::serial_workbench(id, &value.to_string());
         chipdock_service::serial::serial_close_session(id).unwrap();
         assert!(result.unwrap_err().to_string().contains("未连接"));
+    }
+}
+
+fn capture_roll_bytes(p: &Preferences) -> Result<u64> {
+    let Some(mib) = p.fields.get("roll_mib") else {
+        return p.number("roll");
+    };
+    let value = mib.parse::<f64>().context("轮转大小必须是 MiB 数值")?;
+    let bytes = value * 1024. * 1024.;
+    anyhow::ensure!(
+        bytes.is_finite() && bytes >= 0. && bytes < (u64::MAX as f64),
+        "采集轮转大小超出范围"
+    );
+    Ok(bytes.round() as u64)
+}
+#[cfg(test)]
+mod capture_size_tests {
+    use super::*;
+    #[test]
+    fn capture_units_preserve_fractional_mib_and_legacy_bytes() {
+        let mut p = Preferences::default();
+        p.fields.insert("roll_mib".into(), "1.5".into());
+        assert_eq!(capture_roll_bytes(&p).unwrap(), 1_572_864);
+        p.fields.remove("roll_mib");
+        p.fields.insert("roll".into(), "1000001".into());
+        assert_eq!(capture_roll_bytes(&p).unwrap(), 1_000_001);
+        for invalid in ["NaN", "inf", "-1", "1e99"] {
+            p.fields.insert("roll_mib".into(), invalid.into());
+            assert!(capture_roll_bytes(&p).is_err());
+        }
     }
 }

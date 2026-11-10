@@ -57,11 +57,11 @@ pub struct Colors {
 pub fn color(value: &str) -> Result<Option<u32>> {
     Ok(Some(match value {
         "" | "default" => return Ok(None),
-        "red" => 0xcd5c5c,
-        "orange" => 0xff8c00,
-        "green" => 0x2e8b57,
-        "blue" => 0x1e90ff,
-        "purple" => 0x9370db,
+        "red" => 0xff3b30,
+        "orange" => 0xff9500,
+        "green" => 0x34c759,
+        "blue" => 0x007aff,
+        "purple" => 0xaf52de,
         s => {
             let hex = s.strip_prefix('#').unwrap_or(s);
             ensure!(hex.len() == 6, "颜色必须是已知名称或六位 RGB");
@@ -207,11 +207,11 @@ mod tests {
         assert_eq!(rules.for_frame(&frame(Direction::Receive), "AXB"), None);
         assert_eq!(
             rules.for_frame(&frame(Direction::Receive), "A.B"),
-            Some(0xcd5c5c)
+            Some(0xff3b30)
         );
         assert_eq!(
             rules.for_frame(&frame(Direction::Send), "A.B"),
-            Some(0x1e90ff)
+            Some(0x007aff)
         );
     }
     #[test]

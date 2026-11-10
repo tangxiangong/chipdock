@@ -1,4 +1,5 @@
 use super::*;
+
 impl Workbench {
     pub(super) fn plot_page(&self, cx: &mut Context<Self>) -> Div {
         use gpui_kit::component::chart::LineChart;
