@@ -83,6 +83,8 @@ internal static class UpdateFeedTests
         Check.That(Publishable("0.2.0", "0.2.0"), "identical rerun publishes");
         Check.That(!Publishable("0.1.0", "0.2.0"), "downgrade is refused");
         Check.That(!Publishable("0.2.0", "0.2.0", previousPackage: [9, 9]), "replacing published bytes is refused");
+        Check.That(Publishable("0.2.0", "0.2.0", previousPackage: [9, 9], replaceExisting: true), "explicit replacement publishes verified same-version bytes");
+        Check.That(!Publishable("0.1.0", "0.2.0", replaceExisting: true), "explicit replacement still refuses a downgrade");
         Check.That(Publishable("0.10.0", "0.9.0"), "versions compare numerically");
 
         VerifyFileChecks().GetAwaiter().GetResult();
@@ -100,11 +102,11 @@ internal static class UpdateFeedTests
         });
     }
 
-    private static bool Publishable(string candidate, string? previous, byte[]? previousPackage = null)
+    private static bool Publishable(string candidate, string? previous, byte[]? previousPackage = null, bool replaceExisting = false)
     {
         var next = UpdateFeed.Parse(Feed(candidate)).Assets[0];
         var published = previous is null ? null : UpdateFeed.Parse(Feed(previous, package: previousPackage)).Assets[0];
-        try { UpdateFeed.RequirePublishable(next, published); return true; }
+        try { UpdateFeed.RequirePublishable(next, published, replaceExisting); return true; }
         catch (InvalidOperationException) { return false; }
     }
 

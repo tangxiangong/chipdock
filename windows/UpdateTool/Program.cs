@@ -9,7 +9,7 @@ using Velopack;
 //   seal <directory> <architecture> <public-key | ChipDock.csproj>
 //       Signs releases.win-<arch>.json with WINDOWS_UPDATE_PRIVATE_KEY into
 //       releases.win-<arch>.signed.json, after proving the secret matches the shipped public key.
-//   verify <directory> <architecture> <version> <public-key | ChipDock.csproj> [previous-signed-feed]
+//   verify <directory> <architecture> <version> <public-key | ChipDock.csproj> [previous-signed-feed [--replace-existing]]
 //       Checks the signed feed and its package, and that it may replace the previously published feed.
 try
 {
@@ -27,8 +27,11 @@ try
         case ["verify", var directory, var architecture, var version, var key, var previous]:
             await Verify(directory, architecture, version, key, previous);
             break;
+        case ["verify", var directory, var architecture, var version, var key, var previous, "--replace-existing"]:
+            await Verify(directory, architecture, version, key, previous, replaceExisting: true);
+            break;
         default:
-            Console.Error.WriteLine("usage: keygen <file> | seal <dir> <arch> <key> | verify <dir> <arch> <version> <key> [previous]");
+            Console.Error.WriteLine("usage: keygen <file> | seal <dir> <arch> <key> | verify <dir> <arch> <version> <key> [previous [--replace-existing]]");
             return 2;
     }
     return 0;
@@ -67,7 +70,7 @@ static void Seal(string directory, string architecture, string key)
     Console.WriteLine($"Signed {UpdateFeed.SignedFeedFile(channel)}");
 }
 
-static async Task Verify(string directory, string architecture, string version, string key, string? previousPath)
+static async Task Verify(string directory, string architecture, string version, string key, string? previousPath, bool replaceExisting = false)
 {
     using var publicKey = PublicKey(key);
     var channel = UpdateFeed.Channel(architecture);
@@ -85,7 +88,7 @@ static async Task Verify(string directory, string architecture, string version, 
             throw new InvalidOperationException($"The published {channel} feed cannot be verified ({error.Message}); refusing to replace it.");
         }
     }
-    UpdateFeed.RequirePublishable(asset, previous);
+    UpdateFeed.RequirePublishable(asset, previous, replaceExisting);
     Console.WriteLine($"Verified {channel} {version}: {asset.FileName}, {asset.Size} bytes, SHA-256 {asset.SHA256}");
 }
 

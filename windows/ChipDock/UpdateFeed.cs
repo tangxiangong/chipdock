@@ -137,13 +137,13 @@ internal static class UpdateFeed
         if (!hash.Equals(asset.SHA256, StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("更新包 SHA-256 与更新信息不一致");
     }
 
-    /// Publication only moves forward: a newer version, or a rerun with the identical package.
-    internal static void RequirePublishable(VelopackAsset candidate, VelopackAsset? previous)
+    /// Checks version ordering and requires explicit permission to replace a same-version package.
+    internal static void RequirePublishable(VelopackAsset candidate, VelopackAsset? previous, bool replaceExisting = false)
     {
         if (previous is null) return;
         var order = candidate.Version.CompareTo(previous.Version);
         if (order < 0) throw new InvalidOperationException($"Refusing to publish a downgrade: {candidate.Version} < {previous.Version}");
-        if (order == 0 && (candidate.FileName != previous.FileName || candidate.Size != previous.Size
+        if (!replaceExisting && order == 0 && (candidate.FileName != previous.FileName || candidate.Size != previous.Size
             || !candidate.SHA256.Equals(previous.SHA256, StringComparison.OrdinalIgnoreCase)))
             throw new InvalidOperationException($"Refusing to replace the published {candidate.Version} package");
     }

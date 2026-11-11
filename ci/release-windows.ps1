@@ -4,7 +4,8 @@
 param(
     [Parameter(Mandatory)][string]$Version,
     # Holds windows-x64/ and windows-arm64/ from publish.ps1.
-    [Parameter(Mandatory)][string]$AssetsDirectory
+    [Parameter(Mandatory)][string]$AssetsDirectory,
+    [switch]$ReplaceExisting
 )
 $ErrorActionPreference = 'Stop'
 $Repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
@@ -55,8 +56,8 @@ try {
             if ($LASTEXITCODE -ne 0) { throw "Could not download the published $Signed." }
             $Previous = @(Join-Path $PreviousDirectory $Signed)
         }
-        # Refuses downgrades and replacing a published package with different bytes.
-        Invoke-UpdateTool verify $Directory $Arch $Version $Project @Previous
+        $Replacement = if ($ReplaceExisting -and $Previous.Count -gt 0) { @('--replace-existing') } else { @() }
+        Invoke-UpdateTool verify $Directory $Arch $Version $Project @Previous @Replacement
         $Uploads += @(Get-ChildItem $Directory -File | Where-Object { $_.Extension -in @('.exe', '.msi', '.nupkg') })
         $Feeds += Join-Path $Directory $Signed
     }
