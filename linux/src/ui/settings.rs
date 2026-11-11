@@ -229,12 +229,6 @@ impl Workbench {
                 )
                 .child(
                     div()
-                        .text_size(px(10.))
-                        .text_color(cx.theme().muted_foreground)
-                        .child("GPUI · Rust"),
-                )
-                .child(
-                    div()
                         .flex()
                         .gap(px(20.))
                         .mt(px(4.))

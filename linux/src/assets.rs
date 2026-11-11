@@ -1,6 +1,9 @@
 use gpui_kit::{AssetSource, SharedString};
 use std::borrow::Cow;
 
+#[cfg(target_os = "linux")]
+pub const APP_ID: &str = "com.xiaoyu.chipdock";
+#[cfg(not(target_os = "linux"))]
 pub const APP_ID: &str = "com.xiaoyu.chipdock.gpui";
 const APP_ICON: &[u8] = include_bytes!("../../windows/ChipDock/Assets/ChipDock.png");
 

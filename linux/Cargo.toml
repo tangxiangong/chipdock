@@ -19,7 +19,7 @@ serde_json.workspace = true
 tempfile.workspace = true
 
 [[bin]]
-name = "chipdock-gpui"
+name = "ChipDock"
 path = "src/main.rs"
 
 [build-dependencies]

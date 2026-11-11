@@ -1,5 +1,5 @@
 use anyhow::{Context, Result, ensure};
-use chipdock_gpui_update::{PUBLIC_KEY, digest, verify};
+use chipdock_gpui_update::{LINUX_FEED, PUBLIC_KEY, digest, verify};
 use serde_json::Value;
 use std::{path::Path, process::Command};
 
@@ -25,7 +25,7 @@ fn main() -> Result<()> {
         repo == "tangxiangong/chipdock",
         "Unexpected release repository"
     );
-    let feed_path = directory.join("gpui-stable.signed.json");
+    let feed_path = directory.join(LINUX_FEED);
     let bytes = std::fs::read(&feed_path)?;
     let feed = verify(&bytes, PUBLIC_KEY)?;
     ensure!(
@@ -40,7 +40,7 @@ fn main() -> Result<()> {
     );
     let existing = published["assets"].as_array().context("Missing assets")?;
     let mut files: Vec<_> = feed.release_assets().map(|a| a.name.as_str()).collect();
-    files.push("gpui-stable.signed.json");
+    files.push(LINUX_FEED);
     // Validate the complete release before making any immutable uploads.
     for name in &files {
         let path = directory.join(name);
@@ -90,7 +90,7 @@ fn main() -> Result<()> {
     {
         if current["assets"]
             .as_array()
-            .is_some_and(|a| a.iter().any(|a| a["name"] == "gpui-stable.signed.json"))
+            .is_some_and(|a| a.iter().any(|a| a["name"] == LINUX_FEED))
         {
             let temp = tempfile::tempdir()?;
             gh(&[
@@ -100,16 +100,16 @@ fn main() -> Result<()> {
                 "--repo",
                 &repo,
                 "--pattern",
-                "gpui-stable.signed.json",
+                LINUX_FEED,
                 "--dir",
                 temp.path().to_str().context("Invalid temp directory")?,
             ])?;
-            let old_bytes = std::fs::read(temp.path().join("gpui-stable.signed.json"))?;
+            let old_bytes = std::fs::read(temp.path().join(LINUX_FEED))?;
             let old = verify(&old_bytes, PUBLIC_KEY)?;
             let order =
                 semver::Version::parse(&feed.version)?.cmp(&semver::Version::parse(&old.version)?);
             if order.is_lt() {
-                println!("Retained newer GPUI feed");
+                println!("Retained newer Linux feed");
                 return Ok(());
             }
             ensure!(

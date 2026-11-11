@@ -3,6 +3,7 @@ pub mod cos;
 mod xml;
 
 use base64::{Engine, engine::general_purpose::STANDARD};
+use chipdock_gpui_update::{LEGACY_FEED, LINUX_FEED};
 use ed25519_dalek::{Signature, VerifyingKey};
 use p256::{ecdsa::signature::Verifier, pkcs8::DecodePublicKey};
 use semver::Version;
@@ -243,7 +244,7 @@ fn appcast_identity(data: &[u8]) -> Result<(Identity, String)> {
 
 fn identity(name: &str, data: &[u8], keys: &UpdateKeys) -> Result<Identity> {
     match name {
-        "gpui-stable.signed.json" => gpui_identity(data, &keys.sparkle),
+        LINUX_FEED | LEGACY_FEED => gpui_identity(data, &keys.sparkle),
         "appcast.xml" => Ok(appcast_identity(data)?.0),
         "releases.win-x64.signed.json" => windows_identity(data, "x64", &keys.windows),
         "releases.win-arm64.signed.json" => windows_identity(data, "arm64", &keys.windows),
@@ -333,21 +334,25 @@ pub fn prepare(directory: &Path, tag: &str, platform: Platform, keys: &UpdateKey
             plan.identities.insert(name, identity);
         }
     }
-    if matches!(platform, Platform::Gpui)
-        || (platform == Platform::All && directory.join("gpui-stable.signed.json").is_file())
-    {
-        let name = "gpui-stable.signed.json";
+    let linux_feed = [LINUX_FEED, LEGACY_FEED]
+        .into_iter()
+        .find(|name| directory.join(name).is_file());
+    ensure(
+        platform != Platform::Gpui || linux_feed.is_some(),
+        "Missing Linux update feed",
+    )?;
+    if let Some(name) = linux_feed.filter(|_| matches!(platform, Platform::Gpui | Platform::All)) {
         let signed = safe_file(directory, name)?;
         let bytes = fs::read(&signed)?;
         let feed =
             chipdock_gpui_update::verify(&bytes, &keys.sparkle).map_err(|e| e.to_string())?;
-        ensure(feed.version == value, "GPUI update version mismatch")?;
+        ensure(feed.version == value, "Linux update version mismatch")?;
         for asset in feed.release_assets() {
             let path = safe_file(directory, &asset.name)?;
             ensure(
                 fs::metadata(&path)?.len() == asset.size
                     && hash(&path)? == asset.sha256.to_lowercase(),
-                "GPUI asset size or digest mismatch",
+                "Linux asset size or digest mismatch",
             )?;
             plan.assets
                 .insert(format!("releases/{tag}/{}", asset.name), path);
@@ -405,18 +410,21 @@ pub fn download_release(tag: &str, platform: Platform, directory: &Path) -> Resu
             ]);
         }
     }
-    if matches!(platform, Platform::Gpui)
-        || (platform == Platform::All
-            && assets
-                .iter()
-                .any(|asset| asset["name"] == "gpui-stable.signed.json"))
-    {
-        names.push("gpui-stable.signed.json".into());
+    let linux_feed = [LINUX_FEED, LEGACY_FEED]
+        .into_iter()
+        .find(|name| assets.iter().any(|asset| asset["name"] == *name));
+    ensure(
+        platform != Platform::Gpui || linux_feed.is_some(),
+        "Missing Linux update feed",
+    )?;
+    if let Some(name) = linux_feed.filter(|_| matches!(platform, Platform::Gpui | Platform::All)) {
+        names.push(name.into());
+        let prefix = format!("ChipDock-{value}-linux-");
         names.extend(
             assets
                 .iter()
                 .filter_map(|a| a["name"].as_str())
-                .filter(|n| n.starts_with("chipdock-gpui-"))
+                .filter(|n| n.starts_with(&prefix) || n.starts_with("chipdock-gpui-"))
                 .map(str::to_owned),
         );
     }

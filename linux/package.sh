@@ -3,7 +3,7 @@ set -euo pipefail
 umask 022
 
 gpui_repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-gpui_app_id=com.xiaoyu.chipdock.gpui
+linux_app_id=com.xiaoyu.chipdock
 
 validate_binary() {
   local header
@@ -21,17 +21,17 @@ stage_linux() {
   local prefix="$1" binary="$2"
   mkdir -p "$prefix/bin" "$prefix/share/applications" \
     "$prefix/share/icons/hicolor/256x256/apps" "$prefix/share/icons/hicolor/scalable/apps" \
-    "$prefix/share/doc/chipdock-gpui"
-  install -m 755 "$binary" "$prefix/bin/chipdock-gpui"
-  install -m 644 "$gpui_repo/linux/ChipDock.desktop" "$prefix/share/applications/$gpui_app_id.desktop"
-  install -m 644 "$gpui_repo/windows/ChipDock/Assets/ChipDock.png" "$prefix/share/icons/hicolor/256x256/apps/$gpui_app_id.png"
-  install -m 644 "$gpui_repo/assets/app-icons/ChipDock.icon/Assets/AppIcon.svg" "$prefix/share/icons/hicolor/scalable/apps/$gpui_app_id.svg"
-  install -m 644 "$gpui_repo/LICENSE-MIT" "$gpui_repo/LICENSE-APACHE" "$gpui_repo/NOTICE" "$prefix/share/doc/chipdock-gpui/"
+    "$prefix/share/doc/chipdock"
+  install -m 755 "$binary" "$prefix/bin/ChipDock"
+  install -m 644 "$gpui_repo/linux/ChipDock.desktop" "$prefix/share/applications/$linux_app_id.desktop"
+  install -m 644 "$gpui_repo/windows/ChipDock/Assets/ChipDock.png" "$prefix/share/icons/hicolor/256x256/apps/$linux_app_id.png"
+  install -m 644 "$gpui_repo/assets/app-icons/ChipDock.icon/Assets/AppIcon.svg" "$prefix/share/icons/hicolor/scalable/apps/$linux_app_id.svg"
+  install -m 644 "$gpui_repo/LICENSE-MIT" "$gpui_repo/LICENSE-APACHE" "$gpui_repo/NOTICE" "$prefix/share/doc/chipdock/"
 }
 
 package_linux() {
   local binary="$1" version="$2" arch="$3" output="$4" work="$5"
-  local name="chipdock-gpui-$version-linux-$arch" deb_arch dependencies payload top
+  local name="ChipDock-$version-linux-$arch" deb_arch dependencies payload top
   payload="$work/payload"
   top="$work/rpm"
   case "$arch" in x86_64) deb_arch=amd64 ;; aarch64) deb_arch=arm64 ;; esac
@@ -40,30 +40,33 @@ package_linux() {
   install -m 644 "$gpui_repo/linux/README.md" "$work/$name/README.md"
   tar --sort=name --mtime="@${SOURCE_DATE_EPOCH:-0}" --owner=0 --group=0 --numeric-owner \
     -cf - -C "$work" "$name" | gzip -n > "$output/$name.tar.gz"
-  install -m 755 "$binary" "$output/chipdock-gpui-linux-$arch"
+  install -m 755 "$binary" "$output/$name"
 
   stage_linux "$payload/usr" "$binary"
-  mkdir -p "$payload/usr/share/chipdock-gpui" "$payload/DEBIAN" "$work/debian" "$top"
-  printf 'Update this installation with the system package manager.\n' > "$payload/usr/share/chipdock-gpui/package-managed"
+  mkdir -p "$payload/usr/share/chipdock" "$payload/DEBIAN" "$work/debian" "$top"
+  printf 'Update this installation with the system package manager.\n' > "$payload/usr/share/chipdock/package-managed"
   cat > "$payload/DEBIAN/control" <<EOF
-Package: chipdock-gpui
+Package: chipdock
 Version: $version
 Architecture: $deb_arch
 Maintainer: tangxiangong <tangxiangong@gmail.com>
 Section: devel
 Priority: optional
 Homepage: https://github.com/tangxiangong/chipdock
-Description: Firmware programming and serial workbench
+Provides: chipdock-gpui
+Conflicts: chipdock-gpui
+Replaces: chipdock-gpui
+Description: ChipDock firmware programming and serial workbench
 EOF
   cat > "$work/debian/control" <<EOF
-Source: chipdock-gpui
+Source: chipdock
 Maintainer: tangxiangong <tangxiangong@gmail.com>
 
-Package: chipdock-gpui
+Package: chipdock
 Architecture: any
 Description: Firmware programming and serial workbench
 EOF
-  dependencies="$(cd "$work" && dpkg-shlibdeps -O "$payload/usr/bin/chipdock-gpui")"
+  dependencies="$(cd "$work" && dpkg-shlibdeps -O "$payload/usr/bin/ChipDock")"
   dependencies="$(sed -n 's/^shlibs:Depends=//p' <<< "$dependencies")"
   test -n "$dependencies"
   # These libraries are also loaded dynamically and may be absent from shlibdeps output.
@@ -78,7 +81,7 @@ EOF
 %global __os_install_post %{nil}
 %global use_source_date_epoch_as_buildtime 1
 %global clamp_mtime_to_source_date_epoch 1
-Name: chipdock-gpui
+Name: ChipDock
 Version: $version
 Release: 1
 Summary: Firmware programming and serial workbench
@@ -88,34 +91,36 @@ BuildArch: $arch
 Requires: libvulkan.so.1()(64bit), libfontconfig.so.1()(64bit)
 Requires: libwayland-client.so.0()(64bit), libxkbcommon-x11.so.0()(64bit), libX11-xcb.so.1()(64bit)
 Requires: hicolor-icon-theme
+Provides: chipdock-gpui = %{version}-%{release}
+Obsoletes: chipdock-gpui <= %{version}-%{release}
 
 %description
-Firmware programming and serial workbench with a native GPUI interface.
+ChipDock firmware programming and serial workbench.
 
 %install
 mkdir -p "%{buildroot}"
 cp -a "\$RPM_PAYLOAD/usr" "%{buildroot}/usr"
 
 %files
-%attr(0755,root,root) /usr/bin/chipdock-gpui
-/usr/share/applications/$gpui_app_id.desktop
-/usr/share/icons/hicolor/256x256/apps/$gpui_app_id.png
-/usr/share/icons/hicolor/scalable/apps/$gpui_app_id.svg
-/usr/share/chipdock-gpui/
-%dir /usr/share/doc/chipdock-gpui
-%license /usr/share/doc/chipdock-gpui/LICENSE-MIT
-%license /usr/share/doc/chipdock-gpui/LICENSE-APACHE
-%doc /usr/share/doc/chipdock-gpui/NOTICE
+%attr(0755,root,root) /usr/bin/ChipDock
+/usr/share/applications/$linux_app_id.desktop
+/usr/share/icons/hicolor/256x256/apps/$linux_app_id.png
+/usr/share/icons/hicolor/scalable/apps/$linux_app_id.svg
+/usr/share/chipdock/
+%dir /usr/share/doc/chipdock
+%license /usr/share/doc/chipdock/LICENSE-MIT
+%license /usr/share/doc/chipdock/LICENSE-APACHE
+%doc /usr/share/doc/chipdock/NOTICE
 EOF
   RPM_PAYLOAD="$payload" rpmbuild -bb --define "_topdir $top" --target "$arch" "$top/chipdock.spec"
-  install -m 644 "$top/RPMS/$arch/chipdock-gpui-$version-1.$arch.rpm" "$output/$name.rpm"
+  install -m 644 "$top/RPMS/$arch/ChipDock-$version-1.$arch.rpm" "$output/$name.rpm"
 }
 
 package_macos() {
   local binary="$1" version="$2" output="$3" work="$4"
-  local bundle="$work/ChipDock GPUI.app" size scale suffix pixels
+  local bundle="$work/ChipDock.app" bundle_id=com.xiaoyu.chipdock.gpui size scale suffix pixels
   mkdir -p "$bundle/Contents/MacOS" "$bundle/Contents/Resources" "$work/ChipDock.iconset"
-  install -m 755 "$binary" "$bundle/Contents/MacOS/chipdock-gpui"
+  install -m 755 "$binary" "$bundle/Contents/MacOS/ChipDock"
   for size in 16 32 128 256 512; do
     for scale in 1 2; do
       suffix=""; [[ "$scale" == 1 ]] || suffix=@2x
@@ -129,10 +134,10 @@ package_macos() {
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
-<key>CFBundleIdentifier</key><string>$gpui_app_id</string>
-<key>CFBundleName</key><string>ChipDock GPUI</string>
-<key>CFBundleDisplayName</key><string>ChipDock GPUI</string>
-<key>CFBundleExecutable</key><string>chipdock-gpui</string>
+<key>CFBundleIdentifier</key><string>$bundle_id</string>
+<key>CFBundleName</key><string>ChipDock</string>
+<key>CFBundleDisplayName</key><string>ChipDock</string>
+<key>CFBundleExecutable</key><string>ChipDock</string>
 <key>CFBundleIconFile</key><string>ChipDock.icns</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleShortVersionString</key><string>$version</string>
@@ -144,7 +149,13 @@ EOF
   plutil -lint "$bundle/Contents/Info.plist"
   codesign --force --sign - "$bundle"
   codesign --verify --strict "$bundle"
-  if [[ -e "$output/ChipDock GPUI.app" ]]; then rm -r "$output/ChipDock GPUI.app"; fi
+  if [[ -e "$output/ChipDock.app" ]]; then
+    [[ "$(plutil -extract CFBundleIdentifier raw "$output/ChipDock.app/Contents/Info.plist")" == "$bundle_id" ]] || {
+      echo "Choose a separate output directory for this ChipDock build: $output" >&2
+      return 1
+    }
+    rm -r "$output/ChipDock.app"
+  fi
   cp -R "$bundle" "$output/"
 }
 
@@ -179,7 +190,7 @@ package_gpui() {
   fi
   rm -rf "$work"
   trap - EXIT
-  echo "Packaged GPUI $version for $platform-$arch: $output"
+  echo "Packaged ChipDock $version for $platform-$arch: $output"
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then package_gpui "$@"; fi

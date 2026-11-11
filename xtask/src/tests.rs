@@ -171,30 +171,32 @@ fn release_uses_the_same_embedded_keys_as_native_clients() {
     );
 }
 
-pub(crate) fn gpui_fixture(tag: &str) -> (tempfile::TempDir, UpdateKeys) {
+pub(crate) fn linux_fixture(tag: &str, feed_name: &str) -> (tempfile::TempDir, UpdateKeys) {
     let (directory, keys) = fixture(tag);
     let signing = SigningKey::from_bytes(&[17; 32]);
-    let name = "chipdock-gpui-linux-x86_64";
+    let version = tag.trim_start_matches('v');
+    let (product, name) = if feed_name == LEGACY_FEED {
+        ("chipdock-gpui", "chipdock-gpui-linux-x86_64".into())
+    } else {
+        ("ChipDock", format!("ChipDock-{version}-linux-x86_64"))
+    };
     let bytes = b"portable ELF fixture";
-    fs::write(directory.path().join(name), bytes).unwrap();
+    fs::write(directory.path().join(&name), bytes).unwrap();
     let feed = chipdock_gpui_update::Feed {
         identity: "com.xiaoyu.chipdock.gpui".into(),
-        version: tag.trim_start_matches('v').into(),
+        version: version.into(),
         notes: "Linux notes".into(),
         assets: BTreeMap::from([(
             "linux-x86_64".into(),
             chipdock_gpui_update::Asset {
-                name: name.into(),
+                name,
                 size: bytes.len() as u64,
                 sha256: chipdock_gpui_update::digest(bytes),
             },
         )]),
         packages: ["tar.gz", "deb", "rpm"]
             .map(|extension| {
-                let name = format!(
-                    "chipdock-gpui-{}-linux-x86_64.{extension}",
-                    tag.trim_start_matches('v')
-                );
+                let name = format!("{product}-{version}-linux-x86_64.{extension}");
                 let bytes = format!("{extension} package fixture").into_bytes();
                 fs::write(directory.path().join(&name), &bytes).unwrap();
                 chipdock_gpui_update::Asset {
@@ -211,17 +213,17 @@ pub(crate) fn gpui_fixture(tag: &str) -> (tempfile::TempDir, UpdateKeys) {
         signature: STANDARD.encode(signing.sign(&payload).to_bytes()),
     };
     fs::write(
-        directory.path().join("gpui-stable.signed.json"),
+        directory.path().join(feed_name),
         serde_json::to_vec(&signed).unwrap(),
     )
     .unwrap();
     (directory, keys)
 }
 #[test]
-fn gpui_release_verifies_signature_identity_and_binary_digest() {
-    let (directory, keys) = gpui_fixture("v0.2.5");
+fn historical_linux_release_verifies_signature_and_binary_digest() {
+    let (directory, keys) = linux_fixture("v0.2.5", LEGACY_FEED);
     let plan = prepare(directory.path(), "v0.2.5", Platform::Gpui, &keys).unwrap();
-    assert!(plan.feeds.contains_key("gpui-stable.signed.json"));
+    assert!(plan.feeds.contains_key(LEGACY_FEED));
     fs::write(
         directory.path().join("chipdock-gpui-linux-x86_64"),
         b"tampered",
@@ -240,11 +242,11 @@ fn gpui_and_sparkle_embed_the_same_release_public_key() {
 
 #[test]
 fn all_platforms_include_linux_packages_and_reject_altered_installers() {
-    let (directory, keys) = gpui_fixture("v0.2.5");
+    let (directory, keys) = linux_fixture("v0.2.5", LINUX_FEED);
     let plan = prepare(directory.path(), "v0.2.5", Platform::All, &keys).unwrap();
-    assert!(plan.feeds.contains_key("gpui-stable.signed.json"));
+    assert!(plan.feeds.contains_key(LINUX_FEED));
     for extension in ["tar.gz", "deb", "rpm"] {
-        let name = format!("chipdock-gpui-0.2.5-linux-x86_64.{extension}");
+        let name = format!("ChipDock-0.2.5-linux-x86_64.{extension}");
         assert!(plan.assets.contains_key(&format!("releases/v0.2.5/{name}")));
         let path = directory.path().join(&name);
         let original = fs::read(&path).unwrap();

@@ -1,6 +1,6 @@
 use anyhow::{Context, Result, ensure};
 use base64::{Engine, engine::general_purpose::STANDARD};
-use chipdock_gpui_update::{Asset, Feed, PUBLIC_KEY, SignedFeed, digest, verify};
+use chipdock_gpui_update::{Asset, Feed, LINUX_FEED, PUBLIC_KEY, SignedFeed, digest, verify};
 use ed25519_dalek::{Signer, SigningKey};
 use std::{collections::BTreeMap, path::Path};
 
@@ -44,14 +44,16 @@ fn main() -> Result<()> {
         "windows-x86_64",
         "windows-aarch64",
     ] {
-        let name = format!(
-            "chipdock-gpui-{platform}{}",
-            if platform.starts_with("windows") {
+        let name = if platform.starts_with("linux-") {
+            format!("ChipDock-{version}-{platform}")
+        } else {
+            let extension = if platform.starts_with("windows") {
                 ".exe"
             } else {
                 ""
-            }
-        );
+            };
+            format!("chipdock-gpui-{platform}{extension}")
+        };
         let path = directory.join(&name);
         if path.is_file() {
             let bytes = std::fs::read(path)?;
@@ -72,7 +74,7 @@ fn main() -> Result<()> {
     let mut packages = Vec::new();
     for arch in ["x86_64", "aarch64"] {
         for extension in ["tar.gz", "deb", "rpm"] {
-            let name = format!("chipdock-gpui-{version}-linux-{arch}.{extension}");
+            let name = format!("ChipDock-{version}-linux-{arch}.{extension}");
             let bytes = std::fs::read(directory.join(&name))
                 .with_context(|| format!("Missing Linux package: {name}"))?;
             packages.push(Asset {
@@ -96,6 +98,6 @@ fn main() -> Result<()> {
     };
     let bytes = serde_json::to_vec_pretty(&signed)?;
     verify(&bytes, PUBLIC_KEY)?;
-    std::fs::write(directory.join("gpui-stable.signed.json"), bytes)?;
+    std::fs::write(directory.join(LINUX_FEED), bytes)?;
     Ok(())
 }

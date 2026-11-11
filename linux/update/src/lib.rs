@@ -19,6 +19,8 @@ use std::{
 };
 
 pub const PUBLIC_KEY: &str = "NgorrvaZPObmbOUEmKbbCvPbPqcD+kcw7E2NRTfxlKI=";
+pub const LINUX_FEED: &str = "linux-stable.signed.json";
+pub const LEGACY_FEED: &str = "gpui-stable.signed.json";
 const MIRROR: &str = "https://app-release-1302963684.cos.ap-guangzhou.myqcloud.com/chipdock";
 const REPOSITORY: &str = "https://github.com/tangxiangong/chipdock";
 #[derive(Clone, Serialize, Deserialize)]
@@ -70,7 +72,7 @@ pub fn verify(bytes: &[u8], key: &str) -> Result<Feed> {
     let feed: Feed = serde_json::from_slice(&payload)?;
     ensure!(
         feed.identity == "com.xiaoyu.chipdock.gpui",
-        "更新包不属于 GPUI 客户端"
+        "更新包不属于此 ChipDock 客户端"
     );
     let version = semver::Version::parse(&feed.version)?;
     ensure!(
@@ -90,25 +92,17 @@ pub fn verify(bytes: &[u8], key: &str) -> Result<Feed> {
             .contains(&target.as_str()),
             "未知更新平台"
         );
+        let extension = if target.starts_with("windows") {
+            ".exe"
+        } else {
+            ""
+        };
+        let legacy = asset.name == format!("chipdock-gpui-{target}{extension}");
         ensure!(
-            asset.name
-                == format!(
-                    "chipdock-gpui-{target}{}",
-                    if target.starts_with("windows") {
-                        ".exe"
-                    } else {
-                        ""
-                    }
-                ),
+            legacy
+                || (target.starts_with("linux-")
+                    && asset.name == format!("ChipDock-{}-{target}", feed.version)),
             "更新资产与平台不匹配"
-        );
-        ensure!(
-            asset.name.starts_with("chipdock-gpui-")
-                && asset
-                    .name
-                    .bytes()
-                    .all(|b| b.is_ascii_alphanumeric() || b"-_.".contains(&b)),
-            "更新文件名无效"
         );
     }
     let mut names = std::collections::BTreeSet::new();
@@ -117,8 +111,10 @@ pub fn verify(bytes: &[u8], key: &str) -> Result<Feed> {
             ["x86_64", "aarch64"].iter().any(|arch| {
                 feed.assets.contains_key(&format!("linux-{arch}"))
                     && ["tar.gz", "deb", "rpm"].iter().any(|extension| {
-                        package.name
-                            == format!("chipdock-gpui-{}-linux-{arch}.{extension}", feed.version)
+                        ["ChipDock", "chipdock-gpui"].iter().any(|product| {
+                            package.name
+                                == format!("{product}-{}-linux-{arch}.{extension}", feed.version)
+                        })
                     })
             }),
             "安装包与版本或平台不匹配"
@@ -145,7 +141,7 @@ pub fn select(feed: Feed, current: &str, target: &str) -> Result<Option<Availabl
     let asset = feed
         .assets
         .get(target)
-        .context("此版本尚未发布当前平台的 GPUI 更新包")?
+        .context("此版本尚未发布当前平台的更新包")?
         .clone();
     Ok(Some(Available {
         version: feed.version,

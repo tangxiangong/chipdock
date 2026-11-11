@@ -23,11 +23,9 @@ pub fn check() -> Result<Option<Available>> {
             fetch(
                 &client,
                 &if fallback {
-                    format!(
-                        "{REPOSITORY}/releases/download/chipdock-updates/gpui-stable.signed.json"
-                    )
+                    format!("{REPOSITORY}/releases/download/chipdock-updates/{LINUX_FEED}")
                 } else {
-                    format!("{MIRROR}/updates/gpui-stable.signed.json")
+                    format!("{MIRROR}/updates/{LINUX_FEED}")
                 },
                 1024 * 1024,
             )
@@ -85,7 +83,7 @@ pub fn download(
     let executable = std::env::current_exe()?;
     // Keep staging on the same volume so promotion is atomic on Unix.
     let parent = executable.parent().context("无法定位安装目录")?;
-    let path = parent.join(format!(".chipdock-gpui-{}.pending", update.version));
+    let path = parent.join(format!(".chipdock-{}.pending", update.version));
     let mut file = tempfile::NamedTempFile::new_in(parent)?;
     std::io::Write::write_all(&mut file, &bytes)?;
     file.as_file().sync_all()?;

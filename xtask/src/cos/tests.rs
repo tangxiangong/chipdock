@@ -331,16 +331,14 @@ fn hmac_and_object_encoding_match_standard_vectors() {
 
 #[test]
 fn older_gpui_retry_cannot_downgrade_the_reserved_feed() {
-    let (new, keys) = crate::tests::gpui_fixture("v0.2.6");
-    let (old, _) = crate::tests::gpui_fixture("v0.2.5");
+    let (new, keys) = crate::tests::linux_fixture("v0.2.6", crate::LINUX_FEED);
+    let (old, _) = crate::tests::linux_fixture("v0.2.5", crate::LINUX_FEED);
     let store = MemoryStore::default();
     let newest = prepare(new.path(), "v0.2.6", Platform::Gpui, &keys).unwrap();
     publish_to(&newest, new.path(), &keys, &store).unwrap();
-    let feed = store.objects.borrow()["updates/gpui-stable.signed.json"].clone();
+    let feed_path = format!("updates/{}", crate::LINUX_FEED);
+    let feed = store.objects.borrow()[&feed_path].clone();
     let previous = prepare(old.path(), "v0.2.5", Platform::Gpui, &keys).unwrap();
     publish_to(&previous, old.path(), &keys, &store).unwrap();
-    assert_eq!(
-        store.objects.borrow()["updates/gpui-stable.signed.json"],
-        feed
-    );
+    assert_eq!(store.objects.borrow()[&feed_path], feed);
 }

@@ -1,4 +1,4 @@
-name: Linux GPUI
+name: Linux
 
 on:
   push:
@@ -70,7 +70,7 @@ jobs:
         run: bash linux/tests/packaging.sh dist/gpui "${{ matrix.arch }}"
       - uses: actions/upload-artifact@v6
         with:
-          name: gpui-linux-${{ matrix.arch }}
+          name: ChipDock-linux-${{ matrix.arch }}
           path: dist/gpui/*
           if-no-files-found: error
 
@@ -100,7 +100,7 @@ jobs:
           test -n "$COS_SECRET_KEY"
       - uses: actions/download-artifact@v7
         with:
-          pattern: gpui-linux-*
+          pattern: ChipDock-linux-*
           merge-multiple: true
           path: dist/gpui
       - name: Select Linux release notes

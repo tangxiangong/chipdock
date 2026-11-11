@@ -21,7 +21,15 @@ fn portable_installation(executable: &Path) -> bool {
     !executable
         .parent()
         .and_then(Path::parent)
-        .is_some_and(|prefix| prefix.join("share/chipdock-gpui/package-managed").exists())
+        .is_some_and(|prefix| {
+            ["chipdock", "chipdock-gpui"].iter().any(|package| {
+                prefix
+                    .join("share")
+                    .join(package)
+                    .join("package-managed")
+                    .exists()
+            })
+        })
 }
 
 pub(crate) fn verify_asset(bytes: &[u8], asset: &Asset) -> Result<()> {
@@ -87,7 +95,10 @@ pub(crate) fn valid_windows_target(target: &Path, helper: &Path) -> bool {
         && target
             .file_name()
             .and_then(|n| n.to_str())
-            .is_some_and(|n| n.starts_with("chipdock-gpui") && n.ends_with(".exe"))
+            .is_some_and(|name| {
+                name == "ChipDock.exe"
+                    || (name.starts_with("chipdock-gpui") && name.ends_with(".exe"))
+            })
 }
 
 pub fn finish_update(arguments: &[String]) -> Result<bool> {
@@ -137,16 +148,23 @@ mod tests {
     #[test]
     fn packaged_installations_cannot_be_replaced_by_portable_updates() {
         assert!(!portable_installation(Path::new(
-            "/Applications/ChipDock GPUI.app/Contents/MacOS/chipdock-gpui"
+            "/Applications/ChipDock.app/Contents/MacOS/ChipDock"
         )));
         let directory = tempfile::tempdir().unwrap();
-        let executable = directory.path().join("bin/chipdock-gpui");
+        let executable = directory.path().join("bin/ChipDock");
         assert!(portable_installation(&executable));
-        let marker = directory.path().join("share/chipdock-gpui/package-managed");
-        std::fs::create_dir_all(marker.parent().unwrap()).unwrap();
-        std::fs::write(marker, "managed").unwrap();
-        assert!(!portable_installation(&executable));
+        for package in ["chipdock", "chipdock-gpui"] {
+            let marker = directory
+                .path()
+                .join("share")
+                .join(package)
+                .join("package-managed");
+            std::fs::create_dir_all(marker.parent().unwrap()).unwrap();
+            std::fs::write(&marker, "managed").unwrap();
+            assert!(!portable_installation(&executable));
+            std::fs::remove_file(marker).unwrap();
+        }
         #[cfg(target_os = "linux")]
-        assert!(!portable_installation(Path::new("/usr/bin/chipdock-gpui")));
+        assert!(!portable_installation(Path::new("/usr/bin/ChipDock")));
     }
 }

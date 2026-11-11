@@ -58,7 +58,7 @@ fn rejects_partial_binary() {
 fn signed_linux_packages_are_validated_without_becoming_portable_updates() {
     let key = SigningKey::from_bytes(&[11; 32]);
     let asset = Asset {
-        name: "chipdock-gpui-linux-x86_64".into(),
+        name: "ChipDock-1.0.0-linux-x86_64".into(),
         size: 2,
         sha256: digest(b"ok"),
     };
@@ -69,7 +69,7 @@ fn signed_linux_packages_are_validated_without_becoming_portable_updates() {
         assets: BTreeMap::from([("linux-x86_64".into(), asset)]),
         packages: ["deb", "rpm", "tar.gz"]
             .map(|extension| Asset {
-                name: format!("chipdock-gpui-1.0.0-linux-x86_64.{extension}"),
+                name: format!("ChipDock-1.0.0-linux-x86_64.{extension}"),
                 size: 2,
                 sha256: digest(b"ok"),
             })
@@ -94,14 +94,14 @@ fn signed_linux_packages_are_validated_without_becoming_portable_updates() {
             .unwrap()
             .asset
             .name,
-        "chipdock-gpui-linux-x86_64"
+        "ChipDock-1.0.0-linux-x86_64"
     );
     let valid_name = feed.packages[0].name.clone();
     for name in [
-        "../chipdock-gpui-1.0.0-linux-x86_64.deb",
-        "chipdock-gpui-2.0.0-linux-x86_64.deb",
-        "chipdock-gpui-1.0.0-linux-aarch64.deb",
-        "chipdock-gpui-1.0.0-linux-x86_64.exe",
+        "../ChipDock-1.0.0-linux-x86_64.deb",
+        "ChipDock-2.0.0-linux-x86_64.deb",
+        "ChipDock-1.0.0-linux-aarch64.deb",
+        "ChipDock-1.0.0-linux-x86_64.exe",
     ] {
         feed.packages[0].name = name.into();
         assert!(verify_feed(&feed).is_err(), "{name}");
@@ -197,6 +197,10 @@ fn valid_primary_without_update_ends_the_check() {
 #[test]
 fn windows_update_accepts_the_released_portable_name_but_not_other_executables() {
     use super::install::valid_windows_target;
+    assert!(valid_windows_target(
+        Path::new("/app/ChipDock.exe"),
+        Path::new("/app/ChipDock.updater.exe")
+    ));
     assert!(valid_windows_target(
         Path::new("/app/chipdock-gpui-windows-x86_64.exe"),
         Path::new("/app/chipdock-gpui-windows-x86_64.updater.exe")

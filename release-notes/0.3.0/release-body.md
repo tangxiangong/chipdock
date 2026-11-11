@@ -28,7 +28,7 @@ ChipDock 首次提供 Linux 正式安装包，并在三端引入多会话串口�
 <!-- platform:linux -->
 ## Linux
 
-- 首次发布 GPUI 客户端，支持固件烧录、目标内存查看、多会话串口调试和独立的日志与曲线窗口。
-- 选择 `chipdock-gpui-0.3.0-linux-<架构>.deb`、`.rpm` 或 `.tar.gz`。Intel／AMD 64 位选 `x86_64`，ARM64 选 `aarch64`。运行需要 glibc 2.39+、图形桌面和 Vulkan 驱动。
-- 三种安装包均含应用图标和桌面入口。便携包解压后可运行 `bash install.sh` 安装到当前用户目录。DEB 和 RPM 由系统包管理器更新。
+- 首次发布 Linux 版 ChipDock，支持固件烧录、目标内存查看、多会话串口调试和独立的日志与曲线窗口。
+- 选择 `ChipDock-0.3.0-linux-<架构>.deb`、`.rpm` 或 `.tar.gz`。Intel／AMD 64 位选 `x86_64`，ARM64 选 `aarch64`。运行需要 glibc 2.39+、图形桌面和 Vulkan 驱动。
+- 三种安装包均含应用图标和桌面入口，启动命令为 `ChipDock`。便携包解压后可运行 `bash install.sh` 安装到当前用户目录。DEB 和 RPM 由系统包管理器更新。
 <!-- /platform -->

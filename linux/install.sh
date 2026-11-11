@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 source_dir="$(cd "$(dirname "$0")" && pwd)"
-app_id=com.xiaoyu.chipdock.gpui
-binary="$HOME/.local/bin/chipdock-gpui"
+app_id=com.xiaoyu.chipdock
+binary="$HOME/.local/bin/ChipDock"
 data_dir="${XDG_DATA_HOME:-$HOME/.local/share}"
 [[ "$data_dir" == /* ]] || { echo 'XDG_DATA_HOME must be an absolute path' >&2; exit 1; }
 [[ "$binary$data_dir" != *$'\n'* ]] || { echo 'Installation paths must not contain newlines' >&2; exit 1; }
 mkdir -p "$(dirname "$binary")" "$data_dir/applications" "$data_dir/icons" "$data_dir/doc"
 pending="$(mktemp "$(dirname "$binary")/.chipdock-install.XXXXXX")"
 trap 'rm -f "$pending"' EXIT
-install -m 755 "$source_dir/bin/chipdock-gpui" "$pending"
+install -m 755 "$source_dir/bin/ChipDock" "$pending"
 mv -f "$pending" "$binary"
 cp -R "$source_dir/share/icons/." "$data_dir/icons/"
 cp -R "$source_dir/share/doc/." "$data_dir/doc/"
@@ -21,6 +21,12 @@ while IFS= read -r line; do
     *) printf '%s\n' "$line" ;;
   esac
 done < "$source_dir/share/applications/$app_id.desktop" > "$data_dir/applications/$app_id.desktop"
+legacy_id=com.xiaoyu.chipdock.gpui
+legacy_entry="$data_dir/applications/$legacy_id.desktop"
+if [[ -f "$legacy_entry" ]] && grep -Fqx "Exec=\"${exec_path%/ChipDock}/chipdock-gpui\" %f" "$legacy_entry"; then
+  rm -f "$legacy_entry" "${binary%/ChipDock}/chipdock-gpui" \
+    "$data_dir/icons/hicolor/256x256/apps/$legacy_id.png" "$data_dir/icons/hicolor/scalable/apps/$legacy_id.svg"
+fi
 if command -v gtk-update-icon-cache >/dev/null; then
   gtk-update-icon-cache -f -t "$data_dir/icons/hicolor" >/dev/null 2>&1 || true
 fi
