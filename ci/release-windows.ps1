@@ -56,7 +56,10 @@ try {
             if ($LASTEXITCODE -ne 0) { throw "Could not download the published $Signed." }
             $Previous = @(Join-Path $PreviousDirectory $Signed)
         }
-        $Replacement = if ($ReplaceExisting -and $Previous.Count -gt 0) { @('--replace-existing') } else { @() }
+        $Replacement = @()
+        if ($ReplaceExisting -and $Previous.Count -gt 0) {
+            $Replacement += '--replace-existing'
+        }
         Invoke-UpdateTool verify $Directory $Arch $Version $Project @Previous @Replacement
         $Uploads += @(Get-ChildItem $Directory -File | Where-Object { $_.Extension -in @('.exe', '.msi', '.nupkg') })
         $Feeds += Join-Path $Directory $Signed
