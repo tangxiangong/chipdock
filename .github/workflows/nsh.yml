@@ -1,9 +1,31 @@
-name: Linux
+name: NSH
 
 on:
   push:
     branches: [main]
+    paths:
+      - .github/workflows/nsh.yml
+      - .cargo/**
+      - .gitignore
+      - Cargo.toml
+      - Cargo.lock
+      - crates/**
+      - linux/**
+      - assets/**
+      - windows/ChipDock/Assets/**
+      - xtask/**
   pull_request:
+    paths:
+      - .github/workflows/nsh.yml
+      - .cargo/**
+      - .gitignore
+      - Cargo.toml
+      - Cargo.lock
+      - crates/**
+      - linux/**
+      - assets/**
+      - windows/ChipDock/Assets/**
+      - xtask/**
   workflow_dispatch:
   release:
     types: [published]
@@ -12,15 +34,16 @@ permissions:
   contents: read
 
 concurrency:
-  group: linux-nsh-${{ github.ref }}
+  group: nsh-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name != 'release' }}
 
 jobs:
   compatibility:
+    name: NSH compatibility (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-15, windows-2025]
+        os: [macos-26, windows-2025]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     steps:
@@ -33,6 +56,7 @@ jobs:
         run: cargo check --locked -p chipdock-nsh --all-targets
 
   build:
+    name: Linux packages (${{ matrix.arch }})
     strategy:
       fail-fast: false
       matrix:

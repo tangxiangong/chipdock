@@ -45,5 +45,7 @@ fn main() -> std::process::ExitCode {
     if let Err(error) = chipdock_service::serial::serial_shutdown() {
         eprintln!("{error}");
     }
+    #[cfg(target_os = "linux")]
+    let result = result.into();
     result
 }

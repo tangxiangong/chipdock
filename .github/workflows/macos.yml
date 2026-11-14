@@ -3,7 +3,31 @@ name: macOS
 on:
   push:
     branches: [main]
+    paths:
+      - .github/workflows/macos.yml
+      - .cargo/**
+      - .gitignore
+      - Cargo.toml
+      - Cargo.lock
+      - crates/**
+      - bindings/**
+      - macos/**
+      - assets/**
+      - ci/**
+      - xtask/**
   pull_request:
+    paths:
+      - .github/workflows/macos.yml
+      - .cargo/**
+      - .gitignore
+      - Cargo.toml
+      - Cargo.lock
+      - crates/**
+      - bindings/**
+      - macos/**
+      - assets/**
+      - ci/**
+      - xtask/**
   release:
     types: [published]
   workflow_dispatch:

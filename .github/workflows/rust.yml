@@ -5,7 +5,19 @@ name: Rust
 on:
   push:
     branches: [main]
+    paths:
+      - .github/workflows/rust.yml
+      - .cargo/**
+      - Cargo.toml
+      - Cargo.lock
+      - crates/**
   pull_request:
+    paths:
+      - .github/workflows/rust.yml
+      - .cargo/**
+      - Cargo.toml
+      - Cargo.lock
+      - crates/**
   workflow_dispatch:
 
 permissions:
