@@ -1,529 +1,939 @@
 use super::*;
+use crate::model::Preferences;
+use nsh_base::{
+    DataTableCell, DataTableClasses, DataTableColumn, DataTablePress, DataTableRows,
+    DataTableSelection, SelectItem, data_table,
+};
 
-impl Workbench {
-    fn restore_target(&mut self, before: &Preferences, w: &mut Window, cx: &mut Context<Self>) {
-        for key in ["chip", "probe", "speed", "wire", "base"] {
-            self.set(key, before.get(key).to_owned(), w, cx);
-        }
-        self.preferences
-            .flags
-            .insert("under_reset".into(), before.flag("under_reset"));
-        cx.notify();
-    }
-    pub(super) fn open_target_setup(&mut self, w: &mut Window, cx: &mut Context<Self>) {
-        let owner = cx.entity();
-        let before = self.snapshot(cx);
-        let sheet = cx.new(|cx| {
-            cx.observe(&owner, |_, _, cx| cx.notify()).detach();
-            TargetSheet {
-                owner,
-                before,
-                picker: None,
+pub(super) fn dialog(store: Store, open: Signal<bool>) -> impl IntoElement {
+    provide_context(ModalControls);
+    let draft = signal_with(store.read(|s| s.preferences.clone()), SignalEquals::Never);
+    store.target_draft.replace(Some(draft));
+    let chips = store.target_chips;
+    let standalone_chip_picker = chips.get_untracked();
+    let selected = signal(Some(draft.with_untracked(|p| p.get("chip").to_owned())));
+    let was_connecting = signal(false);
+    effect(move || {
+        if store.read(Workbench::target_connecting) {
+            was_connecting.set(true);
+        } else if was_connecting.get() {
+            was_connecting.set(false);
+            if store.read(Workbench::target_connected) {
+                open.set(false);
+            } else if store.read(|state| !state.chips.is_empty()) {
+                chips.set(true);
             }
-        });
-        self.focus_handle.focus(w, cx);
-        w.open_dialog(cx, move |d, _, cx| {
-            let cancelling = sheet.clone();
-            let confirming = sheet.clone();
-            d.p_0()
-                .centered()
-                .close_button(false)
-                .w(px(if sheet.read(cx).picker.is_some() {
-                    500.
+        }
+    });
+    store.modal.set(true);
+    cleanup(move || {
+        store.target_draft.replace(None);
+        store.modal.set(false);
+        store.target_chips.set(false);
+    });
+    nsh_base::dialog()
+        .label(move || {
+            if chips.get() {
+                "选择芯片"
+            } else {
+                "目标配置"
+            }
+        })
+        .on_cancel(move || {
+            if !store.read(|state| state.lane_busy(Lane::Probe)) {
+                if standalone_chip_picker {
+                    open.set(false);
+                } else if chips.get_untracked() {
+                    chips.set(false);
                 } else {
-                    480.
-                }))
+                    open.set(false);
+                }
+            }
+        })
+        .flex_1()
+        .items_center()
+        .justify_center()
+        .bg(move || modal_backdrop(store))
+        .text_color(move || theme().foreground)
+        .child(
+            view()
                 .rounded(px(16.))
-                .child(sheet.clone())
-                .on_ok(move |_, w, cx| {
-                    confirming.update(cx, |s, cx| s.confirm(w, cx));
-                    false
+                .overflow_hidden()
+                .bg(move || theme().background)
+                .child(
+                    when(chips, move || {
+                        chip_picker(store, draft, selected, chips, open, standalone_chip_picker)
+                    })
+                    .otherwise(move || configuration(store, draft, open, chips)),
+                ),
+        )
+}
+fn valid_target(draft: &Preferences) -> bool {
+    valid_speed(draft)
+        && draft.target().is_ok()
+        && (draft.get("base").trim().is_empty() || crate::model::number(draft.get("base")).is_ok())
+}
+
+pub(super) fn can_connect_from_menu(store: Store) -> bool {
+    store
+        .target_draft
+        .with(|draft| draft.is_some_and(|draft| draft.with(valid_target)))
+        && store.read(|state| {
+            !state.lane_busy(Lane::Probe) && (!state.probes_scanned || !state.probes.is_empty())
+        })
+}
+
+pub(super) fn connect_from_menu(store: Store) -> bool {
+    let Some(draft) = store.target_draft.get() else {
+        return false;
+    };
+    if can_connect_from_menu(store) {
+        let preferences = draft.get_untracked();
+        store.change(|state| {
+            for key in ["probe", "chip", "wire", "speed", "base"] {
+                state.set(key, preferences.get(key).into());
+            }
+            state.flag("under_reset", preferences.flag("under_reset"));
+            state.submit(Command::Connect(state.preferences.clone()));
+        });
+    }
+    // A live draft consumes the command even when invalid: never connect with
+    // the saved preferences behind a target configuration window.
+    true
+}
+
+fn configuration(
+    store: Store,
+    draft: Signal<Preferences>,
+    open: Signal<bool>,
+    chips: Signal<bool>,
+) -> View {
+    let busy = move || store.read(|state| state.lane_busy(Lane::Probe));
+    on_key_with(
+        "enter",
+        KeyOptions {
+            when: nsh_core::keymap::When::NotEditing,
+            ..Default::default()
+        },
+        move |_| {
+            connect_from_menu(store);
+        },
+    );
+    let speed_length =
+        draft.with_untracked(|value| value.get("speed").encode_utf16().count() as u32);
+    let speed_selection = signal((0_u32, 0_u32));
+    let selected_speed = stored(false);
+    view()
+        .w(px(480.))
+        .gap_0()
+        .child(view().px_5().pt_5().gap(px(2.))
+            .child(text("目标配置").text_size(body_size).font_weight(FontWeight::BOLD))
+            .child(text(move || store.read(|state| if state.target_connected() {
+                format!("已连接 {}", state.target_name())
+            } else { "未连接".into() })).text_size(small_size).text_color(move || if store.read(Workbench::target_connected) { theme().color("success").unwrap_or(theme().primary) } else { theme().muted_foreground })))
+        .child(scroll().max_h(move || px((nsh_core::element::window().height.0 - 160.).max(320.)))
+            .child(view().px_5().pt_6().gap(px(30.))
+                .child(view().gap_2()
+                    .child(target_section("探针"))
+                    .child(form_group().child(target_row("调试探针", 44., false)
+                        .child(view().flex_1())
+                        .child(nsh_base::select()
+                            .items(move || store.read(|state| std::iter::once(SelectItem::new("", "自动选择"))
+                                .chain(state.probes.iter().map(|probe| SelectItem::new(probe.identifier.clone(), probe.product.clone().unwrap_or_else(|| probe.identifier.clone())))).collect::<Vec<_>>()))
+                            .value(move || Some(SharedString::from(draft.with(|value| value.get("probe").to_owned()))))
+                            .on_change(move |value: &Option<SharedString>| if let Some(value) = value { draft.update(|draft| { draft.fields.insert("probe".into(), value.to_string()); }); })
+                            .disabled(busy).popup_style(popup).accessibility_label("调试探针")
+                            .render_item(|item: &nsh_base::SelectEntry| text(item.title.clone()).text_size(body_size).px_2().py_1())
+                            .trigger(view().flex_row().items_center().gap(px(12.))
+                                .child(text(move || probe_name(store, draft)).text_size(body_size))
+                                .child(view().size(px(20.)).rounded_full().bg(move || theme().foreground.opacity(0.06)).items_center().justify_center().child(icons::icon("target-select").size(px(10.))))))
+                        .child(nsh_base::button().disabled(busy).on_press(move || store.command(|_| Command::Scan)).accessibility_label("扫描调试探针（⌘R）").w(px(37.5)).h(px(24.)).rounded(px(7.)).items_center().justify_center().bg(move || theme().color("button").unwrap_or(theme().secondary)).child(icons::icon("refresh").size(px(14.))))))
+                    .child(when(move || store.read(|state| state.probes_scanned), move || text(move || store.read(|state| if state.probes.is_empty() {
+                        "未发现调试探针。请检查 USB 数据线；使用 Apple 芯片的 Mac 笔记本时，请先解锁并允许此配件连接。关闭其他调试工具后重新扫描。".into()
+                    } else { format!("已发现 {} 个调试探针。", state.probes.len()) })).text_size(small_size).text_color(move || if store.read(|state| state.probes.is_empty()) { theme().color("firmware-tint").unwrap_or(theme().primary) } else { theme().muted_foreground }))))
+                    .child(when(move || store.read(|state| state.probes_scanned && state.probes.is_empty()), move || nsh_base::link().disabled(busy).href("https://support.apple.com/zh-cn/102282").text_color(move || theme().primary).child(text("USB 配件授权说明").text_size(small_size))))
+                .child(view().gap_2()
+                    .child(target_section("目标芯片"))
+                    .child(form_group()
+                        .child(target_row("芯片", 38.5, true).child(view().flex_1())
+                            .child(nsh_base::button().disabled(busy).on_press(move || chips.set(true)).h(px(24.)).flex_row().items_center().gap_1()
+                                .accessibility_label("选择芯片")
+                                .child(text(move || draft.with(|value| if value.get("chip").is_empty() { "自动识别".into() } else { value.get("chip").to_owned() })).text_size(body_size).font_family(mono).text_color(move || theme().muted_foreground))
+                                .child(icons::icon("target-select").size(px(10.)).text_color(move || theme().muted_foreground))))
+                        .child(target_row("协议", 41., true).child(view().flex_1())
+                            .child(view().w(px(112.)).h(px(24.)).rounded(px(6.)).bg(move || theme().color("control").unwrap_or(theme().secondary)).flex_row()
+                                .children([("swd", "SWD"), ("jtag", "JTAG")].into_iter().map(move |(wire, label)| nsh_base::button()
+                                    .disabled(busy).selected(move || draft.with(|value| value.get("wire") == wire))
+                                    .on_press(move || draft.update(|value| { value.fields.insert("wire".into(), wire.into()); }))
+                                    .w(px(56.)).h(px(24.)).items_center().justify_center().rounded(px(6.))
+                                    .selected_style(|style| style.bg(move || theme().primary).text_color(move || theme().primary_foreground))
+                                    .child(text(label).text_size(body_size))))))
+                        .child(target_row("速度", 37., true).child(view().flex_1())
+                            .child(nsh_base::input().label("速度").value(move || draft.with(|value| value.get("speed").to_owned()))
+                                .on_change(move |value: &str| draft.update(|draft| { draft.fields.insert("speed".into(), value.into()); }))
+                                .on_submit(move |_: &str| { connect_from_menu(store); }).auto_focus(true).on_focus(move || { if !selected_speed.replace(true) { speed_selection.set((0, speed_length)); } }).selected_range(speed_selection).readonly(busy).w(px(80.)).h(px(16.)).text_size(body_size).text_right().tabular_nums()
+                                .caret_color(|| color(theme().primary)).selection_color(|| color(theme().primary.opacity(0.4))))
+                            .child(text("kHz").text_size(body_size).text_color(move || theme().muted_foreground))
+                            .child(native_menu_disabled(
+                                view().size(px(12.)).items_center().justify_center().label("常用连接速度").child(icons::icon("target-down").size(px(12.))),
+                                busy,
+                                move || [100, 1000, 4000, 10000, 24000].into_iter().map(move |speed| nsh_core::element::desktop::MenuItem::new(format!("{speed} kHz")).on_select(move || draft.update(|value| { value.fields.insert("speed".into(), speed.to_string()); }))).collect(),
+                            )))
+                        .child(when(move || draft.with(|value| !valid_speed(value)), || view().h(px(36.)).flex_row().items_center().gap(px(12.)).border_b_1().border_color(hairline).text_color(move || theme().destructive)
+                            .child(icons::icon("warning").size(px(13.)))
+                            .child(text("速度须为 1–4294967295 kHz 的整数").text_size(small_size))))
+                        .child(target_row("复位下连接", 37., false).child(view().flex_1())
+                            .child(nsh_base::switch().checked(move || draft.with(|value| value.flag("under_reset"))).disabled(busy)
+                                .on_change(move |value: &bool| draft.update(|draft| { draft.flags.insert("under_reset".into(), *value); })).accessibility_label("复位下连接")
+                                .track_style(|style| style.w(px(36.)).h(px(16.)).p(px(2.)).rounded_full().bg(move || theme().foreground.opacity(0.18)).checked(|style| style.bg(move || theme().primary)))
+                                .thumb_style(|style| style.w(px(20.)).h(px(12.)).rounded_full().bg(move || theme().primary_foreground).checked(|style| style.translate_x(px(12.))))))))
+                .child(view().gap_2().child(target_section("固件地址"))
+                    .child(form_group()
+                        .child(target_row("BIN 基地址", 36., false)
+                            .border_b_1().border_color(move || if draft.with(valid_base) && !inferred_bin_address(store, draft) { theme().background.opacity(0.) } else { hairline() })
+                            .child(nsh_base::input().label("BIN 基地址").placeholder("自动识别")
+                                .value(move || draft.with(|value| value.get("base").to_owned()))
+                                .on_change(move |value: &str| draft.update(|draft| { draft.fields.insert("base".into(), value.into()); }))
+                                .on_submit(move |_: &str| { connect_from_menu(store); })
+                                .readonly(busy).flex_1().h(px(16.)).text_right().text_size(body_size).font_family(mono)
+                                .placeholder_color(|| color(theme().muted_foreground)).caret_color(|| color(theme().primary))))
+                        .child(when(move || draft.with(|value| !valid_base(value)), || view().h(px(36.)).justify_center()
+                            .child(text("请输入有效的十六进制地址").text_size(body_size).text_color(move || theme().destructive)))
+                            .otherwise(move || view().child(when(move || inferred_bin_address(store, draft), move || target_row("已识别地址", 36., false)
+                                .child(view().flex_1())
+                                .child(text(move || store.read(|state| state.preview.as_ref().and_then(|preview| preview.usage.start_address).map(|address| format!("0x{address:08X}")).unwrap_or_default())).text_size(body_size).text_color(move || theme().muted_foreground)))))))
+                    .child(view().px(px(10.)).mt_1().child(text("留空自动识别 ESP BIN；其他 BIN 可手动输入。ELF / HEX 使用文件内地址。").text_size(small_size).text_color(move || theme().muted_foreground))))
+                .child(when(move || store.read(|state| state.target_information().is_some()), move || identified_information(store)))))
+        .child(view().px_6().pb_5().pt(px(28.)).flex_row().items_center().gap_2()
+            .child(when(move || store.read(Workbench::target_connected), move || action("断开", Variant::Ghost, busy, move || store.change(Workbench::disconnect_target))))
+            .child(view().flex_1())
+            .child(action("取消", Variant::Default, busy, move || open.set(false)))
+            .child(target_connect_button(store)))
+}
+
+fn probe_name(store: Store, draft: Signal<Preferences>) -> String {
+    let selected = draft.with(|draft| draft.get("probe").to_owned());
+    if selected.is_empty() {
+        return "自动选择".into();
+    }
+    store.read(|state| {
+        state
+            .probes
+            .iter()
+            .find(|probe| probe.identifier == selected)
+            .and_then(|probe| probe.product.clone())
+            .unwrap_or(selected)
+    })
+}
+
+fn target_connect_button(store: Store) -> impl IntoElement {
+    let disabled = computed(move || !can_connect_from_menu(store));
+    let active = control_active();
+    nsh_base::button()
+        .disabled(disabled)
+        .on_press(move || {
+            connect_from_menu(store);
+        })
+        .w(move || {
+            px(if store.read(Workbench::target_connected) {
+                100.5
+            } else {
+                74.5
+            })
+        })
+        .h(px(24.))
+        .flex_row()
+        .items_center()
+        .justify_center()
+        .gap(px(5.))
+        .rounded(px(7.))
+        .bg(move || {
+            if active.get() {
+                default_push_fill(disabled.get())
+            } else {
+                theme()
+                    .color(if disabled.get() {
+                        "primary-inactive-disabled"
+                    } else {
+                        "primary-inactive"
+                    })
+                    .unwrap_or(theme().secondary)
+            }
+        })
+        .text_color(move || {
+            if !active.get() {
+                theme()
+                    .color(if disabled.get() {
+                        "control-inactive-disabled-foreground"
+                    } else {
+                        "control-inactive-foreground"
+                    })
+                    .unwrap_or(theme().muted_foreground)
+            } else if disabled.get() {
+                theme()
+                    .color("default-push-disabled-foreground")
+                    .unwrap_or(theme().muted_foreground)
+            } else {
+                theme().primary_foreground
+            }
+        })
+        .hover(|style| style.bg(move || theme().primary.opacity(0.9)))
+        .active(|style| style.bg(move || theme().primary.opacity(0.8)))
+        .focus_visible(|style| style.outline(px(2.)).outline_color(move || theme().ring))
+        .disabled_style(|style| style.opacity(1.))
+        .child(icons::icon("link").size(px(14.)))
+        .child(
+            text(move || {
+                store.read(|state| {
+                    if state.target_connected() {
+                        "重新连接"
+                    } else {
+                        "连接"
+                    }
                 })
-                .on_cancel(move |_, w, cx| {
-                    cancelling.update(cx, |s, cx| {
-                        if s.picker.take().is_some() {
-                            cx.notify();
-                            false
+            })
+            .text_size(body_size),
+        )
+}
+
+fn inferred_bin_address(store: Store, draft: Signal<Preferences>) -> bool {
+    draft.with(|value| value.get("base").trim().is_empty())
+        && store.read(|state| {
+            state.preferences.get("base").trim().is_empty()
+                && state.preview.as_ref().is_some_and(|preview| {
+                    matches!(
+                        preview.usage.format,
+                        chipdock_core::models::FirmwareFormat::Bin
+                    ) && preview.usage.start_address.is_some()
+                })
+        })
+}
+
+fn identified_information(store: Store) -> View {
+    let has_cpu = move || {
+        store.read(|state| {
+            state
+                .target_information()
+                .is_some_and(|information| information.cpu.is_some())
+        })
+    };
+    let has_flash = move || {
+        store.read(|state| {
+            state
+                .target_information()
+                .is_some_and(|information| information.flash_size_bytes.is_some())
+        })
+    };
+    view().gap_2().child(target_section("已识别")).child(
+        form_group()
+            .child(
+                target_row("型号", 36., has_cpu() || has_flash())
+                    .child(view().flex_1())
+                    .child(
+                        text(move || {
+                            store.read(|state| {
+                                state
+                                    .target_information()
+                                    .map(|information| information.device_type.clone())
+                                    .unwrap_or_default()
+                            })
+                        })
+                        .text_size(body_size)
+                        .text_color(move || theme().muted_foreground),
+                    ),
+            )
+            .child(when(has_cpu, move || {
+                target_row("内核", 36., has_flash())
+                    .child(view().flex_1())
+                    .child(
+                        text(move || {
+                            store.read(|state| {
+                                state
+                                    .target_information()
+                                    .and_then(|information| information.cpu.clone())
+                                    .unwrap_or_default()
+                            })
+                        })
+                        .text_size(body_size)
+                        .text_color(move || theme().muted_foreground),
+                    )
+            }))
+            .child(when(has_flash, move || {
+                target_row("Flash", 36., false)
+                    .child(view().flex_1())
+                    .child(
+                        text(move || {
+                            store.read(|state| {
+                                state
+                                    .target_information()
+                                    .and_then(|information| information.flash_size_bytes)
+                                    .map(|bytes| {
+                                        if bytes >= 1_048_576 {
+                                            format!("{:.1} MiB", bytes as f64 / 1_048_576.)
+                                        } else if bytes >= 1024 {
+                                            format!("{:.1} KiB", bytes as f64 / 1024.)
+                                        } else {
+                                            format!("{bytes} B")
+                                        }
+                                    })
+                                    .unwrap_or_default()
+                            })
+                        })
+                        .text_size(body_size)
+                        .text_color(move || theme().muted_foreground),
+                    )
+            })),
+    )
+}
+
+fn target_section(label: &'static str) -> View {
+    view().h(px(16.)).px(px(10.)).justify_center().child(
+        text(label)
+            .text_size(body_size)
+            .font_weight(FontWeight::BOLD),
+    )
+}
+
+fn target_row(label: &'static str, height: f32, separator: bool) -> View {
+    view()
+        .h(px(height))
+        .flex_row()
+        .items_center()
+        .gap(px(6.))
+        .when(separator, |view| {
+            view.border_b_1()
+                .border_color(move || theme().foreground.opacity(0.06))
+        })
+        .child(
+            text(label)
+                .text_size(body_size)
+                .when(label == "BIN 基地址", |text| text.font_family(mono)),
+        )
+}
+
+fn valid_base(value: &Preferences) -> bool {
+    value.get("base").trim().is_empty() || crate::model::number(value.get("base")).is_ok()
+}
+
+fn chip_picker(
+    store: Store,
+    draft: Signal<Preferences>,
+    selected: Signal<Option<String>>,
+    back: Signal<bool>,
+    open: Signal<bool>,
+    standalone: bool,
+) -> View {
+    let query = signal(String::new());
+    let results = signal(Vec::<String>::new());
+    let searching = signal(false);
+    let error = signal(String::new());
+    let revision = stored(0_u64);
+    let initial = draft.with_untracked(|value| value.get("chip").to_owned());
+    let candidates = store.read(|state| state.chips.clone());
+    selected.set(Some(
+        candidates
+            .first()
+            .cloned()
+            .unwrap_or_else(|| initial.clone()),
+    ));
+    let initial = stored(initial);
+    let candidates = stored(candidates);
+    let displayed = computed(move || {
+        if query.with(String::is_empty) {
+            candidates.with(|candidates| {
+                if candidates.is_empty() {
+                    initial.with(|initial| {
+                        if initial.is_empty() {
+                            Vec::new()
                         } else {
-                            s.owner
-                                .update(cx, |o, cx| o.restore_target(&s.before, w, cx));
-                            true
+                            vec![initial.clone()]
                         }
                     })
-                })
-        });
-    }
-    fn target_setup(
-        &self,
-        before: &Preferences,
-        _w: &mut Window,
-        cx: &mut Context<Self>,
-        sheet: WeakEntity<TargetSheet>,
-    ) -> AnyElement {
-        let background = rgb(if cx.theme().is_dark() {
-            0x252525
+                } else {
+                    candidates.clone()
+                }
+            })
         } else {
-            0xf7f7f7
-        });
-        let separator = cx.theme().foreground.opacity(0.08);
-        let secondary = cx.theme().muted_foreground;
-        let mono = cx.theme().mono_font_family.clone();
-        let group = || {
-            div()
-                .rounded(px(10.))
-                .bg(background)
-                .px(px(10.))
-                .flex()
-                .flex_col()
-        };
-        let row = |name: &'static str| {
-            div()
-                .min_h(px(37.))
-                .flex()
-                .items_center()
-                .gap(px(8.))
-                .child(div().flex_1().child(name))
-        };
-        let section = |title: &'static str| {
-            div().flex().flex_col().gap(px(10.)).child(
-                div()
-                    .px(px(10.))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .child(title),
-            )
-        };
-        let footnote = || div().mt(px(6.)).px(px(10.)).text_size(px(10.));
-        let p = self.snapshot(cx);
-        let busy = self.is_busy();
-        let connected = self.target_connected(cx);
-        let chip = if p.get("chip").is_empty() {
-            "自动识别".into()
-        } else {
-            p.get("chip").to_owned()
-        };
-        let mut probes = vec![(String::new(), "自动选择".into())];
-        probes.extend(self.probes.iter().map(|p| {
-            (
-                p.identifier.clone(),
-                p.product.clone().unwrap_or_else(|| p.identifier.clone()),
-            )
-        }));
-        let before = before.clone();
-        let speed_valid = p.get("speed").trim().parse::<u32>().is_ok_and(|v| v > 0);
-        let base_valid = p.get("base").trim().is_empty() || model::number(p.get("base")).is_ok();
-        let mut probe_section = section("探针").child(
-            group().child(
-                row("调试探针")
-                    .h(px(42.))
-                    .child(self.target_probe_menu(probes, cx))
-                    .child(
-                        bordered("scan", Some("refresh"), "")
-                            .w(px(37.))
-                            .px_0()
-                            .accessibility_label("扫描探针")
-                            .tooltip(if cfg!(target_os = "macos") {
-                                "扫描调试探针（⌘R）"
-                            } else {
-                                "扫描调试探针（Ctrl+R）"
-                            })
-                            .disabled(busy)
-                            .on_click(cx.listener(|s, _, _, cx| s.submit(Command::Scan, cx))),
-                    ),
-            ),
-        );
-        if self.has_scanned {
-            probe_section = probe_section.child(if self.probes.is_empty() {
-                footnote()
-                    .text_color(rgb(0xff9500))
-                    .child(if cfg!(target_os = "macos") {
-                        "未发现调试探针。请检查 USB 数据线；使用 Apple 芯片的 Mac 笔记本时，请先解锁并允许此配件连接。关闭其他调试工具后重新扫描。"
-                    } else {
-                        "未发现调试探针。请检查 USB 数据线，关闭其他调试工具后重新扫描。"
-                    })
-            } else {
-                footnote()
-                    .text_color(secondary)
-                    .child(format!("已发现 {} 个调试探针。", self.probes.len()))
-            });
+            results.get()
         }
-        let mut page = div()
-            .flex()
-            .flex_col()
-            .text_size(px(13.))
-            .line_height(relative(1.2))
-            .child(
-                div()
-                    .px(px(20.))
-                    .pt(px(20.))
-                    .flex()
-                    .flex_col()
-                    .gap(px(2.))
-                    .child(div().font_weight(FontWeight::BOLD).child("目标配置"))
-                    .child(
-                        div()
-                            .text_size(px(10.))
-                            .text_color(if connected {
-                                rgb(0x34c759).into()
-                            } else {
-                                secondary
+    });
+    let automatic =
+        move || query.with(String::is_empty) && candidates.with(|values| values.is_empty());
+    let names = computed(move || {
+        let mut names = displayed.get();
+        if automatic() {
+            names.insert(0, String::new());
+        }
+        names
+    });
+    let source = store.read(|state| state.worker.core.clone());
+    effect(move || {
+        let text = query.get();
+        let request = revision.with(|revision| {
+            *revision += 1;
+            *revision
+        });
+        results.set(Vec::new());
+        error.set(String::new());
+        if text.trim().is_empty() {
+            searching.set(false);
+            if text.is_empty() {
+                selected.set(Some(
+                    candidates
+                        .with(|values| values.first().cloned())
+                        .unwrap_or_else(|| initial.get()),
+                ));
+            } else {
+                selected.set(None);
+            }
+            return;
+        }
+        selected.set(None);
+        searching.set(true);
+        let core = source.clone();
+        spawn(async move {
+            timer(Duration::from_millis(200)).await;
+            if revision
+                .try_with(|revision| *revision != request)
+                .unwrap_or(true)
+            {
+                return;
+            }
+            let found = nsh_core::element::blocking(move || core.search_chips(text, 150)).await;
+            if revision
+                .try_with(|revision| *revision != request)
+                .unwrap_or(true)
+            {
+                return;
+            }
+            match found {
+                Ok(Ok(names)) => {
+                    selected.set(names.first().cloned());
+                    results.set(names);
+                }
+                Ok(Err(problem)) => error.set(format!("{problem:#}")),
+                Err(problem) => error.set(problem.to_string()),
+            }
+            searching.set(false);
+        });
+    });
+    let choose = move || {
+        if searching.get_untracked() {
+            return;
+        }
+        if let Some(chip) = selected.get_untracked() {
+            draft.update(|draft| {
+                draft.fields.insert("chip".into(), chip.clone());
+            });
+            if standalone {
+                store.change(|state| state.set("chip", chip));
+            } else {
+                back.set(false);
+            }
+            if candidates.with(|candidates| !candidates.is_empty()) {
+                connect_from_menu(store);
+            }
+            if standalone {
+                open.set(false);
+            }
+        }
+    };
+    on_key_with(
+        "enter",
+        KeyOptions {
+            when: nsh_core::keymap::When::NotEditing,
+            ..Default::default()
+        },
+        move |_| choose(),
+    );
+    let list_size = signal(Size {
+        width: px(452.),
+        height: px(300.),
+    });
+    let focused = signal(false);
+    let list_ref = element_ref();
+    list_ref.on_focus_in(move || focused.set(true));
+    list_ref.on_focus_out(move || focused.set(false));
+    let data =
+        computed(move || names.with(|names| DataTableRows::new(names.len()).texts("name", names)));
+    let mut classes = DataTableClasses::default();
+    classes.root = Some("border-0 bg-transparent rounded-none".into());
+    classes.header = Some("hidden".into());
+    classes.cell = Some("p-0".into());
+    classes.row = Some("bg-transparent border-0".into());
+    classes.row_selected = Some("bg-transparent".into());
+    view()
+        .w(px(500.))
+        .h(px(480.))
+        .p_6()
+        .gap(px(14.))
+        .child(
+            view()
+                .gap(px(3.))
+                .child(
+                    text(move || {
+                        if candidates.with(|values| values.is_empty()) {
+                            "选择芯片"
+                        } else {
+                            "选择识别到的目标"
+                        }
+                    })
+                    .text_size(body_size)
+                    .font_weight(FontWeight::BOLD),
+                )
+                .child(caption(move || {
+                    if candidates.with(|values| values.is_empty()) {
+                        "搜索 probe-rs 支持的芯片型号。"
+                    } else {
+                        "目标无法唯一识别，请从候选型号中选择。"
+                    }
+                })),
+        )
+        .child(
+            view()
+                .h(px(24.))
+                .flex_row()
+                .items_center()
+                .gap_2()
+                .child(
+                    view()
+                        .flex_1()
+                        .h(px(24.))
+                        .flex_row()
+                        .items_center()
+                        .gap_1()
+                        .px(px(7.))
+                        .rounded_full()
+                        .border_1()
+                        .border_color(hairline)
+                        .bg(move || {
+                            theme()
+                                .color("record-search-well")
+                                .unwrap_or(theme().background)
+                        })
+                        .focus_within(|style| {
+                            style.outline(px(3.5)).outline_color(move || {
+                                theme().color("record-search-ring").unwrap_or(theme().ring)
                             })
-                            .child(if connected {
-                                format!("已连接 {}", self.target_name(cx))
-                            } else {
-                                "未连接".into()
-                            }),
-                    ),
-            );
-        let mut chip_group = group()
-            .child(
-                row("芯片").border_b_1().border_color(separator).child(
-                    Button::new("chip-picker")
-                        .ghost()
-                        .px_0()
-                        .h(px(22.))
-                        .text_color(secondary)
-                        .disabled(busy)
+                        })
                         .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap(px(4.))
-                                .child(div().font_family(mono.clone()).child(chip))
-                                .child(icons::icon("select").size(px(11.))),
+                            icons::icon("search")
+                                .size(px(14.))
+                                .text_color(move || theme().muted_foreground),
                         )
-                        .on_click(move |_, w, cx| {
-                            let _ = sheet.update(cx, |s, cx| s.select_chip(w, cx));
-                        }),
-                ),
-            )
-            .child(
-                row("协议").border_b_1().border_color(separator).child(
-                    div()
-                        .flex()
-                        .p(px(2.))
-                        .rounded(px(7.))
-                        .bg(control_bg(cx))
-                        .children([("swd", "SWD"), ("jtag", "JTAG")].into_iter().map(
-                            |(value, label)| {
-                                let selected = p.get("wire") == value;
-                                Button::new(value)
-                                    .ghost()
-                                    .h(px(24.))
-                                    .w(px(54.))
-                                    .rounded(px(6.))
-                                    .disabled(busy)
-                                    .when(selected, |b| {
-                                        b.bg(rgb(if cx.theme().is_dark() {
-                                            0x5a5a5a
-                                        } else {
-                                            0xd6d6d6
-                                        }))
-                                    })
-                                    .child(div().text_size(px(13.)).child(label))
-                                    .on_click(cx.listener(move |s, _, w, cx| {
-                                        s.set("wire", value, w, cx);
-                                        cx.notify();
-                                    }))
+                        .child(
+                            nsh_base::input()
+                                .label("搜索芯片型号")
+                                .placeholder("搜索芯片型号，例如 STM32F407")
+                                .value(query)
+                                .on_change(move |value: &str| query.set(value.into()))
+                                .on_submit(move |_: &str| choose())
+                                .flex_1()
+                                .min_w_0()
+                                .h(px(20.))
+                                .text_size(body_size)
+                                .caret_color(|| color(theme().primary))
+                                .placeholder_color(|| color(theme().muted_foreground)),
+                        )
+                        .child(when(
+                            move || !query.with(String::is_empty),
+                            move || {
+                                nsh_base::button()
+                                    .size(px(14.))
+                                    .accessibility_label("清除搜索内容")
+                                    .on_press(move || query.set(String::new()))
+                                    .rounded_full()
+                                    .bg(move || theme().muted_foreground)
+                                    .items_center()
+                                    .justify_center()
+                                    .child(
+                                        icons::icon("close")
+                                            .size(px(9.))
+                                            .text_color(move || theme().background),
+                                    )
                             },
                         )),
-                ),
-            )
-            .child(
-                row("速度")
-                    .gap(px(6.))
-                    .border_b_1()
-                    .border_color(separator)
-                    .child(
-                        div().w(px(80.)).child(
-                            Input::new(&self.fields["speed"])
-                                .small()
-                                .appearance(false)
-                                .text_right()
-                                .disabled(busy)
-                                .aria_label("调试速度"),
-                        ),
-                    )
-                    .child(div().text_color(secondary).child("kHz"))
-                    .child(self.speed_menu(cx)),
-            );
-        if !speed_valid {
-            chip_group = chip_group.child(
-                div()
-                    .min_h(px(30.))
-                    .flex()
-                    .items_center()
-                    .gap(px(6.))
-                    .border_b_1()
-                    .border_color(separator)
-                    .text_size(px(10.))
-                    .text_color(cx.theme().danger)
-                    .child(icons::icon("warning").size(px(12.)))
-                    .child("速度须为 1–4294967295 kHz 的整数"),
-            );
-        }
-        chip_group = chip_group.child(
-            row("复位下连接").child(
-                gpui_kit::component::switch::Switch::new("under-reset")
-                    .small()
-                    .disabled(busy)
-                    .checked(self.preferences.flag("under_reset"))
-                    .on_click(cx.listener(|s, v, _, cx| {
-                        s.preferences.flags.insert("under_reset".into(), *v);
-                        cx.notify();
-                    })),
-            ),
-        );
-        let mut base_group = group().child(
-            row("BIN 基地址").child(
-                div().w(px(220.)).child(
-                    Input::new(&self.fields["base"])
-                        .small()
-                        .appearance(false)
-                        .text_right()
-                        .font_family(mono.clone())
-                        .disabled(busy)
-                        .aria_label("BIN 基地址"),
-                ),
-            ),
-        );
-        if !base_valid {
-            base_group = base_group.child(
-                div()
-                    .min_h(px(30.))
-                    .flex()
-                    .items_center()
-                    .border_t_1()
-                    .border_color(separator)
-                    .text_color(cx.theme().danger)
-                    .child("请输入有效的十六进制地址"),
-            );
-        }
-        page = page.child(
-            div()
-                .px(px(20.))
-                .pt(px(22.))
-                .flex()
-                .flex_col()
-                .gap(px(32.))
-                .child(probe_section)
-                .child(section("目标芯片").child(chip_group))
-                .child(section("固件地址").child(base_group).child(
-                    footnote().text_size(px(10.)).text_color(secondary).child(
-                        "留空自动识别 ESP BIN；其他 BIN 可手动输入。ELF / HEX 使用文件内地址。",
-                    ),
-                ))
-                .when_some(
-                    self.target_info.as_ref().filter(|_| connected),
-                    |d, info| {
-                        let mut identified = group();
-                        let mut rows = vec![("型号", info.device_type.clone())];
-                        rows.extend(info.cpu.clone().map(|cpu| ("内核", cpu)));
-                        rows.extend(
-                            info.flash_size_bytes
-                                .map(|bytes| ("Flash", format!("{:.1} KiB", bytes as f64 / 1024.))),
-                        );
-                        let last = rows.len() - 1;
-                        for (i, (name, value)) in rows.into_iter().enumerate() {
-                            identified = identified.child(
-                                row(name)
-                                    .when(i < last, |r| r.border_b_1().border_color(separator))
-                                    .child(div().text_color(secondary).child(value)),
-                            );
-                        }
-                        d.child(section("已识别").child(identified))
-                    },
-                ),
-        );
-        if cfg!(windows) {
-            page = page.child(div().px(px(30.)).pt(px(16.)).child(self.button(
-                "repair-driver",
-                "检查／修复探针驱动",
-                cx,
-                |s, _, cx| s.submit(Command::RepairProbe(s.snapshot(cx).get("probe").into()), cx),
-            )));
-        }
-        page.child(
-            div()
-                .px(px(24.))
-                .pt(px(28.))
-                .pb(px(20.))
-                .flex()
-                .items_center()
-                .gap(px(8.))
-                .when(connected, |d| {
-                    d.child(
-                        bordered("disconnect-sheet", Some("xmark-circle"), "断开")
-                            .text_color(cx.theme().danger)
-                            .disabled(busy)
-                            .on_click(cx.listener(|s, _, w, cx| s.disconnect_target(w, cx))),
-                    )
-                })
-                .child(div().flex_1())
-                .when(busy, |d| {
-                    d.child(
-                        div()
-                            .mr(px(4.))
-                            .child(gpui_kit::component::spinner::Spinner::new().small()),
-                    )
-                })
+                )
+                .child(when(searching, || caption("…"))),
+        )
+        .child(when(
+            move || !error.with(String::is_empty),
+            move || {
+                text(move || error.get())
+                    .text_size(caption_size)
+                    .text_color(move || theme().destructive)
+            },
+        ))
+        .child(
+            view()
+                .relative()
+                .flex_1()
+                .min_h_0()
+                .border_1()
+                .border_color(hairline)
+                .overflow_hidden()
+                .on_layout(move |bounds: &Bounds<Points>| list_size.set(bounds.size))
                 .child(
-                    bordered("cancel-target", None, "取消")
-                        .disabled(busy)
-                        .on_click(cx.listener(move |s, _, w, cx| {
-                            s.restore_target(&before, w, cx);
-                            w.close_dialog(cx);
+                    view()
+                        .absolute()
+                        .inset_0()
+                        .pointer_events(nsh_core::PointerEvents::None)
+                        .accessibility_elements_hidden(true)
+                        .children((0..20).map(move |index| {
+                            view().h(px(24.)).flex_shrink_0().bg(move || {
+                                if index % 2 == 1 {
+                                    theme().color("table-stripe").unwrap_or(theme().muted)
+                                } else {
+                                    theme().background
+                                }
+                            })
                         })),
                 )
                 .child(
-                    bordered(
-                        "connect",
-                        Some("link"),
-                        if connected { "重新连接" } else { "连接" },
-                    )
-                    .disabled(!self.can_connect_target(cx))
-                    .on_click(cx.listener(|s, _, w, cx| {
-                        s.submit(Command::Connect(s.snapshot(cx)), cx);
-                        w.close_dialog(cx);
-                    })),
-                ),
-        )
-        .into_any_element()
-    }
-    fn can_connect_target(&self, cx: &App) -> bool {
-        let p = self.snapshot(cx);
-        !self.is_busy()
-            && (!self.has_scanned || !self.probes.is_empty())
-            && p.target().is_ok()
-            && (p.get("base").trim().is_empty() || model::number(p.get("base")).is_ok())
-    }
-    fn target_probe_menu(
-        &self,
-        options: Vec<(String, String)>,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        let current = self.fields["probe"].read(cx).value().to_string();
-        let label = options
-            .iter()
-            .find(|(v, _)| *v == current)
-            .map(|(_, l)| l.clone())
-            .unwrap_or_else(|| "自动选择".into());
-        let owner = cx.entity().downgrade();
-        Button::new("target-probe-menu")
-            .ghost()
-            .h(px(24.))
-            .px(px(4.))
-            .disabled(self.busy_lanes.contains(&Lane::Probe))
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(px(8.))
-                    .text_size(px(13.))
-                    .child(label)
-                    .child(
-                        div()
-                            .size(px(20.))
-                            .rounded_full()
-                            .bg(control_bg(cx))
-                            .flex()
+                    data_table()
+                        .element_ref(&list_ref)
+                        .columns(move || {
+                            let mut column = DataTableColumn::default();
+                            column.key = "name".into();
+                            column.title = Some(SharedString::default());
+                            column.width = Some(px((list_size.get().width.0 - 2.).max(1.)));
+                            column.min_width = Some(px(1.));
+                            vec![column]
+                        })
+                        .data(data)
+                        .header_height(px(1.))
+                        .row_height(px(24.))
+                        .row_header(false)
+                        .row_selectable(true)
+                        .column_selectable(false)
+                        .cell_selectable(false)
+                        .loop_selection(false)
+                        .resizable_columns(false)
+                        .movable_columns(false)
+                        .horizontal_scrollbar(false)
+                        .font_size(body_size)
+                        .classes(classes)
+                        .accessibility_label("芯片型号")
+                        .selection(move || {
+                            selected.with(|selection| {
+                                names.with(|names| {
+                                    selection
+                                        .as_ref()
+                                        .and_then(|selected| {
+                                            names.iter().position(|name| name == selected)
+                                        })
+                                        .map(|row| {
+                                            let mut selection = DataTableSelection::default();
+                                            selection.row = Some(row as u32);
+                                            selection
+                                        })
+                                })
+                            })
+                        })
+                        .on_selection_change(move |selection: &Option<DataTableSelection>| {
+                            selected.set(
+                                selection
+                                    .as_ref()
+                                    .and_then(|selection| selection.row)
+                                    .and_then(|row| {
+                                        names.with_untracked(|names| {
+                                            names.get(row as usize).cloned()
+                                        })
+                                    }),
+                            )
+                        })
+                        .on_row_press(move |press: &DataTablePress| {
+                            selected
+                                .set(names.with_untracked(|names| {
+                                    names.get(press.row as usize).cloned()
+                                }));
+                        })
+                        .render_cell(move |cell: &DataTableCell| {
+                            let name = names
+                                .with_untracked(|names| names.get(cell.row as usize).cloned())
+                                .unwrap_or_default();
+                            let automatic = name.is_empty();
+                            let row_name = name.clone();
+                            let is_selected = computed(move || {
+                                selected
+                                    .with(|selected| selected.as_deref() == Some(row_name.as_str()))
+                            });
+                            view()
+                                .h(px(24.))
+                                .px(px(8.))
+                                .flex_row()
+                                .items_center()
+                                .gap(px(6.))
+                                .bg(move || {
+                                    if is_selected.get() {
+                                        if focused.get() {
+                                            theme()
+                                                .color("selection-active")
+                                                .unwrap_or(theme().primary)
+                                        } else {
+                                            theme()
+                                                .color("selection-inactive")
+                                                .unwrap_or(theme().secondary)
+                                        }
+                                    } else {
+                                        theme().background.opacity(0.)
+                                    }
+                                })
+                                .child(
+                                    icons::icon(if automatic { "auto-detect" } else { "memory" })
+                                        .size(px(14.))
+                                        .text_color(move || {
+                                            if is_selected.get() && focused.get() {
+                                                theme().primary_foreground
+                                            } else {
+                                                theme().primary
+                                            }
+                                        }),
+                                )
+                                .child(
+                                    text(if automatic {
+                                        "自动识别".into()
+                                    } else {
+                                        name
+                                    })
+                                    .text_size(body_size)
+                                    .text_color(move || {
+                                        if is_selected.get() && focused.get() {
+                                            theme().primary_foreground
+                                        } else {
+                                            theme().foreground
+                                        }
+                                    })
+                                    .when(!automatic, |text| text.font_family(mono)),
+                                )
+                        })
+                        .h(move || px(list_size.get().height.0 + 1.))
+                        .mt(px(-1.)),
+                )
+                .child(when(
+                    move || {
+                        !query.with(String::is_empty)
+                            && displayed.with(Vec::is_empty)
+                            && !searching.get()
+                            && error.with(String::is_empty)
+                    },
+                    move || {
+                        view()
+                            .absolute()
+                            .inset_0()
                             .items_center()
                             .justify_center()
-                            .child(icons::icon("select").size(px(12.))),
-                    ),
-            )
-            .dropdown_menu(move |mut m, _, _| {
-                for (value, label) in &options {
-                    let value = value.clone();
-                    let owner = owner.clone();
-                    m = m.item(
-                        PopupMenuItem::new(label.clone())
-                            .checked(value == current)
-                            .on_click(move |_, w, cx| {
-                                let _ = owner.update(cx, |s, cx| {
-                                    s.set("probe", value.clone(), w, cx);
-                                    cx.notify();
-                                });
-                            }),
-                    );
-                }
-                m
-            })
-    }
-    fn speed_menu(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let owner = cx.entity().downgrade();
-        native_button("speed-presets")
-            .small()
-            .ghost()
-            .icon(icons::icon("down"))
-            .tooltip("常用连接速度")
-            .dropdown_menu(move |mut m, _, _| {
-                for (speed, label) in [
-                    (100, "100 kHz"),
-                    (1000, "1,000 kHz"),
-                    (4000, "4,000 kHz"),
-                    (10000, "10,000 kHz"),
-                    (24000, "24,000 kHz"),
-                ] {
-                    let owner = owner.clone();
-                    m = m.item(PopupMenuItem::new(label).on_click(move |_, w, cx| {
-                        let _ = owner.update(cx, |s, cx| {
-                            s.set("speed", speed.to_string(), w, cx);
-                            cx.notify();
-                        });
-                    }));
-                }
-                m
-            })
-    }
+                            .gap(px(8.))
+                            .px_6()
+                            .translate_y(px(-10.))
+                            .pointer_events(nsh_core::PointerEvents::None)
+                            .child(
+                                icons::icon("search")
+                                    .size(px(44.))
+                                    .mb(px(12.))
+                                    .text_color(move || theme().muted_foreground.opacity(0.6)),
+                            )
+                            .child(
+                                text(move || format!("未找到“{}”的相关结果", query.get()))
+                                    .text_size(px(15.))
+                                    .max_w(px(320.))
+                                    .line_height(nsh_core::LineHeight::Multiple(4. / 3.))
+                                    .font_weight(FontWeight::BOLD)
+                                    .text_center()
+                                    .text_color(move || theme().muted_foreground),
+                            )
+                            .child(
+                                text("检查拼写或尝试新搜索词。")
+                                    .text_size(px(15.))
+                                    .text_color(move || theme().muted_foreground),
+                            )
+                    },
+                )),
+        )
+        .child(
+            view()
+                .flex_row()
+                .items_center()
+                .gap_2()
+                .child(when(
+                    move || !displayed.with(Vec::is_empty),
+                    move || {
+                        text(move || format!("{} 个目标", displayed.with(Vec::len)))
+                            .text_size(small_size)
+                            .text_color(move || theme().muted_foreground)
+                    },
+                ))
+                .child(view().flex_1())
+                .child(action(
+                    if standalone { "取消" } else { "返回" },
+                    Variant::Default,
+                    || false,
+                    move || {
+                        if standalone {
+                            open.set(false)
+                        } else {
+                            back.set(false)
+                        }
+                    },
+                ))
+                .child(action(
+                    move || {
+                        if candidates.with(|values| values.is_empty()) {
+                            "选择"
+                        } else {
+                            "选择并连接"
+                        }
+                    },
+                    Variant::DefaultAction,
+                    move || searching.get() || selected.with(Option::is_none),
+                    choose,
+                )),
+        )
 }
 
-struct TargetSheet {
-    owner: Entity<Workbench>,
-    before: Preferences,
-    picker: Option<Entity<super::chip_picker::ChipPicker>>,
+fn valid_speed(value: &Preferences) -> bool {
+    let speed = value.get("speed").trim();
+    !speed.is_empty()
+        && speed.bytes().all(|value| value.is_ascii_digit())
+        && speed.parse::<u32>().is_ok_and(|speed| speed > 0)
 }
-impl TargetSheet {
-    fn select_chip(&mut self, w: &mut Window, cx: &mut Context<Self>) {
-        let initial = self.owner.read(cx).snapshot(cx).get("chip").to_owned();
-        let core = self.owner.read(cx).worker.core.clone();
-        let parent = cx.entity().downgrade();
-        self.picker = Some(cx.new(|cx| {
-            super::chip_picker::ChipPicker::new(initial, core, w, cx, move |selection, w, cx| {
-                let _ = parent.update(cx, |s, cx| {
-                    if let Some(chip) = selection {
-                        s.owner.update(cx, |o, cx| o.set("chip", chip, w, cx));
-                    }
-                    s.picker = None;
-                    cx.notify();
-                });
-            })
-        }));
-        cx.notify();
-    }
-    fn confirm(&mut self, w: &mut Window, cx: &mut Context<Self>) {
-        if let Some(picker) = &self.picker {
-            let picker = picker.clone();
-            w.defer(cx, move |w, cx| picker.update(cx, |p, cx| p.confirm(w, cx)));
-        } else {
-            self.owner.update(cx, |o, cx| {
-                let p = o.snapshot(cx);
-                if o.can_connect_target(cx) {
-                    o.submit(Command::Connect(p), cx);
-                    w.close_dialog(cx);
-                }
-            });
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn target_speed_matches_native_decimal_input() {
+        let mut draft = Preferences::default();
+        for (value, expected) in [
+            (" 4000 ", true),
+            ("4294967295", true),
+            ("4294967296", false),
+            ("0", false),
+            ("0x1000", false),
+            ("+4000", false),
+            ("4_000", false),
+            ("", false),
+        ] {
+            draft.fields.insert("speed".into(), value.into());
+            assert_eq!(valid_speed(&draft), expected, "{value}");
         }
     }
-}
-impl Render for TargetSheet {
-    fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        if let Some(picker) = &self.picker {
-            return div().child(picker.clone());
+
+    #[test]
+    fn blank_or_valid_bin_addresses_preserve_native_validation() {
+        let mut draft = Preferences::default();
+        for (value, expected) in [
+            ("", true),
+            ("  ", true),
+            ("0x08000000", true),
+            ("134217728", true),
+            ("0x", false),
+            ("-1", false),
+            ("0800ZZ", false),
+        ] {
+            draft.fields.insert("base".into(), value.into());
+            assert_eq!(valid_base(&draft), expected, "{value}");
         }
-        let sheet = cx.entity().downgrade();
-        div().child(
-            self.owner
-                .update(cx, |o, cx| o.target_setup(&self.before, w, cx, sheet)),
-        )
     }
 }

@@ -1,202 +1,370 @@
 use super::*;
 
-impl Workbench {
-    pub(super) fn logs_page(&self, cx: &mut Context<Self>) -> AnyElement {
-        let query = self.fields["log_search"].read(cx).value().to_lowercase();
-        let errors_only = self.preferences.flag("errors_only");
-        let follow = self.preferences.flag("follow_logs");
-        let entries = self
-            .logs
-            .iter()
-            .filter(|s| s.to_lowercase().contains(&query))
-            .filter(|s| !errors_only || s.contains("[错误]"))
-            .cloned()
-            .collect::<Vec<_>>();
-        let copy = self.logs.iter().cloned().collect::<Vec<_>>().join("\n");
-        let export = copy.clone().into_bytes();
-        let errors = self.logs.iter().filter(|s| s.contains("[错误]")).count();
-        let empty = self.logs.is_empty();
-        let leading = if cx.platform_info().os == OperatingSystem::Mac {
-            108.
-        } else {
-            16.
-        };
-        let toggled = rgb(if cx.theme().is_dark() {
-            0x484848
-        } else {
-            0xe3e3e3
-        });
-        let tool = |id: &'static str, icon: &'static str, on: bool| {
-            Button::new(id)
-                .ghost()
-                .size(px(30.))
-                .p_0()
-                .rounded_full()
-                .when(on, |b| b.bg(toggled))
-                .text_color(cx.theme().foreground.opacity(0.75))
-                .child(icons::icon(icon).size(px(17.)).flex_shrink_0())
-        };
-        let body = if empty || entries.is_empty() {
-            let (icon, title, detail) = if empty {
-                (
-                    "logs",
-                    "暂无日志",
-                    "连接、烧录和读取内存的过程会记录在这里。",
-                )
-            } else if query.is_empty() {
-                ("check", "没有错误", "")
-            } else {
-                ("search", "无结果", "检查拼写或尝试其他搜索。")
-            };
-            div()
-                .flex_1()
-                .flex()
-                .flex_col()
-                .items_center()
-                .justify_center()
-                .gap(px(8.))
-                .text_color(cx.theme().muted_foreground)
-                .child(icons::icon(icon).size(px(40.)).mb(px(4.)))
-                .child(
-                    div()
-                        .text_size(px(17.))
-                        .font_weight(FontWeight::BOLD)
-                        .child(title),
-                )
-                .when(!detail.is_empty(), |d| {
-                    d.child(div().text_size(px(13.)).child(detail))
+pub(super) fn page(store: Store) -> View {
+    let entries = computed(move || {
+        store.read(|s| {
+            let query = s.preferences.get("log_search").to_lowercase();
+            s.logs
+                .iter()
+                .filter(|line| {
+                    line.to_lowercase().contains(&query)
+                        && (!s.preferences.flag("errors_only") || line.contains("[错误]"))
                 })
-                .into_any_element()
-        } else {
-            div()
-                .id("logs-list")
-                .flex_1()
-                .min_h_0()
-                .overflow_y_scroll()
-                .track_scroll(&self.logs_scroll)
-                .px(px(16.))
-                .py(px(10.))
-                .font_family(cx.theme().mono_font_family.clone())
-                .text_size(px(12.))
-                .line_height(relative(1.3))
-                .children(entries.iter().map(|s| {
-                    div()
-                        .when(s.contains("[错误]"), |d| d.text_color(cx.theme().danger))
-                        .child(s.clone())
-                }))
-                .into_any_element()
-        };
-        div()
-            .size_full()
-            .flex()
-            .flex_col()
-            .child(
-                gpui_kit::component::TitleBar::new()
-                    .h(px(52.))
-                    .pl(px(leading))
-                    .pr(px(9.))
-                    .bg(cx.theme().background)
-                    .border_0()
+                .cloned()
+                .collect::<Vec<_>>()
+        })
+    });
+    let scroll_ref = element_ref();
+    let previous = stored(0.0_f32);
+    let search = element_ref();
+    crate::ui::commands::watch_window(store, "logs", Some(search));
+    on_key("mod+f", move |_| {
+        crate::ui::commands::focus_search(search, &store.field("log_search"));
+    });
+    effect(move || {
+        let count = entries.with(Vec::len);
+        if count > 0 && store.flag("follow_logs") {
+            scroll_ref.scroll_to_end(false);
+        }
+    });
+    let leading = if cfg!(target_os = "macos") { 108. } else { 16. };
+    view()
+        .flex_1()
+        .min_h_0()
+        .bg(move || {
+            theme()
+                .color("logs-background")
+                .unwrap_or(theme().background)
+        })
+        .child(
+            view()
+                .h(px(52.))
+                .pl(px(leading))
+                .pr(px(9.))
+                .flex_row()
+                .items_center()
+                .gap_3()
+                .window_drag(true)
+                .child(
+                    view()
+                        .flex_1()
+                        .min_w_0()
+                        .child(
+                            text("活动日志")
+                                .text_size(body_size)
+                                .font_weight(FontWeight::BOLD)
+                                .text_color(move || {
+                                    theme().color("logs-title").unwrap_or(theme().foreground)
+                                }),
+                        )
+                        .child(
+                            text(move || {
+                                store.read(|s| {
+                                    format!(
+                                        "{} 条日志 · {} 条错误",
+                                        entries.with(Vec::len),
+                                        s.logs.iter().filter(|l| l.contains("[错误]")).count()
+                                    )
+                                })
+                            })
+                            .text_size(px(11.))
+                            .text_color(move || {
+                                theme()
+                                    .color("logs-subtitle")
+                                    .unwrap_or(theme().muted_foreground)
+                            }),
+                        ),
+                )
+                .child(
+                    glass()
+                        .pr(px(3.))
+                        .child(search_control(store, search))
+                        .child(view().w(px(3.5)))
+                        .child(
+                            view()
+                                .flex_row()
+                                .items_center()
+                                .gap(px(6.))
+                                .child(log_toggle(
+                                    store,
+                                    "errors_only",
+                                    "error-circle",
+                                    "仅显示错误",
+                                ))
+                                .child(log_toggle(
+                                    store,
+                                    "follow_logs",
+                                    "arrow-down-to-line",
+                                    "跟随最新日志",
+                                )),
+                        )
+                        .child(view().w(px(5.5)))
+                        .child(
+                            view()
+                                .flex_row()
+                                .items_center()
+                                .gap(px(6.))
+                                .child(log_tool(
+                                    "logs-copy-document",
+                                    "复制全部日志",
+                                    || false,
+                                    move || store.read(|s| s.logs.is_empty()),
+                                    move || {
+                                        set_clipboard(store.read(|s| {
+                                            s.logs.iter().cloned().collect::<Vec<_>>().join("\n")
+                                        }))
+                                    },
+                                ))
+                                .child(log_tool(
+                                    "logs-export",
+                                    "导出日志…",
+                                    || false,
+                                    move || store.read(|s| s.logs.is_empty()),
+                                    move || {
+                                        store.export_as(
+                                            "ChipDock.log",
+                                            store
+                                                .read(|s| {
+                                                    s.logs
+                                                        .iter()
+                                                        .cloned()
+                                                        .collect::<Vec<_>>()
+                                                        .join("\n")
+                                                })
+                                                .into_bytes(),
+                                            crate::ui::file_dialogs::ExportKind::DocumentText,
+                                        )
+                                    },
+                                ))
+                                .child(log_tool(
+                                    "logs-trash",
+                                    "清空日志",
+                                    || false,
+                                    move || store.read(|s| s.logs.is_empty()),
+                                    move || store.change(|s| s.logs.clear()),
+                                )),
+                        ),
+                ),
+        )
+        .child(
+            when(move || entries.with(Vec::is_empty), move || empty(store)).otherwise(move || {
+                scroll()
+                    .element_ref(&scroll_ref)
+                    .on_scroll(move |event: &nsh_core::element::ScrollEvent| {
+                        let old = previous.replace(event.offset.y.0);
+                        if event.offset.y.0 + 1. < old {
+                            store.change(|s| s.flag("follow_logs", false));
+                        }
+                    })
+                    .flex_1()
                     .child(
-                        div()
-                            .w_full()
-                            .flex()
+                        view()
+                            .px(px(21.))
+                            .py(px(10.))
+                            .font_family(mono)
+                            .text_size(caption_size)
+                            .line_height(px(15.))
+                            .selectable(true)
+                            .child(each(
+                                computed(move || {
+                                    entries.with(|rows| {
+                                        rows.iter().cloned().enumerate().collect::<Vec<_>>()
+                                    })
+                                }),
+                                |line: &(usize, String)| line.0,
+                                move |line, _| {
+                                    text(move || line.with(|row| row.1.clone())).text_color(
+                                        move || {
+                                            if line.with(|row| row.1.contains("[错误]")) {
+                                                theme().destructive
+                                            } else {
+                                                theme().foreground
+                                            }
+                                        },
+                                    )
+                                },
+                            )),
+                    )
+            }),
+        )
+}
+/// The native search field's frame includes its icon and clear button; keep the whole region at the measured native 180 pt.
+fn search_control(store: Store, search: ElementRef) -> View {
+    let focused = signal(false);
+    let active = control_active();
+    let focused_style = |s: nsh_core::element::StyleRefinement| {
+        s.outline(px(3.5)).outline_color(move || {
+            theme()
+                .color("logs-search-ring")
+                .unwrap_or(theme().primary.opacity(0.5))
+        })
+    };
+    view()
+        .w(px(180.))
+        .h(px(36.))
+        .pl(px(12.))
+        .flex_row()
+        .items_center()
+        .gap(px(4.))
+        .rounded_full()
+        .focus_within(focused_style)
+        .style_when(move || focused.get() && active.get(), focused_style)
+        .child(
+            icons::icon("search")
+                .size(px(16.))
+                .text_color(move || theme().foreground.opacity(0.7)),
+        )
+        .child(
+            nsh_base::input()
+                .value(move || store.field("log_search"))
+                .on_change(move |value: &str| store.change(|s| s.set("log_search", value.into())))
+                .on_focus(move || focused.set(true))
+                .on_blur(move || focused.set(false))
+                .on_key_press(move |key: &str| {
+                    if key == "Escape" {
+                        store.change(|s| s.set("log_search", String::new()));
+                        // The hosted input blurs after reporting Escape; restore search focus next frame.
+                        spawn(async move {
+                            let _ = nsh_core::element::next_frame().await;
+                            search.focus();
+                        });
+                    }
+                })
+                .element_ref(&search)
+                .label("筛选日志")
+                .caret_color(|| color(theme().primary))
+                .placeholder("筛选日志")
+                .flex_1()
+                .min_w_0()
+                .text_size(body_size),
+        )
+        .child(when(
+            move || !store.field("log_search").is_empty(),
+            move || {
+                // NSSearchField's cancel cell has a 36 pt hit region with a 13 pt circular glyph.
+                nsh_base::button()
+                    .on_press(move || {
+                        store.change(|s| s.set("log_search", String::new()));
+                        search.focus();
+                    })
+                    .accessibility_label("清除日志筛选")
+                    .size(px(36.))
+                    .p_0()
+                    .items_center()
+                    .justify_center()
+                    .rounded_full()
+                    .hover(|s| s.opacity(0.8))
+                    .active(|s| s.opacity(0.65))
+                    .focus_visible(|s| s.outline(px(2.)).outline_color(move || theme().ring))
+                    .child(
+                        view()
+                            .size(px(13.))
                             .items_center()
-                            .gap(px(12.))
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .min_w_0()
-                                    .child(
-                                        div()
-                                            .text_size(px(15.))
-                                            .font_weight(FontWeight::BOLD)
-                                            .text_color(cx.theme().foreground.opacity(0.7))
-                                            .child("活动日志"),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_size(px(11.))
-                                            .text_color(cx.theme().muted_foreground)
-                                            .child(format!(
-                                                "{} 条日志 · {errors} 条错误",
-                                                entries.len()
-                                            )),
-                                    ),
-                            )
-                            .child(
-                                glass(cx)
-                                    .pl(px(12.))
-                                    .pr(px(3.))
-                                    .gap(px(4.))
-                                    .child(
-                                        icons::icon("search")
-                                            .size(px(16.))
-                                            .flex_shrink_0()
-                                            .text_color(cx.theme().foreground.opacity(0.7)),
-                                    )
-                                    .child(
-                                        div().w(px(180.)).child(
-                                            Input::new(&self.fields["log_search"])
-                                                .appearance(false)
-                                                .text_size(px(13.))
-                                                .aria_label("筛选日志"),
-                                        ),
-                                    )
-                                    .child(
-                                        tool("only-errors", "warning", errors_only)
-                                            .tooltip("仅显示错误")
-                                            .on_click(cx.listener(|s, _, _, cx| {
-                                                s.preferences.flags.insert(
-                                                    "errors_only".into(),
-                                                    !s.preferences.flag("errors_only"),
-                                                );
-                                                cx.notify();
-                                            })),
-                                    )
-                                    .child(
-                                        tool("follow-logs", "arrow-down", follow)
-                                            .tooltip("上滚时暂停跟随；点击继续显示最新日志")
-                                            .on_click(cx.listener(|s, _, _, cx| {
-                                                s.preferences.flags.insert(
-                                                    "follow_logs".into(),
-                                                    !s.preferences.flag("follow_logs"),
-                                                );
-                                                cx.notify();
-                                            })),
-                                    )
-                                    .child(
-                                        tool("copy-logs", "copy", false)
-                                            .tooltip("复制全部日志")
-                                            .disabled(empty)
-                                            .on_click(move |_, _, cx| {
-                                                cx.write_to_clipboard(ClipboardItem::new_string(
-                                                    copy.clone(),
-                                                ))
-                                            }),
-                                    )
-                                    .child(
-                                        tool("export-logs", "export", false)
-                                            .tooltip("导出日志…")
-                                            .disabled(empty)
-                                            .on_click(cx.listener(move |s, _, _, cx| {
-                                                s.export_bytes("ChipDock.log", export.clone(), cx)
-                                            })),
-                                    )
-                                    .child(
-                                        tool("clear-logs", "trash", false)
-                                            .tooltip("清空日志")
-                                            .disabled(empty)
-                                            .on_click(cx.listener(|s, _, _, cx| {
-                                                s.logs.clear();
-                                                s.unseen_errors = 0;
-                                                cx.notify();
-                                            })),
-                                    ),
-                            ),
-                    ),
-            )
-            .child(body)
-            .into_any_element()
-    }
+                            .justify_center()
+                            .rounded_full()
+                            .bg(move || theme().muted_foreground)
+                            .text_color(move || theme().background)
+                            .child(icons::icon("close").size(px(9.))),
+                    )
+            },
+        ))
+}
+
+fn empty(store: Store) -> View {
+    let state = computed(move || {
+        store.read(|s| {
+            if s.logs.is_empty() {
+                0
+            } else if s.preferences.get("log_search").is_empty() {
+                1
+            } else {
+                2
+            }
+        })
+    });
+    super::empty_view_with_layout(
+        move || match state.get() {
+            0 => "logs-empty",
+            1 => "logs-no-errors",
+            _ => "logs-search-empty",
+        },
+        move || match state.get() {
+            0 => "暂无日志".to_owned(),
+            1 => "没有错误".to_owned(),
+            _ => format!("未找到“{}”的相关结果", store.field("log_search")),
+        },
+        move || match state.get() {
+            0 => "连接、烧录和读取内存的过程会记录在这里。",
+            1 => "",
+            _ => "检查拼写或尝试新搜索词。",
+        },
+        move || match state.get() {
+            0 => super::EmptyLayout::Standard,
+            1 => super::EmptyLayout::LabelOnly,
+            _ => super::EmptyLayout::Search,
+        },
+    )
+}
+fn log_toggle(
+    store: Store,
+    key: &'static str,
+    name: &'static str,
+    label: &'static str,
+) -> impl IntoElement {
+    nsh_base::checkbox()
+        .checked(move || store.flag(key))
+        .on_change(move |checked: &bool| store.change(|s| s.flag(key, *checked)))
+        .indicator_class("hidden")
+        .accessibility_label(label)
+        .size(px(30.))
+        .p_0()
+        .rounded_full()
+        .items_center()
+        .justify_center()
+        .text_color(move || theme().foreground)
+        .hover(|s| s.bg(move || theme().accent))
+        .active(|s| s.bg(move || theme().muted))
+        .checked_style(|s| {
+            s.bg(move || {
+                theme()
+                    .color("logs-control-selected")
+                    .unwrap_or(theme().primary)
+            })
+            .text_color(move || theme().primary_foreground)
+        })
+        .focus_visible(|s| s.outline(px(2.)).outline_color(move || theme().ring))
+        .child(icons::icon(name).size(px(20.75)))
+}
+
+fn log_tool(
+    name: &'static str,
+    label: &'static str,
+    selected: impl Fn() -> bool + 'static,
+    disabled: impl Fn() -> bool + 'static,
+    press: impl Fn() + 'static,
+) -> impl IntoElement {
+    nsh_base::button()
+        .on_press(press)
+        .selected(selected)
+        .disabled(disabled)
+        .accessibility_label(label)
+        .size(px(30.))
+        .p_0()
+        .rounded_full()
+        .items_center()
+        .justify_center()
+        .text_color(move || theme().foreground)
+        .hover(|s| s.bg(move || theme().accent))
+        .active(|s| s.bg(move || theme().muted))
+        .selected_style(|s| {
+            s.bg(move || theme().primary)
+                .text_color(move || theme().primary_foreground)
+        })
+        .focus_visible(|s| s.outline(px(2.)).outline_color(move || theme().ring))
+        .disabled_style(|s| s.opacity(0.30))
+        .child(icons::icon(name).size(px(match name {
+            "logs-copy-document" => 20.75,
+            "logs-export" | "logs-trash" => 21.75,
+            _ => 17.,
+        })))
 }

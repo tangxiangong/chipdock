@@ -41,11 +41,12 @@ pub enum Lane {
     Plot(u64),
     Files,
     Discovery,
+    Registry,
     Update,
 }
 impl Lane {
     pub fn background(self) -> bool {
-        matches!(self, Self::Plot(_) | Self::Discovery)
+        matches!(self, Self::Plot(_) | Self::Discovery | Self::Registry)
     }
 }
 impl Command {
@@ -53,6 +54,7 @@ impl Command {
         match self {
             Self::CheckUpdate | Self::DownloadUpdate(_) | Self::InstallUpdate(..) => Lane::Update,
             Self::Plot(id, ..) => Lane::Plot(*id),
+            Self::Layout(_) => Lane::Registry,
             Self::CloseSession(id)
             | Self::ConnectSerial(id, _)
             | Self::Disconnect(id)
@@ -359,6 +361,15 @@ mod tests {
             Command::Plot(1, 0, json!({})).lane(),
             Command::Send(1, Preferences::default()).lane()
         );
+    }
+
+    #[test]
+    fn registry_layout_never_uses_the_probe_worker() {
+        let layout = Command::Layout(Preferences::default()).lane();
+        assert_eq!(layout, Lane::Registry);
+        assert!(layout.background());
+        assert_ne!(layout, Command::Preview(Preferences::default()).lane());
+        assert_ne!(layout, Command::Connect(Preferences::default()).lane());
     }
 }
 

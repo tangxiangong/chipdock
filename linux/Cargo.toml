@@ -1,22 +1,23 @@
 [package]
-name = "chipdock-gpui"
+name = "chipdock-nsh"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+base64.workspace = true
 chipdock-core.workspace = true
 chipdock-gpui-update.workspace = true
 chipdock-service.workspace = true
 chrono.workspace = true
-gpui-kit.workspace = true
-image.workspace = true
+nsh-core.workspace = true
+nsh-base.workspace = true
 regex.workspace = true
-ropey.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
+url.workspace = true
 
 [[bin]]
 name = "ChipDock"
@@ -26,6 +27,7 @@ path = "src/main.rs"
 embed-resource.workspace = true
 
 [target.'cfg(windows)'.dependencies]
+nsh-platform-windows.workspace = true
 uuid.workspace = true
 windows = { workspace = true, features = [
     "Win32_Foundation",
@@ -37,3 +39,16 @@ windows = { workspace = true, features = [
     "Win32_UI_Shell",
     "Win32_UI_WindowsAndMessaging",
 ] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+block2.workspace = true
+tokio.workspace = true
+dispatch2.workspace = true
+nsh-platform-macos.workspace = true
+objc2.workspace = true
+objc2-app-kit.workspace = true
+objc2-foundation.workspace = true
+objc2-uniform-type-identifiers.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+nsh-platform-linux.workspace = true

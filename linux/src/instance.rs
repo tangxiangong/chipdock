@@ -9,6 +9,7 @@ use std::{
 pub struct Instance {
     _lock: File,
 }
+
 impl Instance {
     pub fn acquire(wait_for_update: bool, firmware: Option<&str>) -> Result<Option<Self>> {
         let directory = crate::model::preferences_path()?
@@ -61,12 +62,22 @@ pub fn firmware_argument() -> Option<String> {
 }
 pub fn take_firmware() -> Result<Option<PathBuf>> {
     let path = crate::model::preferences_path()?.with_file_name("open-firmware.json");
-    match std::fs::read(&path) {
+    take_firmware_at(&path)
+}
+fn take_firmware_at(path: &Path) -> Result<Option<PathBuf>> {
+    match std::fs::read(path) {
         Ok(bytes) => {
             std::fs::remove_file(path)?;
             Ok(Some(serde_json::from_slice(&bytes)?))
         }
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e)
+            if matches!(
+                e.kind(),
+                std::io::ErrorKind::NotFound | std::io::ErrorKind::NotADirectory
+            ) =>
+        {
+            Ok(None)
+        }
         Err(e) => Err(e.into()),
     }
 }
@@ -74,6 +85,17 @@ pub fn take_firmware() -> Result<Option<PathBuf>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn absent_mailbox_inside_an_unavailable_directory_is_not_a_repeated_storage_error() {
+        let directory = tempfile::tempdir().unwrap();
+        let parent = directory.path().join("preferences");
+        std::fs::write(&parent, b"not a directory").unwrap();
+        assert!(
+            take_firmware_at(&parent.join("open-firmware.json"))
+                .unwrap()
+                .is_none()
+        );
+    }
     #[test]
     fn only_one_desktop_owns_the_lock_and_second_launch_hands_off_firmware() {
         let directory = tempfile::tempdir().unwrap();

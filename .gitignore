@@ -22,3 +22,6 @@ docs/superpowers/
 *.user
 windows/**/bin/
 windows/**/obj/
+
+# NSH generated hosts, declarations and bundles
+**/.nsh/

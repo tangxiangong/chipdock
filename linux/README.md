@@ -1,6 +1,6 @@
 # ChipDock for Linux
 
-ChipDock 提供固件烧录、芯片与内存查看、串口调试、协议模板、工作流、采集和曲线工具。界面采用顶部工作区切换、可拖动分栏和独立工具窗口，支持浅色、深色与系统主题。
+ChipDock 提供固件烧录、芯片与内存查看、串口调试、协议模板、工作流、采集和曲线工具。界面采用 NSH 原生控件，保留 macOS 工作台的顶部工具切换、可拖动分栏和独立工具窗口，支持浅色、深色与系统主题。
 
 ## 安装
 
@@ -14,7 +14,7 @@ ChipDock 提供固件烧录、芯片与内存查看、串口调试、协议模�
 
 三种格式都包含应用图标和桌面入口，安装后从应用菜单打开 ChipDock。系统包的启动命令为 `ChipDock`，DEB 的包管理器登记名为 `chipdock`，RPM 的登记名为 `ChipDock`。便携包的桌面入口使用绝对路径，桌面会话无需额外配置 PATH。DEB／RPM 不会安装驱动或修改串口用户组。
 
-运行需要 glibc 2.39 或更新版本、图形桌面、可用的 Vulkan 驱动，以及发行版的 Wayland 或 X11 运行库；Ubuntu 24.04 满足 glibc 基线。DEB／RPM 会声明运行库依赖。便携包需自行安装对应运行库。请勿以 root 身份运行桌面应用。
+运行需要 glibc 2.39 或更新版本、GTK 4.14 或更新版本、GStreamer 基础运行库与插件，以及 Wayland 或 X11 图形桌面；Ubuntu 24.04 满足这套系统基线。DEB／RPM 会声明运行库依赖。便携包需自行安装对应运行库；Ubuntu 可安装 `libgtk-4-1` 和 `gstreamer1.0-plugins-base`。请勿以 root 身份运行桌面应用。
 
 Release 中无扩展名的 `ChipDock-<版本>-linux-<架构>` 文件供便携版应用内更新使用。首次安装请选择上述安装包。
 
@@ -39,7 +39,7 @@ Windows 版的“检查／修复所选探针驱动”使用 Rust 调用系统 Wi
 
 快捷键在 macOS 使用 ⌘，其他平台使用 Ctrl：`R` 刷新、`K` 连接／断开、`Shift+K` 断开、`Enter` 烧录／发送、`Shift+R` 读取内存、`L` 清空终端、`F` 查找、`,` 打开设置。
 
-设置保存在 Linux 的 `$XDG_CONFIG_HOME/ChipDock/GPUI/preferences.json`（默认 `~/.config/ChipDock/GPUI/preferences.json`）。macOS 使用 `~/Library/Application Support/ChipDock/GPUI/`，Windows 使用 `%APPDATA%\ChipDock\GPUI\`。
+迁移到 NSH 后继续使用原有设置目录。设置保存在 Linux 的 `$XDG_CONFIG_HOME/ChipDock/GPUI/preferences.json`（默认 `~/.config/ChipDock/GPUI/preferences.json`）。macOS 使用 `~/Library/Application Support/ChipDock/GPUI/`，Windows 使用 `%APPDATA%\ChipDock\GPUI\`。
 
 ## 更新
 
@@ -51,6 +51,6 @@ DEB／RPM 安装版可以检查新版本；请下载新版安装包，再用相�
 
 如果已安装重发前的 Linux v0.3.0，请下载对应的 `ChipDock` 安装包重新安装。便携版可重新运行 `bash install.sh`。重新安装会保留用户设置。
 
-源码运行的 macOS／Windows GPUI 客户端只接受各自平台的 GPUI 文件；没有对应发布文件时会明确报错。应用不会将其替换成现有原生客户端。打包进 macOS `.app` 的程序需要完整应用包更新，不能使用便携二进制替换。
+源码运行的 macOS／Windows NSH 客户端只接受各自平台的对应更新文件；没有对应发布文件时会明确报错。应用不会将其替换成现有 SwiftUI／WinUI 客户端。打包进 macOS `.app` 的程序需要完整应用包更新，不能使用便携二进制替换。
 
 构建、检查和发布维护说明见仓库根目录的 [AGENTS.md](../AGENTS.md)。

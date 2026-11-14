@@ -1,0 +1,31 @@
+{
+  "name": "ChipDock",
+  "id": "com.xiaoyu.chipdock",
+  "version": "0.3.0",
+  "build": 1,
+  "rust": ".",
+  "root": "App",
+  "theme": "theme.json",
+  "appearance": "system",
+  "window": {
+    "titleBar": {
+      "style": "hidden",
+      "height": 52,
+      "controlsOffset": {
+        "x": 19,
+        "y": 19
+      }
+    },
+    "minSize": {
+      "width": 900,
+      "height": 652
+    },
+    "closeOnPress": false,
+    "restoreBounds": true,
+    "defaultSize": {
+      "width": 1160,
+      "height": 780
+    }
+  },
+  "icon": "../windows/ChipDock/Assets/ChipDock.png"
+}

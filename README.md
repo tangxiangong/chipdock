@@ -10,7 +10,7 @@ ChipDock 是面向嵌入式开发的桌面工具。用调试探针烧录固件�
 | ---------------------------- | --------------------------------------------- | ----------------------------------------------------------------------------- |
 | [macOS](macos/README.md)     | macOS 14 或更新版本，支持 Apple 芯片和 Intel  | `ChipDock-<版本>-macOS-universal.zip`，解压后将 `ChipDock.app` 拖入“应用程序” |
 | [Windows](windows/README.md) | Windows 10 1809 或更新版本，支持 x64 和 ARM64 | `ChipDock-<版本>-windows-<架构>.exe` 或 `.msi`，选择与系统架构一致的安装包    |
-| [Linux](linux/README.md) | glibc 2.39+、图形桌面与 Vulkan，支持 x86_64 和 ARM64 | `ChipDock-<版本>-linux-<架构>.deb`、`.rpm` 或 `.tar.gz` |
+| [Linux](linux/README.md) | glibc 2.39+、GTK 4.14+ 图形桌面，支持 x86_64 和 ARM64 | `ChipDock-<版本>-linux-<架构>.deb`、`.rpm` 或 `.tar.gz` |
 
 平台指南包含应用内更新入口和探针连接说明。
 

@@ -155,7 +155,7 @@ impl Preferences {
     }
     pub fn save(&self, path: &Path) -> Result<()> {
         let parent = path.parent().context("设置目录无效")?;
-        std::fs::create_dir_all(parent)?;
+        std::fs::create_dir_all(parent).context("create json parent dir")?;
         let mut file = tempfile::NamedTempFile::new_in(parent)?;
         serde_json::to_writer_pretty(&mut file, self)?;
         file.as_file().sync_all()?;
@@ -238,6 +238,9 @@ pub fn number(s: &str) -> Result<u64> {
     )
 }
 pub fn preferences_path() -> Result<PathBuf> {
+    if let Some(path) = std::env::var_os("CHIPDOCK_PREFERENCES_PATH") {
+        return preference_override(PathBuf::from(path));
+    }
     let base = if cfg!(target_os = "windows") {
         std::env::var_os("APPDATA").map(PathBuf::from)
     } else if cfg!(target_os = "macos") {
@@ -433,5 +436,48 @@ mod target_identity_tests {
         changed = p;
         changed.fields.insert("firmware".into(), "new.bin".into());
         assert_eq!(key, changed.target_key());
+    }
+}
+
+/// Resolves an OS file-drop URL without treating a remote URL as a local firmware path.
+pub fn dropped_file(uri: &str) -> Result<PathBuf> {
+    url::Url::parse(uri)?
+        .to_file_path()
+        .map_err(|_| anyhow::anyhow!("仅支持本地固件文件"))
+}
+#[cfg(test)]
+mod drop_tests {
+    #[test]
+    fn os_file_urls_preserve_escaped_names_and_reject_network_urls() {
+        #[cfg(not(windows))]
+        assert_eq!(
+            super::dropped_file("file:///tmp/firmware%20%E6%B5%8B%E8%AF%95.hex").unwrap(),
+            std::path::PathBuf::from("/tmp/firmware 测试.hex")
+        );
+        #[cfg(windows)]
+        assert_eq!(
+            super::dropped_file("file:///C:/firmware%20%E6%B5%8B%E8%AF%95.hex").unwrap(),
+            std::path::PathBuf::from(r"C:\firmware 测试.hex")
+        );
+        assert!(super::dropped_file("https://example.com/firmware.hex").is_err());
+        #[cfg(not(windows))]
+        assert!(super::dropped_file("file://other-host/firmware.hex").is_err());
+    }
+}
+
+fn preference_override(path: PathBuf) -> Result<PathBuf> {
+    anyhow::ensure!(
+        path.is_absolute(),
+        "CHIPDOCK_PREFERENCES_PATH 必须是绝对路径"
+    );
+    Ok(path)
+}
+#[cfg(test)]
+mod preference_override_tests {
+    #[test]
+    fn explicit_configuration_path_never_changes_home_or_accepts_relative_paths() {
+        assert!(super::preference_override("relative.json".into()).is_err());
+        let path = std::env::temp_dir().join("ChipDock/preview-preferences.json");
+        assert_eq!(super::preference_override(path.clone()).unwrap(), path);
     }
 }

@@ -1,445 +1,2296 @@
 use super::*;
+use chipdock_core::serial::{Direction, types::ControlLine};
+use nsh_base::{
+    DataTable, DataTableApi, DataTableCell, DataTableClasses, DataTableColumn,
+    DataTableContextMenu, DataTableEvent, DataTablePress, DataTableRange, DataTableRows,
+    DataTableSelection, SelectItem, h_resizable, resizable_panel, v_resizable,
+};
+use nsh_core::element::desktop::MenuItem as NativeMenuItem;
+use std::collections::BTreeMap;
 
-impl Workbench {
-    pub(super) fn serial_page(&self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
-        let mut content = div()
-            .flex()
-            .flex_col()
-            .flex_1()
-            .min_h_0()
-            .child(self.terminal_page(window, cx));
-        if let Some(status) = self
-            .sessions
-            .iter()
-            .find(|s| Some(s.id) == self.active)
-            .and_then(|s| s.status.as_ref())
-        {
-            if let Some(error) = status
-                .last_error
-                .as_ref()
-                .or(status.job_error.as_ref())
-                .or(status.capture_error.as_ref())
-                .filter(|e| self.dismissed_serial_error.as_ref() != Some(*e))
-            {
-                let dismissed = error.clone();
-                content = div()
-                    .flex_1()
-                    .min_h_0()
-                    .flex()
-                    .flex_col()
-                    .child(
-                        div()
-                            .p(px(12.))
-                            .flex()
-                            .items_start()
-                            .gap(px(10.))
-                            .bg(rgba(0xff950014))
-                            .border_b_1()
-                            .border_color(cx.theme().foreground.opacity(0.1))
-                            .text_size(px(12.))
-                            .child(
-                                icons::icon("warning")
-                                    .size(px(14.))
-                                    .flex_shrink_0()
-                                    .text_color(rgb(0xff9500)),
-                            )
-                            .child(div().flex_1().child(error.clone()))
-                            .child(
-                                Button::new("dismiss-serial-error")
-                                    .ghost()
-                                    .size(px(18.))
-                                    .p_0()
-                                    .tooltip("关闭错误提示")
-                                    .child(icons::icon("close").size(px(12.)).flex_shrink_0())
-                                    .on_click(cx.listener(move |s, _, _, cx| {
-                                        s.dismissed_serial_error = Some(dismissed.clone());
-                                        cx.notify();
-                                    })),
-                            ),
-                    )
-                    .child(content);
-            }
-            if let Some(feedback) = &status.feedback {
-                content = content.child(div().px_3().py_1().text_sm().child(feedback.clone()));
+#[derive(Clone, PartialEq)]
+struct Record {
+    id: u64,
+    time: String,
+    direction: &'static str,
+    bytes: usize,
+    text: String,
+    color: Option<u32>,
+    json: String,
+}
+
+#[derive(Clone, Default)]
+pub(super) struct TerminalState {
+    pub selected: Vec<u64>,
+    pub anchor: Option<u64>,
+    pub widths: BTreeMap<String, f32>,
+    pub top_sequence: Option<u64>,
+}
+
+pub(super) fn navigate(store: Store, next: bool) {
+    let ids = store.read(|s| {
+        s.active_session()
+            .map(|session| {
+                crate::presentation::filtered(session.records(), &s.preferences)
+                    .unwrap_or_default()
+                    .iter()
+                    .map(|r| r.sequence)
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default()
+    });
+    if let Some(id) = next_sequence(&ids, store.jump.get_untracked(), next) {
+        store.change(|s| s.flag("auto_scroll", false));
+        store.jump.set(Some(id));
+    }
+}
+
+fn next_sequence(ids: &[u64], current: Option<u64>, next: bool) -> Option<u64> {
+    if ids.is_empty() {
+        return None;
+    }
+    let at = current.and_then(|id| ids.iter().position(|row| *row == id));
+    let index = match (at, next) {
+        (None, true) => 0,
+        (None, false) => ids.len() - 1,
+        (Some(index), true) => (index + 1) % ids.len(),
+        (Some(index), false) => (index + ids.len() - 1) % ids.len(),
+    };
+    ids.get(index).copied()
+}
+
+fn select_rows(
+    ids: &[u64],
+    selected: &[u64],
+    anchor: Option<u64>,
+    row: usize,
+    shift: bool,
+    toggle: bool,
+) -> (Vec<u64>, Option<u64>) {
+    let Some(id) = ids.get(row).copied() else {
+        return (selected.to_vec(), anchor);
+    };
+    if shift {
+        let start = anchor
+            .and_then(|id| ids.iter().position(|v| *v == id))
+            .unwrap_or(row);
+        let range = &ids[start.min(row)..=start.max(row)];
+        let mut next = if toggle {
+            selected.to_vec()
+        } else {
+            Vec::new()
+        };
+        for id in range {
+            if !next.contains(id) {
+                next.push(*id)
             }
         }
-        let mut workspace = h_resizable("serial-workspace");
-        if !self.expanded.contains("hide-connection") {
-            workspace = workspace.child(
-                resizable_panel()
-                    .size(px(252.))
-                    .size_range(px(220.)..px(340.))
-                    .child(self.connection_panel(window, cx)),
-            );
+        (next, anchor.or(Some(id)))
+    } else if toggle {
+        let mut next = selected.to_vec();
+        if let Some(at) = next.iter().position(|v| *v == id) {
+            next.remove(at);
+        } else {
+            next.push(id)
         }
-        workspace = workspace.child(
-            resizable_panel()
-                .size_range(px(440.)..px(2400.))
-                .child(div().size_full().flex().flex_col().child(content)),
-        );
-        div()
-            .size_full()
-            .flex()
-            .flex_col()
-            .child(
-                div()
-                    .h(px(32.))
-                    .flex_shrink_0()
-                    .px(px(10.))
-                    .flex()
-                    .items_center()
-                    .gap(px(8.))
-                    .border_b_1()
-                    .border_color(cx.theme().foreground.opacity(0.1))
-                    .text_size(px(12.))
-                    .child(div().flex_1().min_w_0().flex().gap(px(4.)).children(
-                        self.sessions.iter().map(|session| {
-                            let id = session.id;
-                            let selected = Some(id) == self.active;
-                            let connected = session.status.as_ref().is_some_and(|s| s.connected);
-                            let title = session
-                                .status
-                                .as_ref()
-                                .and_then(|s| s.path.clone())
-                                .unwrap_or_else(|| format!("会话 {id}"));
-                            div()
-                                .flex()
-                                .items_center()
-                                .child(
-                                    Button::new(("session", id as usize))
-                                        .ghost()
-                                        .h(px(22.))
-                                        .px(px(8.))
-                                        .rounded(px(6.))
-                                        .toggled(selected)
-                                        .when(selected, |b| {
-                                            b.bg(rgb(if cx.theme().is_dark() {
-                                                0x484848
-                                            } else {
-                                                0xdfdfdf
-                                            }))
-                                        })
-                                        .tooltip(title.clone())
-                                        .child(
-                                            div()
-                                                .max_w(px(200.))
-                                                .flex()
-                                                .items_center()
-                                                .gap(px(5.))
-                                                .text_size(px(12.))
-                                                .child(div().size(px(6.)).rounded_full().bg(
-                                                    if connected {
-                                                        rgb(0x34c759).into()
-                                                    } else {
-                                                        cx.theme().muted_foreground.opacity(0.4)
-                                                    },
-                                                ))
-                                                .child(div().truncate().child(title)),
-                                        )
-                                        .on_click(cx.listener(move |s, _, w, cx| {
-                                            s.switch_session(id, w, cx)
-                                        })),
-                                )
-                                .when(selected && id != 1, |d| {
-                                    d.child(
-                                        Button::new(("close-session", id as usize))
-                                            .ghost()
-                                            .size(px(18.))
-                                            .p_0()
-                                            .mx(px(2.))
-                                            .text_color(cx.theme().muted_foreground)
-                                            .child(
-                                                icons::icon("close").size(px(11.)).flex_shrink_0(),
-                                            )
-                                            .tooltip("关闭会话")
-                                            .disabled(self.busy_lanes.contains(&Lane::Serial))
-                                            .on_click(cx.listener(move |s, _, _, cx| {
-                                                s.submit(Command::CloseSession(id), cx)
-                                            })),
+        (next, Some(id))
+    } else {
+        (vec![id], Some(id))
+    }
+}
+
+pub(super) fn page(store: Store) -> View {
+    view()
+        .flex_1()
+        .min_h(px(633.))
+        .mt(|| {
+            px(if nsh_core::element::window().width.0 < 997. {
+                -16.5
+            } else {
+                0.
+            })
+        })
+        .child(session_bar(store))
+        .child(
+            h_resizable()
+                .flex_1()
+                .min_h_0()
+                .handle_class("bg-border")
+                .handle_accessibility_label("调整连接区宽度")
+                .child(
+                    resizable_panel()
+                        .size(px(340.))
+                        .min_size(px(220.))
+                        .max_size(px(340.))
+                        .visible(store.sidebar)
+                        .child(connection(store)),
+                )
+                .child(
+                    resizable_panel().size(px(820.)).min_size(px(440.)).child(
+                        view()
+                            .pl(move || px(if store.sidebar.get() { 1. } else { 0. }))
+                            .flex_1()
+                            .min_h_0()
+                            .child(error_banner(store))
+                            .child(
+                                v_resizable()
+                                    .flex_1()
+                                    .min_h_0()
+                                    .handle_class("bg-border")
+                                    .handle_accessibility_label("调整终端与发送区高度")
+                                    .handle_style(|style| style.translate_y(px(-1.)))
+                                    .child(
+                                        resizable_panel().size(px(348.)).min_size(px(180.)).child(
+                                            view()
+                                                .pb(move || {
+                                                    px(if store.composer.get() { 1. } else { 0. })
+                                                })
+                                                .flex_1()
+                                                .min_h_0()
+                                                .child(terminal(store)),
+                                        ),
                                     )
-                                })
-                        }),
-                    ))
-                    .child(
-                        Button::new("local-control")
-                            .ghost()
-                            .h(px(22.))
-                            .px(px(4.))
-                            .tooltip("为当前登录用户的 Rust CLI 和 MCP 设置访问权限")
+                                    .child(
+                                        resizable_panel()
+                                            .size(px(320.))
+                                            .min_size(px(164.))
+                                            .max_size(px(320.))
+                                            .visible(store.composer)
+                                            .child(composer(store)),
+                                    ),
+                            ),
+                    ),
+                ),
+        )
+        .child(status_bar(store))
+}
+fn session_bar(store: Store) -> View {
+    let sessions = computed(move || store.read(|s| s.sessions.keys().copied().collect::<Vec<_>>()));
+    view()
+        .h(px(33.))
+        .px(px(10.))
+        .flex_row()
+        .items_center()
+        .gap_2()
+        .border_b_1()
+        .border_color(hairline)
+        .child(
+            scroll()
+                .horizontal()
+                .flex_1()
+                .child(view().flex_row().gap_1().child(each(
+                    sessions,
+                    |id: &u64| *id,
+                    move |id, _| {
+                        let tab = view()
+                            .flex_row()
+                            .items_center()
                             .child(
-                                div()
-                                    .flex()
+                                nsh_base::checkbox()
+                                    .checked(move || store.read(|s| s.active == Some(id.get())))
+                                    .indicator_style(|style| style.hidden())
+                                    .on_change(move |checked: &bool| {
+                                        if *checked {
+                                            store.change(|s| s.switch_session(id.get_untracked()));
+                                        }
+                                    })
+                                    .h(px(20.))
+                                    .px(px(10.))
+                                    .rounded(move || theme().radius)
+                                    .flex_row()
                                     .items_center()
                                     .gap(px(5.))
-                                    .text_size(px(12.))
-                                    .child(icons::icon("terminal").size(px(14.)).flex_shrink_0())
-                                    .child("本地控制")
+                                    .checked_style(|s| {
+                                        s.bg(move || {
+                                            theme()
+                                                .color("session-selected")
+                                                .unwrap_or(theme().secondary)
+                                        })
+                                    })
+                                    .hover(|s| s.bg(move || theme().accent))
+                                    .active(|s| s.bg(move || theme().muted))
+                                    .focus_visible(|s| {
+                                        s.outline(px(2.)).outline_color(move || theme().ring)
+                                    })
+                                    .child(view().size(px(6.)).rounded_full().bg(move || {
+                                        store.read(|s| {
+                                            if s.sessions
+                                                .get(&id.get())
+                                                .is_some_and(|s| s.connected())
+                                            {
+                                                theme().color("success").unwrap_or(theme().primary)
+                                            } else {
+                                                theme().muted_foreground.opacity(0.4)
+                                            }
+                                        })
+                                    }))
                                     .child(
-                                        icons::icon("chevron-bold").size(px(8.)).flex_shrink_0(),
+                                        text(move || {
+                                            store.read(|s| {
+                                                s.sessions
+                                                    .get(&id.get())
+                                                    .and_then(|s| s.status.as_ref())
+                                                    .and_then(|s| s.path.clone())
+                                                    .unwrap_or_else(|| format!("会话 {}", id.get()))
+                                            })
+                                        })
+                                        .text_size(small_control_size),
                                     ),
                             )
-                            .dropdown_menu({
-                                let owner = cx.entity().downgrade();
-                                let current = self.preferences.ipc;
-                                move |mut menu, _, _| {
-                                    for (mode, label) in [(0, "关闭"), (1, "只读"), (2, "允许控制")]
-                                    {
-                                        let owner = owner.clone();
-                                        menu = menu.item(
-                                            PopupMenuItem::new(label)
-                                                .checked(current == mode)
-                                                .on_click(move |_, _, cx| {
-                                                    let _ = owner.update(cx, |s, cx| {
-                                                        s.submit(Command::Ipc(mode), cx)
-                                                    });
-                                                }),
-                                        );
+                            .child(when(
+                                move || id.get() != 1 && store.read(|s| s.active == Some(id.get())),
+                                move || {
+                                    icon_button(
+                                        "close",
+                                        "关闭会话",
+                                        || false,
+                                        move || store.read(Workbench::serial_busy),
+                                        move || store.change(Workbench::close_session),
+                                    )
+                                },
+                            ));
+                        tab.on_context_menu(move |event: &ContextMenuEvent| {
+                            if id.get_untracked() != 1 {
+                                drop(nsh_core::element::desktop::popup_menu_at(
+                                    vec![
+                                        NativeMenuItem::new("关闭会话")
+                                            .disabled(store.read(|s| s.lane_busy(Lane::Serial)))
+                                            .on_select(move || {
+                                                store.command(|_| {
+                                                    Command::CloseSession(id.get_untracked())
+                                                })
+                                            }),
+                                    ],
+                                    event.page_position,
+                                ));
+                            }
+                        })
+                    },
+                ))),
+        )
+        .child(native_borderless_menu_small(
+            view()
+                .w(px(83.))
+                .h(px(14.))
+                .px(px(4.25))
+                .flex_row()
+                .items_center()
+                .gap_1()
+                .hit_slop(nsh_core::geometry::Edges::all(px(3.)))
+                .text_color(move || {
+                    theme()
+                        .color("terminal-menu-glyph")
+                        .unwrap_or(theme().foreground)
+                })
+                .label("本地控制")
+                .child(icons::icon("terminal"))
+                .child(text("本地控制").text_size(small_control_size))
+                .child(text("⌄").text_size(small_size)),
+            move || {
+                [(0, "关闭"), (1, "只读"), (2, "允许控制")]
+                    .into_iter()
+                    .map(|(mode, label)| {
+                        NativeMenuItem::new(label)
+                            .checked(store.read(|s| s.preferences.ipc == mode))
+                            .on_select(move || store.command(|_| Command::Ipc(mode)))
+                    })
+                    .collect()
+            },
+        ))
+        .child(view().w(px(1.)).h_4().bg(hairline))
+        .child(
+            nsh_base::button()
+                .accessibility_label("新建串口会话")
+                .disabled(move || {
+                    store.read(|state| state.lane_busy(Lane::Serial) || state.sessions.len() >= 16)
+                })
+                .on_press(move || {
+                    store.command(|state| Command::NewSession(state.preferences.clone()))
+                })
+                .w(px(12.))
+                .h(px(20.))
+                .p_0()
+                .items_center()
+                .justify_center()
+                .hit_slop(nsh_core::geometry::Edges::all(px(5.)))
+                .text_color(move || {
+                    theme()
+                        .color("terminal-glyph")
+                        .unwrap_or(theme().muted_foreground)
+                })
+                .focus_visible(|style| style.outline(px(2.)).outline_color(move || theme().ring))
+                .child(icons::icon("plus").size(px(14.))),
+        )
+}
+fn connection(store: Store) -> View {
+    let active = control_active();
+    let section = |label: &'static str| {
+        view().gap(px(10.)).child(
+            text(label)
+                .text_size(body_size)
+                .font_weight(FontWeight::SEMIBOLD)
+                .px(px(30.)),
+        )
+    };
+    let valid_baud = move || {
+        store
+            .field("baud")
+            .trim()
+            .parse::<u32>()
+            .is_ok_and(|v| v > 0)
+    };
+    let connect_disabled = computed(move || {
+        store.read(|s| {
+            s.serial_busy()
+                || (!s.serial_connected()
+                    && !s
+                        .active_session()
+                        .and_then(|v| v.status.as_ref())
+                        .is_some_and(|v| v.reconnecting)
+                    && (s.preferences.get("port").is_empty()
+                        || !s
+                            .preferences
+                            .get("baud")
+                            .trim()
+                            .parse::<u32>()
+                            .is_ok_and(|v| v > 0)))
+        })
+    });
+    view().flex_1().min_h_0()
+        .child(scroll().flex_1().child(view().py_5().gap(px(30.))
+            .child(section("设备").child(form_group().mx_5().child(
+                view().min_h(px(40.)).flex_row().items_center().gap_1()
+                    .child(view().flex_1().min_w_0().child(device_picker(store)))
+                    .child(nsh_base::button()
+                        .accessibility_label("刷新串口（⌘R）")
+                        .disabled(move || store.read(|s| s.lane_busy(Lane::Serial)))
+                        .on_press(move || store.command(|_| Command::Ports))
+                        .w(px(11.5)).h(px(22.)).p_0()
+                        .hit_slop(nsh_core::geometry::Edges::all(px(5.)))
+                        .items_center().justify_center()
+                        .text_color(move || theme().foreground.opacity(0.7))
+                        .focus_visible(|s| s.outline(px(2.)).outline_color(move || theme().ring))
+                        .child(icons::icon("refresh").size(px(14.)))),
+            )))
+            .child(section("参数").child(form_group().mx_5()
+                .child(parameter_row("波特率").min_h(px(36.)).child(
+                    view().flex_1().flex_row().items_center().justify_end().gap(px(2.))
+                        .child(nsh_base::input().value(move || store.field("baud"))
+                            .on_change(move |v:&str| store.change(|s| s.set("baud", v.into())))
+                            .label("波特率").readonly(move || store.locked("baud"))
+                            .w(px(135.)).h(px(20.)).text_right().text_size(small_control_size))
+                        .child(native_borderless_menu_small_disabled(
+                            view().w(px(17.)).h(px(16.)).items_center().justify_center().label("常用波特率")
+                                .child(icons::icon("select").size(px(12.))),
+                            move || store.locked("baud"),
+                            move || [1200,2400,4800,9600,19200,38400,57600,115200,230400,460800,921600]
+                                .into_iter().map(move |rate| NativeMenuItem::new(rate.to_string()).on_select(move || {
+                                    if !store.locked("baud") { store.change(|s| s.set("baud", rate.to_string())); }
+                                })).collect()))))
+                .child(parameter_pick(store,"bits","数据位", &["5","6","7","8"]))
+                .child(parameter_pick(store,"stop","停止位", &["1","2"]))
+                .child(parameter_pick(store,"parity","校验位", &["none","even","odd"]))
+                .child(parameter_pick(store,"flow","流控制", &["none","software","hardware"]).border_b(px(0.))))
+                .child(when(move || !valid_baud(), || {
+                    text("波特率须为正整数").px(px(30.)).text_size(small_size).text_color(move ||theme().destructive)
+                })))
+            .child(section("选项").child(form_group().mx_5()
+                .child(form_switch(store,"auto_connect","启动时连接"))
+                .child(form_switch(store,"reconnect","掉线后重连").border_b(px(0.)))))
+            .child(when(move || store.read(|s| s.active_session().and_then(|s|s.status.as_ref())
+                .is_some_and(|v|v.connected && !v.path.as_deref().unwrap_or("").starts_with("VIRTUAL-"))), move || {
+                    section("控制线").child(form_group().mx_5().children(
+                        [("RTS",ControlLine::Rts),("DTR",ControlLine::Dtr)].into_iter().map(move |(label,line)| {
+                            form_row(label).child(view().flex_1()).child(
+                                view().flex_row().p(px(2.)).rounded(px(7.)).bg(move ||theme().secondary)
+                                    .children([(false,"清除"),(true,"置位")].into_iter().map(move |(level,caption)| {
+                                        nsh_base::button().selected(move || store.read(|s| s.active_session()
+                                            .and_then(|s|s.status.as_ref()).and_then(|v|if label=="RTS" {v.rts}else{v.dtr}).unwrap_or(false)==level))
+                                            .disabled(move || store.read(|s|s.serial_busy() || (label=="RTS" && s.preferences.get("flow")=="hardware")))
+                                            .on_press(move ||store.command(|s|Command::Line(s.active.unwrap_or(1),line,level)))
+                                            .h(px(20.)).px(px(10.)).rounded(px(5.))
+                                            .selected_style(|s|s.bg(move ||theme().foreground.opacity(0.15)))
+                                            .child(text(caption).text_size(caption_size))
+                                    })),
+                            )
+                        }),
+                    ))
+            }))))
+        .child(view().p_3().border_t_1().border_color(hairline)
+            .child(nsh_base::button()
+.disabled(connect_disabled)
+                .on_press(move || { if !store.modal.get_untracked() {store.change(Workbench::connect_serial);} })
+                .h(px(28.)).px(px(14.)).rounded(px(14.)).flex_row().items_center().justify_center().gap_2()
+                .bg(move ||emphasized_fill(true, connect_disabled.get(), active.get(), false)).text_color(move ||emphasized_ink(true, connect_disabled.get(), active.get(), false))
+                .hover(|s|s.bg(move ||theme().primary.opacity(0.9))).active(|s|s.bg(move ||theme().primary.opacity(0.8)))
+                .focus_visible(|s|s.outline(px(2.)).outline_color(move ||theme().ring)).disabled_style(|s|s.opacity(1.))
+                .child(when(move ||store.read(Workbench::serial_connected), ||icons::icon("stop")).otherwise(||icons::icon("link")))
+                .child(text(move ||store.read(|s|if s.serial_busy(){"正在处理…"}
+                    else if s.active_session().and_then(|v|v.status.as_ref()).is_some_and(|v|v.reconnecting){"取消重连"}
+                    else if s.serial_connected(){"断开连接"}else{"连接串口"})).text_size(body_size))))
+}
+
+fn parameter_row(label: &'static str) -> View {
+    view()
+        .min_h(px(40.))
+        .flex_row()
+        .items_center()
+        .gap(px(20.))
+        .border_b_1()
+        .border_color(hairline)
+        .child(text(label).w(px(39.)).flex_shrink_0().text_size(body_size))
+}
+
+fn parameter_pick(
+    store: Store,
+    key: &'static str,
+    label: &'static str,
+    values: &'static [&'static str],
+) -> View {
+    let width = signal(280_f32);
+    // Native remains inline at a 300pt rail (181pt picker), and stacks at 299pt.
+    // Preserve that measured 240pt inner-width boundary and its 65pt stacked rows.
+    let stacked = computed(move || width.get() < 240.);
+    view()
+        .min_h(move || px(if stacked.get() { 65. } else { 40. }))
+        .border_b_1()
+        .border_color(hairline)
+        .on_layout(move |bounds: &Bounds<Points>| {
+            if (width.get_untracked() - bounds.size.width.0).abs() > 0.25 {
+                width.set(bounds.size.width.0);
+            }
+        })
+        .style_with(move |style| {
+            if stacked.get() {
+                style.flex_col().items_start().pt(px(11.)).gap(px(8.))
+            } else {
+                style.flex_row().items_center().gap(px(20.))
+            }
+        })
+        .child(
+            text(label)
+                .w(px(39.))
+                .h(px(16.))
+                .flex_shrink_0()
+                .text_size(body_size),
+        )
+        .child(
+            view()
+                .min_w_0()
+                .style_with(move |style| {
+                    if stacked.get() {
+                        style.w_full().h(px(20.))
+                    } else {
+                        style.flex_1()
+                    }
+                })
+                .child(popup_control(store, key, values, true)),
+        )
+}
+
+fn device_picker(store: Store) -> impl IntoElement {
+    nsh_base::select()
+        .items(move || {
+            store.read(|s| {
+                let mut ports = s
+                    .ports
+                    .iter()
+                    .map(|p| SelectItem::new(p.path.clone(), p.display_name.clone()))
+                    .collect::<Vec<_>>();
+                let selected = s.preferences.get("port");
+                if !selected.is_empty() && !s.ports.iter().any(|p| p.path == selected) {
+                    ports.push(SelectItem::new(
+                        selected.to_owned(),
+                        format!("{selected}（已移除）"),
+                    ));
+                }
+                if ports.is_empty() {
+                    ports.push(SelectItem::new("", "未发现串口"));
+                }
+                ports
+            })
+        })
+        .value(move || Some(SharedString::from(store.field("port"))))
+        .on_change(move |v: &Option<SharedString>| {
+            if let Some(v) = v {
+                store.change(|s| s.set("port", v.to_string()))
+            }
+        })
+        .disabled(move || store.locked("port") || store.read(|s| s.ports.is_empty()))
+        .accessibility_label("串口设备")
+        .popup_style(popup)
+        .searchable(true)
+        .render_item(|item: &nsh_base::SelectEntry| {
+            view()
+                .px_2()
+                .py_1()
+                .child(text(item.title.clone()).text_size(body_size))
+        })
+        .trigger(
+            view()
+                .opacity(move || {
+                    if store.locked("port") || store.read(|s| s.ports.is_empty()) {
+                        0.45_f32
+                    } else {
+                        1_f32
+                    }
+                })
+                .h(px(20.))
+                .px(px(10.))
+                .rounded(px(5.))
+                .bg(move || {
+                    theme()
+                        .color(
+                            if store.locked("port") || store.read(|s| s.ports.is_empty()) {
+                                "serial-control-disabled"
+                            } else {
+                                "serial-control"
+                            },
+                        )
+                        .unwrap_or(theme().secondary)
+                })
+                .flex_row()
+                .items_center()
+                .gap_1()
+                .child(
+                    text(move || {
+                        store.read(|s| {
+                            s.ports
+                                .iter()
+                                .find(|p| p.path == s.preferences.get("port"))
+                                .map(|p| p.display_name.clone())
+                                .unwrap_or_else(|| {
+                                    if s.preferences.get("port").is_empty() {
+                                        "未发现串口".into()
+                                    } else {
+                                        format!("{}（已移除）", s.preferences.get("port"))
                                     }
-                                    menu
+                                })
+                        })
+                    })
+                    .flex_1()
+                    .text_size(body_size)
+                    .text_color(move || {
+                        if store.locked("port") || store.read(|s| s.ports.is_empty()) {
+                            theme().foreground.opacity(0.3)
+                        } else {
+                            theme().foreground
+                        }
+                    }),
+                )
+                .child(icons::icon("select").size(px(12.))),
+        )
+}
+fn form_switch(store: Store, key: &'static str, label: &'static str) -> View {
+    let active = control_active();
+    form_row(label).child(view().flex_1()).child(
+        nsh_base::switch()
+            .checked(move || store.flag(key))
+            .disabled(move || {
+                store.locked("port")
+                    || (key == "auto_connect" && store.read(|s| s.active != Some(1)))
+            })
+            .on_change(move |v: &bool| store.change(|s| s.flag(key, *v)))
+            .accessibility_label(label)
+            .track_style(move |s| {
+                s.w(px(42.))
+                    .h(px(22.))
+                    .p(px(3.))
+                    .rounded_full()
+                    .bg(move || theme().foreground.opacity(0.18))
+                    .checked(|s| {
+                        s.bg(move || {
+                            if active.get() {
+                                theme().primary
+                            } else {
+                                theme()
+                                    .color("selection-inactive")
+                                    .unwrap_or(theme().secondary)
+                            }
+                        })
+                    })
+                    .transition_colors()
+                    .duration(INSTANT)
+            })
+            .thumb_style(|s| {
+                s.w(px(26.))
+                    .h(px(16.))
+                    .rounded_full()
+                    .bg(move || theme().primary_foreground)
+                    .checked(|s| s.translate_x(px(10.)))
+                    .transition_transform()
+                    .duration(FAST)
+            }),
+    )
+}
+fn terminal(store: Store) -> View {
+    let records = computed(move || {
+        store.read(|s| {
+            let Some(session) = s.active_session() else {
+                return vec![];
+            };
+            let p = &s.preferences;
+            let colors = crate::presentation::Colors::new(p.get("colors"), p.get("tx_color")).ok();
+            crate::presentation::filtered(session.records(), p)
+                .unwrap_or_default()
+                .into_iter()
+                .map(|f| {
+                    let text = crate::presentation::display_text(f, p);
+                    Record {
+                        id: f.sequence,
+                        time: record_time(&f.timestamp),
+                        direction: if matches!(f.direction, Direction::Send) {
+                            "TX"
+                        } else {
+                            "RX"
+                        },
+                        bytes: f.bytes.len(),
+                        color: colors.as_ref().and_then(|c| c.for_frame(f, &text)),
+                        json: serde_json::to_string_pretty(f).unwrap_or_default(),
+                        text,
+                    }
+                })
+                .collect::<Vec<_>>()
+        })
+    });
+    let search_config = computed(move || {
+        store.read(|s| {
+            (
+                s.preferences.get("filter").to_owned(),
+                s.preferences.flag("search_regex"),
+                s.preferences.flag("search_case"),
+            )
+        })
+    });
+    let search_cache = stored(None::<((String, bool, bool), Option<regex::Regex>)>);
+    let matcher = move || {
+        let key = search_config.get();
+        search_cache.with(|cache| {
+            if cache.as_ref().is_none_or(|cached| cached.0 != key) {
+                let regex =
+                    untracked(|| store.read(|s| crate::serial::search(&s.preferences))).ok();
+                *cache = Some((key, regex));
+            }
+            cache.as_ref().and_then(|cached| cached.1.clone())
+        })
+    };
+    let table = component_ref::<DataTable>();
+    let table_width = signal(700_f32);
+    let selected = signal(Vec::<u64>::new());
+    let anchor = signal(None::<u64>);
+    let widths = signal(BTreeMap::<String, f32>::new());
+    let top = signal(None::<u64>);
+    let session = stored(None::<u64>);
+    let focused = signal(false);
+    let focus_region = element_ref();
+    focus_region.on_focus_in(move || focused.set(true));
+    focus_region.on_focus_out(move || focused.set(false));
+    effect(move || {
+        let active = store.read(|s| s.active);
+        if session.get() == active {
+            return;
+        }
+        if let Some(previous) = session.replace(active) {
+            store.terminal_state.with(|states| {
+                states.insert(
+                    previous,
+                    TerminalState {
+                        selected: selected.get_untracked(),
+                        anchor: anchor.get_untracked(),
+                        widths: widths.get_untracked(),
+                        top_sequence: top.get_untracked(),
+                    },
+                );
+            });
+        }
+        let saved = active
+            .and_then(|id| store.terminal_state.with(|states| states.get(&id).cloned()))
+            .unwrap_or_default();
+        batch(|| {
+            selected.set(saved.selected);
+            anchor.set(saved.anchor);
+            widths.set(saved.widths);
+            top.set(saved.top_sequence);
+        });
+    });
+    cleanup(move || {
+        if let Some(id) = session.get() {
+            store.terminal_state.try_with(|states| {
+                states.insert(
+                    id,
+                    TerminalState {
+                        selected: selected.get_untracked(),
+                        anchor: anchor.get_untracked(),
+                        widths: widths.get_untracked(),
+                        top_sequence: top.get_untracked(),
+                    },
+                );
+            });
+        }
+    });
+    let copy_selected = move || {
+        let selection = selected.get_untracked();
+        if let Some(value) = records.with_untracked(|rows| selection_text(rows, &selection)) {
+            set_clipboard(value);
+        }
+    };
+    let select_all = move || {
+        selected.set(records.with_untracked(|rows| rows.iter().map(|row| row.id).collect()))
+    };
+    super::commands::watch_edit_actions(
+        store,
+        move || focused.get() && !store.text_terminal.get(),
+        move || {
+            selected.with(|selection| {
+                records.with(|rows| rows.iter().any(|row| selection.contains(&row.id)))
+            })
+        },
+        copy_selected,
+        move || records.with(|rows| !rows.is_empty()),
+        select_all,
+    );
+    effect(move || {
+        if focused.get() {
+            on_key("mod+c", move |_| copy_selected());
+            on_key("mod+a", move |_| select_all());
+        }
+    });
+    let data = computed(move || {
+        records.with(|r| {
+            DataTableRows::new(r.len())
+                .texts("time", r.iter().map(|r| r.time.clone()))
+                .texts("direction", r.iter().map(|r| r.direction))
+                .texts("size", r.iter().map(|r| r.bytes.to_string()))
+                .texts("data", r.iter().map(|r| r.text.replace('\n', " ↵ ")))
+        })
+    });
+    effect(move || {
+        let ids = records.with(|rows| rows.iter().map(|r| r.id).collect::<Vec<_>>());
+        if ids.is_empty() {
+            return;
+        }
+        if let Some(api) = table.api::<DataTableApi>() {
+            if store.flag("auto_scroll") {
+                api.scroll_to_row((ids.len() - 1) as u32, Some(false));
+            } else if let Some(id) = top.get_untracked()
+                && let Some(index) = ids.iter().position(|row| *row == id)
+            {
+                api.scroll_to_row(index as u32, Some(false));
+            }
+        }
+    });
+    effect(move || {
+        if let Some(jump) = store.jump.get() {
+            let index = records.with_untracked(|r| r.iter().position(|r| r.id == jump));
+            if let Some(index) = index {
+                selected.set(vec![jump]);
+                anchor.set(Some(jump));
+                untracked(|| store.change(|s| s.flag("auto_scroll", false)));
+                if let Some(api) = table.api::<DataTableApi>() {
+                    api.scroll_to_row(index as u32, Some(false));
+                }
+            }
+        }
+    });
+    view()
+        .flex_1()
+        .min_h_0()
+        .child(
+            view()
+                .flex_1()
+                .min_h_0()
+                .relative()
+                .element_ref(&focus_region)
+                .on_layout(move |bounds: &Bounds<Points>| table_width.set(bounds.size.width.0))
+                .child(
+                    when(
+                        move || !store.text_terminal.get(),
+                        move || {
+                            nsh_base::data_table()
+                                .columns(move || {
+                                    columns(
+                                        store.flag("timestamps"),
+                                        &widths.get(),
+                                        table_width.get(),
+                                    )
+                                })
+                                .data(data)
+                                .row_height(px(32.))
+                                .header_height(px(28.))
+                                .column_selectable(false)
+                                .stripe(false)
+                                .movable_columns(false)
+                                .resizable_columns(true)
+                                .accessibility_label("串口数据终端")
+                                .component_ref(&table)
+                                .flex_1()
+                                .classes(table_classes())
+                                .select_on_modifier_press(false)
+                                .selection(move || {
+                                    selected
+                                        .with(|ids| ids.last().copied())
+                                        .and_then(|id| {
+                                            records.with(|r| r.iter().position(|r| r.id == id))
+                                        })
+                                        .map(|index| {
+                                            let mut s = DataTableSelection::default();
+                                            s.row = Some(index as u32);
+                                            s
+                                        })
+                                })
+                                .row_classes(move || {
+                                    records.with(|rows| {
+                                        rows.iter()
+                                            .map(|row| {
+                                                if selected.with(|ids| ids.contains(&row.id)) {
+                                                    "bg-primary/15".into()
+                                                } else {
+                                                    "".into()
+                                                }
+                                            })
+                                            .collect::<Vec<_>>()
+                                    })
+                                })
+                                .on_selection_change(move |value: &Option<DataTableSelection>| {
+                                    if let Some(row) = value.and_then(|s| s.row).and_then(|index| {
+                                        records
+                                            .with_untracked(|r| r.get(index as usize).map(|r| r.id))
+                                    }) {
+                                        selected.set(vec![row]);
+                                        anchor.set(Some(row));
+                                    }
+                                })
+                                .on_row_press(move |p: &DataTablePress| {
+                                    let ids = records.with_untracked(|rows| {
+                                        rows.iter().map(|r| r.id).collect::<Vec<_>>()
+                                    });
+                                    let (next, next_anchor) = select_rows(
+                                        &ids,
+                                        &selected.get_untracked(),
+                                        anchor.get_untracked(),
+                                        p.row as usize,
+                                        p.shift,
+                                        p.platform || p.control,
+                                    );
+                                    selected.set(next);
+                                    anchor.set(next_anchor);
+                                    focused.set(true);
+                                })
+                                .on_column_resize(move |event: &DataTableEvent| {
+                                    if let DataTableEvent::ColumnResize(key, size) = event {
+                                        widths.update(|columns| {
+                                            columns.insert(key.to_string(), size.0);
+                                        });
+                                    }
+                                })
+                                .on_visible_rows_change(move |range: &DataTableRange| {
+                                    top.set(records.with_untracked(|r| {
+                                        r.get(range.start as usize).map(|r| r.id)
+                                    }))
+                                })
+                                .on_context_menu(move |_: &DataTableContextMenu| {
+                                    use nsh_core::element::desktop::{MenuItem, popup_menu};
+                                    drop(popup_menu(vec![
+                                        MenuItem::new("复制")
+                                            .disabled(selected.with_untracked(Vec::is_empty))
+                                            .on_select(copy_selected),
+                                        MenuItem::new("记录表…")
+                                            .on_select(move || tools::open(store, "records")),
+                                    ]));
+                                })
+                                .render_cell(move |cell: &DataTableCell| {
+                                    let row = cell.row as usize;
+                                    let data = cell.key.as_str() == "data";
+                                    let secondary = matches!(cell.key.as_str(), "time" | "size");
+                                    let value = cell.text.clone();
+                                    let color = move || {
+                                        if data {
+                                            records
+                                                .with(|rows| {
+                                                    rows.get(row).and_then(|row| row.color)
+                                                })
+                                                .map(|value| nsh_core::color::rgb(value).into())
+                                                .unwrap_or(theme().foreground)
+                                        } else if secondary {
+                                            theme().muted_foreground
+                                        } else {
+                                            theme().foreground
+                                        }
+                                    };
+                                    if data {
+                                        dynamic(move || {
+                                            let key = search_config.get();
+                                            let pieces = if key.0.is_empty() {
+                                                vec![(value.to_string(), false)]
+                                            } else {
+                                                matcher()
+                                                    .map(|query| {
+                                                        highlight_pieces(value.as_str(), &query)
+                                                    })
+                                                    .unwrap_or_else(|| {
+                                                        vec![(value.to_string(), false)]
+                                                    })
+                                            };
+                                            text("")
+                                                .w_full()
+                                                .font_family(mono)
+                                                .text_size(body_size)
+                                                .text_color(color)
+                                                .children(pieces.into_iter().map(
+                                                    |(value, matched)| {
+                                                        text(value).when(matched, |span| {
+                                                            span.bg(move || {
+                                                                theme()
+                                                                    .color("search-highlight")
+                                                                    .unwrap_or_else(|| {
+                                                                        theme()
+                                                                            .color("warning")
+                                                                            .unwrap_or(
+                                                                                theme().primary,
+                                                                            )
+                                                                    })
+                                                                    .opacity(0.35)
+                                                            })
+                                                        })
+                                                    },
+                                                ))
+                                        })
+                                        .into_element()
+                                    } else {
+                                        let label = text(cell.text.clone())
+                                            .w_full()
+                                            .font_family(mono)
+                                            .text_size(small_control_size)
+                                            .when(cell.key.as_str() == "size", |text| {
+                                                text.text_right()
+                                            })
+                                            .text_color(color);
+                                        if cell.key.as_str() == "direction" {
+                                            view()
+                                                .flex_row()
+                                                .items_center()
+                                                .gap(px(6.))
+                                                .child(
+                                                    icons::icon(if cell.text.as_str() == "RX" {
+                                                        "arrow-down-left"
+                                                    } else {
+                                                        "arrow-up-right"
+                                                    })
+                                                    .size(px(11.))
+                                                    .text_color(move || theme().primary),
+                                                )
+                                                .child(label)
+                                                .into_element()
+                                        } else {
+                                            label.into_element()
+                                        }
+                                    }
+                                })
+                        },
+                    )
+                    .otherwise(move || {
+                        readonly(move || {
+                            Some(
+                                records
+                                    .with(|r| {
+                                        r.iter()
+                                            .map(|r| {
+                                                format!(
+                                                    "{} {} {}\n",
+                                                    if store.flag("timestamps") {
+                                                        &r.time
+                                                    } else {
+                                                        ""
+                                                    },
+                                                    r.direction,
+                                                    r.text
+                                                )
+                                            })
+                                            .collect::<String>()
+                                    })
+                                    .into(),
+                            )
+                        })
+                    }),
+                )
+                .child(when(
+                    move || records.with(Vec::is_empty),
+                    move || {
+                        view()
+                            .absolute()
+                            .inset_0()
+                            .items_center()
+                            .justify_center()
+                            .gap_2()
+                            .child(
+                                icons::icon("serial-empty-cable")
+                                    .size(px(44.))
+                                    .translate_y(px(-16.))
+                                    .text_color(move || {
+                                        theme()
+                                            .color("empty-symbol")
+                                            .unwrap_or(theme().muted_foreground)
+                                    })
+                                    .into_element(),
+                            )
+                            .child(
+                                text(move || {
+                                    store.read(|s| {
+                                        if s.active_session().is_some_and(|s| !s.frames.is_empty())
+                                        {
+                                            "没有匹配的数据"
+                                        } else if s.serial_connected() {
+                                            "等待设备数据"
+                                        } else {
+                                            "暂无收发记录"
+                                        }
+                                    })
+                                })
+                                .text_size(px(15.))
+                                .font_weight(FontWeight::BOLD)
+                                .text_color(move || {
+                                    theme()
+                                        .color("empty-foreground")
+                                        .unwrap_or(theme().muted_foreground)
+                                }),
+                            )
+                            .child(
+                                text(move || {
+                                    store.read(|s| {
+                                        if s.active_session().is_some_and(|s| !s.frames.is_empty())
+                                        {
+                                            "尝试其他搜索内容，或显示全部方向。"
+                                        } else if s.serial_connected() {
+                                            "设备数据会实时显示在这里。"
+                                        } else {
+                                            "在左侧选择串口并连接，即可开始收发。"
+                                        }
+                                    })
+                                })
+                                .text_size(px(15.))
+                                .text_color(move || {
+                                    theme()
+                                        .color("empty-foreground")
+                                        .unwrap_or(theme().muted_foreground)
+                                }),
+                            )
+                    },
+                )),
+        )
+        .child(
+            view()
+                .h(px(31.))
+                .px_3()
+                .py(px(5.))
+                .flex_row()
+                .items_center()
+                .gap(px(10.))
+                .border_t_1()
+                .border_color(hairline)
+                .child(view().w(px(82.)).child(popup_control(
+                    store,
+                    "display",
+                    &["hex", "ascii", "gbk", "utf-8", "latin-1"],
+                    true,
+                )))
+                .child(
+                    text(move || format!("{} 条", records.with(Vec::len)))
+                        .text_size(native_caption_size)
+                        .text_color(move || theme().muted_foreground),
+                )
+                .child(view().flex_1())
+                .child(
+                    view()
+                        .flex_row()
+                        .items_center()
+                        .gap(px(4.))
+                        .child(icon_toggle(
+                            "arrow-down-to-line",
+                            || "自动滚动",
+                            move || store.flag("auto_scroll"),
+                            || false,
+                            move || {
+                                store.change(|state| {
+                                    state
+                                        .flag("auto_scroll", !state.preferences.flag("auto_scroll"))
+                                })
+                            },
+                            11.5,
+                        ))
+                        .child(icon_toggle(
+                            "terminal-pause",
+                            move || {
+                                if store.read(|state| {
+                                    state
+                                        .active_session()
+                                        .is_some_and(|session| session.frozen.is_some())
+                                }) {
+                                    "继续显示"
+                                } else {
+                                    "暂停显示"
+                                }
+                            },
+                            move || {
+                                store.read(|state| {
+                                    state
+                                        .active_session()
+                                        .is_some_and(|session| session.frozen.is_some())
+                                })
+                            },
+                            || false,
+                            move || store.change(Workbench::pause),
+                            7.5,
+                        ))
+                        .child(divider())
+                        .child(native_borderless_menu_small_offset(
+                            view()
+                                .w(px(20.))
+                                .h(px(20.))
+                                .items_center()
+                                .justify_center()
+                                .label("显示选项")
+                                .text_color(move || {
+                                    theme()
+                                        .color("terminal-menu-glyph")
+                                        .unwrap_or(theme().foreground)
+                                })
+                                .child(icons::icon("settings")),
+                            move || {
+                                vec![
+                                    native_toggle(store, "mixed", "文本与 HEX 混显"),
+                                    native_toggle(store, "timestamps", "显示时间戳"),
+                                    NativeMenuItem::new("着色规则…")
+                                        .on_select(move || tools::open(store, "colors")),
+                                    NativeMenuItem::separator(),
+                                    NativeMenuItem::new("重置计数").on_select(move || {
+                                        store.change(|state| state.serial_action("resetCounters"))
+                                    }),
+                                    native_toggle(store, "reset_on_clear", "清屏时重置计数"),
+                                ]
+                            },
+                            -3.,
+                        ))
+                        .child(terminal_action(
+                            "terminal-table",
+                            "记录表",
+                            16.,
+                            || false,
+                            move || tools::open(store, "records"),
+                        ))
+                        .child(native_borderless_menu_small_disabled(
+                            view()
+                                .w(px(19.))
+                                .h(px(20.))
+                                .items_center()
+                                .justify_center()
+                                .label("导出记录")
+                                .text_color(move || {
+                                    theme()
+                                        .color(if serial_history_empty(store) {
+                                            "terminal-menu-disabled"
+                                        } else {
+                                            "terminal-menu-glyph"
+                                        })
+                                        .unwrap_or(theme().muted_foreground)
+                                })
+                                .child(icons::icon("export")),
+                            move || serial_history_empty(store),
+                            move || {
+                                ["json", "txt", "csv", "bin"]
+                                    .into_iter()
+                                    .map(|format| {
+                                        NativeMenuItem::new(format.to_uppercase())
+                                            .on_select(move || export_records(store, format))
+                                    })
+                                    .collect()
+                            },
+                        ))
+                        .child(terminal_action(
+                            "trash-portrait",
+                            "清屏",
+                            13.,
+                            move || serial_history_empty(store),
+                            move || store.change(Workbench::clear_terminal),
+                        ))
+                        .child(divider())
+                        .child(icon_toggle(
+                            "terminal-composer",
+                            || "发送区",
+                            move || store.composer.get(),
+                            || false,
+                            move || store.composer.update(|visible| *visible = !*visible),
+                            15.5,
+                        )),
+                ),
+        )
+}
+fn serial_history_empty(store: Store) -> bool {
+    store.read(|state| {
+        state
+            .active_session()
+            .is_none_or(|session| session.frames.is_empty())
+    })
+}
+fn terminal_action(
+    name: &'static str,
+    label: &'static str,
+    width: f32,
+    disabled: impl Fn() -> bool + 'static,
+    press: impl Fn() + 'static,
+) -> impl IntoElement {
+    let disabled = computed(disabled);
+    nsh_base::button()
+        .disabled(disabled)
+        .on_press(press)
+        .accessibility_label(label)
+        .w(px(width))
+        .h(px(20.))
+        .p_0()
+        .items_center()
+        .justify_center()
+        .hit_slop(nsh_core::geometry::Edges::all(px(5.)))
+        .text_color(move || {
+            theme()
+                .color(if disabled.get() {
+                    "terminal-button-disabled"
+                } else {
+                    "terminal-glyph"
+                })
+                .unwrap_or(theme().muted_foreground)
+        })
+        .focus_visible(|style| style.outline(px(2.)).outline_color(move || theme().ring))
+        .child(icons::icon(name).size(px(if name == "terminal-table" { 15. } else { 14. })))
+}
+
+fn selection_text(rows: &[Record], selected: &[u64]) -> Option<String> {
+    let rows = rows
+        .iter()
+        .filter(|row| selected.contains(&row.id))
+        .collect::<Vec<_>>();
+    (!rows.is_empty()).then(|| {
+        rows.iter()
+            .map(|row| row.text.as_str())
+            .collect::<Vec<_>>()
+            .join("\n")
+    })
+}
+
+fn highlight_pieces(value: &str, query: &regex::Regex) -> Vec<(String, bool)> {
+    // Native TerminalAppearance highlights the first match; Regex ranges are UTF-8 boundaries, Text spans convert them natively.
+    let Some(found) = query.find(value).filter(|found| !found.is_empty()) else {
+        return vec![(value.into(), false)];
+    };
+    let mut pieces = Vec::with_capacity(3);
+    if found.start() > 0 {
+        pieces.push((value[..found.start()].into(), false));
+    }
+    pieces.push((value[found.range()].into(), true));
+    if found.end() < value.len() {
+        pieces.push((value[found.end()..].into(), false));
+    }
+    pieces
+}
+
+fn columns(
+    timestamps: bool,
+    widths: &BTreeMap<String, f32>,
+    available: f32,
+) -> Vec<DataTableColumn> {
+    [
+        ("time", "时间", 116., 100.),
+        ("direction", "方向", 76., 72.),
+        ("size", "字节", 64., 52.),
+        ("data", "数据", 620., 120.),
+    ]
+    .into_iter()
+    .filter(|c| timestamps || c.0 != "time")
+    .map(|(key, title, width, min)| {
+        let mut c = DataTableColumn::default();
+        c.key = key.into();
+        c.title = Some(title.into());
+        c.width = Some(px(if key == "data" && !widths.contains_key(key) {
+            let leading = if timestamps {
+                widths.get("time").copied().unwrap_or(116.)
+            } else {
+                0.
+            } + widths.get("direction").copied().unwrap_or(76.)
+                + widths.get("size").copied().unwrap_or(64.);
+            (available - leading).max(min)
+        } else {
+            widths.get(key).copied().unwrap_or(width)
+        }));
+        c.min_width = Some(px(min));
+        c
+    })
+    .collect()
+}
+fn table_classes() -> DataTableClasses {
+    let mut c = DataTableClasses::default();
+    c.header = Some("border-b border-border".into());
+    c.header_cell = Some("px-3 border-r border-border text-xs".into());
+    c.cell = Some("px-3 text-xs".into());
+    c.row_selected = Some("bg-primary/15".into());
+    c
+}
+fn export_records(store: Store, format: &'static str) {
+    let bytes = store.read(|s| {
+        let Some(session) = s.active_session() else {
+            return Ok(vec![]);
+        };
+        let records = session.frames.iter().collect::<Vec<_>>();
+        crate::presentation::records(&records, format, s.preferences.get("display"))
+    });
+    match bytes {
+        Ok(bytes) => store.export(&format!("ChipDock-Serial.{format}"), bytes),
+        Err(e) => store.report(e),
+    }
+}
+fn divider() -> View {
+    view().w(px(1.)).h(px(14.)).mx_1().bg(hairline)
+}
+fn composer(store: Store) -> View {
+    let active = control_active();
+    let repeating = move || {
+        store.read(|s| {
+            s.active_session()
+                .and_then(|s| s.status.as_ref())
+                .is_some_and(|s| s.job_kind.as_deref() == Some("repeat"))
+        })
+    };
+    let busy = move || store.read(Workbench::serial_busy);
+    view()
+        .flex_1()
+        .min_h_0()
+        .child(
+            view()
+                .h(px(37.))
+                .px_3()
+                .flex_row()
+                .items_center()
+                .gap(px(10.))
+                .border_b_1()
+                .border_color(hairline)
+                .child(
+                    nsh_base::radio_group()
+                        .flex_row()
+                        .px(px(0.))
+                        .rounded(px(6.))
+                        .bg(move || theme().color("serial-control").unwrap_or(theme().secondary))
+                        .children([(false, "文本"), (true, "命令")].into_iter().map(
+                            move |(mode, label)| {
+                                nsh_base::radio()
+                                    .checked(move || store.flag("command_mode") == mode)
+                                    .on_change(move |checked: &bool| {
+                                        if *checked {
+                                            store.change(|s| s.flag("command_mode", mode));
+                                        }
+                                    })
+                                    .h(px(20.))
+                                    .w(px(42.))
+                                    .p_0()
+                                    .items_center()
+                                    .justify_center()
+                                    .rounded(px(5.))
+                                    .checked_style(|s| {
+                                        s.bg(move || {
+                                            if active.get() {
+                                                theme().primary
+                                            } else {
+                                                theme()
+                                                    .color("composer-selection-inactive")
+                                                    .unwrap_or(theme().secondary)
+                                            }
+                                        })
+                                        .text_color(
+                                            move || {
+                                                if active.get() {
+                                                    theme().primary_foreground
+                                                } else {
+                                                    theme().foreground
+                                                }
+                                            },
+                                        )
+                                    })
+                                    .hover(|s| s.bg(move || theme().accent))
+                                    .active(|s| s.bg(move || theme().muted))
+                                    .focus_visible(|s| {
+                                        s.outline(px(2.)).outline_color(move || theme().ring)
+                                    })
+                                    .child(text(label).text_size(caption_size))
+                            },
+                        )),
+                )
+                .child(when(
+                    move || !store.flag("command_mode"),
+                    move || {
+                        view()
+                            .flex_row()
+                            .items_center()
+                            .gap(px(8.))
+                            .child(view().w(px(81.5)).child(popup_control(
+                                store,
+                                "format",
+                                &["hex", "ascii", "gbk", "utf-8", "latin-1"],
+                                true,
+                            )))
+                            .child(view().w(px(72.5)).child(popup_control(
+                                store,
+                                "ending",
+                                &["none", "lf", "cr", "crlf"],
+                                true,
+                            )))
+                            .child(checksum_menu(store))
+                    },
+                ))
+                .child(view().flex_1().min_w(px(8.)))
+                .child(native_borderless_menu_small(
+                    view()
+                        .w(px(58.))
+                        .h(px(14.))
+                        .px(px(3.))
+                        .flex_row()
+                        .items_center()
+                        .gap(px(4.))
+                        .hit_slop(nsh_core::geometry::Edges::all(px(3.)))
+                        .text_color(move || {
+                            theme()
+                                .color("terminal-menu-glyph")
+                                .unwrap_or(theme().foreground)
+                        })
+                        .label("串口工具")
+                        .child(icons::icon("more").size(px(14.)))
+                        .child(text("工具").text_size(small_control_size))
+                        .child(icons::icon("down").size(px(8.))),
+                    move || {
+                        vec![
+                            NativeMenuItem::new("命令与接收规则…")
+                                .disabled(repeating())
+                                .on_select(move || tools::open(store, "protocol")),
+                            NativeMenuItem::separator(),
+                            NativeMenuItem::new("校验、分帧、Modbus 与采集…")
+                                .on_select(move || tools::open(store, "checksum")),
+                            NativeMenuItem::new("包库、文件、宏与应答…")
+                                .on_select(move || tools::open(store, "packets")),
+                            NativeMenuItem::separator(),
+                            NativeMenuItem::new("打开实时曲线").on_select(move || {
+                                if let Some(id) = store.read(|s| s.active) {
+                                    auxiliary::open(store, auxiliary::Panel::Plot(id));
+                                }
+                            }),
+                        ]
+                    },
+                )),
+        )
+        .child(
+            when(
+                move || store.flag("command_mode"),
+                move || command_composer(store),
+            )
+            .otherwise(move || {
+                nsh_base::input()
+                    .value(move || store.field("send"))
+                    .on_change(move |v: &str| store.change(|s| s.set("send", v.into())))
+                    .label("要发送的数据")
+                    .multiline(true)
+                    .readonly(move || repeating() || store.read(|s| s.installing))
+                    .placeholder(move || {
+                        if store.field("format") == "hex" {
+                            "输入十六进制字节，例如 AA 01 FF"
+                        } else {
+                            "输入文本或设备指令…"
+                        }
+                    })
+                    .placeholder_color(|| color(theme().foreground.opacity(0.26)))
+                    .font_family(mono)
+                    .text_size(body_size)
+                    .px(px(14.))
+                    .py(px(6.))
+                    .flex_1()
+                    .min_h_0()
+            }),
+        )
+        .child(
+            view()
+                .min_h(px(40.))
+                .px_3()
+                .py_2()
+                .flex_row()
+                .items_center()
+                .gap(px(10.))
+                .border_t_1()
+                .border_color(hairline)
+                .child(when(
+                    move || !store.flag("command_mode"),
+                    move || {
+                        view()
+                            .flex_row()
+                            .items_center()
+                            .gap(px(10.))
+                            .child(native_borderless_menu_small_disabled(
+                                view().size(px(20.)).label("发送历史").child(
+                                    icons::icon("history").size(px(15.)).text_color(move || {
+                                        button_ink(
+                                            false,
+                                            repeating()
+                                                || store.read(|s| s.preferences.history.is_empty()),
+                                        )
+                                    }),
+                                ),
+                                move || {
+                                    repeating() || store.read(|s| s.preferences.history.is_empty())
+                                },
+                                move || {
+                                    store
+                                        .read(|s| s.preferences.history.clone())
+                                        .into_iter()
+                                        .map(|value| {
+                                            NativeMenuItem::new(
+                                                value.chars().take(80).collect::<String>(),
+                                            )
+                                            .on_select(
+                                                move || {
+                                                    if !repeating() {
+                                                        store.change(|s| {
+                                                            s.set("send", value.clone())
+                                                        });
+                                                    }
+                                                },
+                                            )
+                                        })
+                                        .collect()
+                                },
+                            ))
+                            .child(divider())
+                            .child(caption("每"))
+                            .child(compact_input(store, "interval", "自动发送间隔，毫秒", 64.))
+                            .child(caption("ms"))
+                            .child(
+                                nsh_base::checkbox()
+                                    .checked(repeating)
+                                    .indicator_style(|style| style.hidden())
+                                    .disabled(move || {
+                                        !repeating()
+                                            && store.read(|s| {
+                                                !super::commands::can_send(s)
+                                                    || !s.preferences.number("interval").is_ok_and(
+                                                        |v| (10..=3_600_000).contains(&v),
+                                                    )
+                                            })
+                                    })
+                                    .on_change(move |_: &bool| {
+                                        let stop = repeating();
+                                        store.change(|s| {
+                                            s.serial_action(if stop {
+                                                "cancelJob"
+                                            } else {
+                                                "repeat"
+                                            })
+                                        });
+                                    })
+                                    .h(px(20.))
+                                    .px_2()
+                                    .rounded(px(5.))
+                                    .flex_row()
+                                    .items_center()
+                                    .gap(px(5.))
+                                    .bg(move || {
+                                        theme().color("button").unwrap_or(theme().secondary)
+                                    })
+                                    .border_1()
+                                    .border_color(hairline)
+                                    .checked_style(|s| {
+                                        s.bg(move || theme().primary)
+                                            .text_color(move || theme().primary_foreground)
+                                    })
+                                    .hover(|s| s.bg(move || theme().accent))
+                                    .active(|s| s.bg(move || theme().muted))
+                                    .disabled_style(|s| s.opacity(0.45))
+                                    .child(icons::icon("repeat").size(px(13.)))
+                                    .child(text("自动发送").text_size(caption_size)),
+                            )
+                    },
+                ))
+                .child(when(
+                    move || {
+                        store.read(|s| {
+                            s.active_session()
+                                .and_then(|s| s.status.as_ref())
+                                .is_some_and(|s| {
+                                    s.job_kind.as_deref().is_some_and(|k| k != "repeat")
+                                })
+                        })
+                    },
+                    move || {
+                        view()
+                            .flex_row()
+                            .items_center()
+                            .gap_2()
+                            .child(
+                                nsh_base::progress()
+                                    .value(move || {
+                                        store.read(|s| {
+                                            s.active_session()
+                                                .and_then(|s| s.status.as_ref())
+                                                .map_or(0., |s| {
+                                                    if s.job_total > 0 {
+                                                        s.job_done as f32 / s.job_total as f32
+                                                            * 100.
+                                                    } else {
+                                                        0.
+                                                    }
+                                                })
+                                        })
+                                    })
+                                    .w(px(80.))
+                                    .track_class("h-1 bg-muted rounded-full")
+                                    .indicator_class("h-1 bg-primary rounded-full")
+                                    .accessibility_label("发送任务进度"),
+                            )
+                            .child(caption(move || {
+                                store.read(|s| {
+                                    s.active_session()
+                                        .and_then(|s| s.status.as_ref())
+                                        .map_or(String::new(), |s| {
+                                            format!("{} / {}", s.job_done, s.job_total)
+                                        })
+                                })
+                            }))
+                            .child(action("取消任务", Variant::Default, busy, move || {
+                                store.change(|s| s.serial_action("cancelJob"))
+                            }))
+                    },
+                ))
+                .child(view().flex_1().min_w_1())
+                .child(when(
+                    move || !store.flag("command_mode") && !store.field("send").is_empty(),
+                    move || {
+                        caption(move || format!("{} 字符", store.field("send").chars().count()))
+                    },
+                ))
+                .child(prominent_button(
+                    "send",
+                    move || {
+                        if busy() && store.read(Workbench::serial_connected) {
+                            "发送中…"
+                        } else {
+                            "发送"
+                        }
+                    },
+                    move || !store.read(super::commands::can_send) || repeating(),
+                    move || {
+                        if !store.modal.get_untracked() {
+                            store.change(Workbench::send);
+                        }
+                    },
+                )),
+        )
+}
+
+fn checksum_menu(store: Store) -> impl IntoElement {
+    let disabled = move || {
+        store.read(|s| {
+            s.installing
+                || s.active_session()
+                    .and_then(|s| s.status.as_ref())
+                    .is_some_and(|s| s.job_kind.as_deref() == Some("repeat"))
+        })
+    };
+    native_menu_small_offset_disabled(
+        view()
+            .w(px(86.5))
+            .h(px(20.))
+            .px_2()
+            .flex_row()
+            .items_center()
+            .gap_1()
+            .rounded(px(5.))
+            .bg(move || theme().color("serial-control").unwrap_or(theme().secondary))
+            .label("发送校验")
+            .child(icons::icon("shield").size(px(13.)))
+            .child(
+                text(move || value_label("checksum", &store.field("checksum")))
+                    .text_size(small_control_size),
+            )
+            .child(icons::icon("down").size(px(8.)).ml_1()),
+        disabled,
+        move || {
+            let item = |value: &'static str, label: &'static str| {
+                NativeMenuItem::new(label)
+                    .checked(store.field("checksum") == value)
+                    .on_select(move || store.change(|s| s.set("checksum", value.to_owned())))
+            };
+            vec![
+                NativeMenuItem::new("校验算法").disabled(true),
+                item("none", "无校验（默认）"),
+                item("sum8", "校验和（SUM8）"),
+                NativeMenuItem::separator(),
+                NativeMenuItem::new("奇偶校验").disabled(true),
+                item("oddParity", "奇校验"),
+                item("evenParity", "偶校验"),
+                NativeMenuItem::separator(),
+                item("xor8", "异或校验（XOR8）"),
+                item("crc16Modbus", "CRC16/MODBUS"),
+                item("crc16Ccitt", "CRC16/CCITT"),
+                item("crc32", "CRC32"),
+                item("lrc", "LRC"),
+            ]
+        },
+        3.,
+    )
+}
+
+fn command_composer(store: Store) -> View {
+    let input = element_ref();
+    let focused = signal(false);
+    input.on_focus_in(move || focused.set(true));
+    input.on_focus_out(move || focused.set(false));
+    effect(move || {
+        if focused.get() {
+            let keys = nsh_core::element::KeyOptions {
+                when: nsh_core::keymap::When::Always,
+                repeat: true,
+                ..Default::default()
+            };
+            on_key_with("up", keys, move |_| recall_command(store, true));
+            on_key_with("down", keys, move |_| recall_command(store, false));
+        }
+    });
+    let preview = computed(move || store.read(|s| command_preview(&s.preferences)));
+    let suggestions = computed(move || {
+        store.read(|s| {
+            serde_json::from_str::<Vec<chipdock_core::serial::program::Rule>>(
+                s.preferences.get("protocol"),
+            )
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|r| {
+                !r.receive
+                    && (s.preferences.get("command").is_empty()
+                        || r.name.starts_with(s.preferences.get("command")))
+            })
+            .map(|r| r.name)
+            .collect::<Vec<_>>()
+        })
+    });
+    view()
+        .flex_1()
+        .min_h_0()
+        .px(px(14.))
+        .py(px(10.))
+        .gap_2()
+        .child(
+            draft_input(
+                "协议命令",
+                move || store.field("command"),
+                move |v| store.change(|s| s.set("command", v.into())),
+            )
+            .element_ref(&input)
+            .on_submit(move |_: &str| {
+                if store.read(super::commands::can_send) {
+                    store.change(Workbench::send);
+                }
+            })
+            .submit_behavior(SubmitBehavior::Submit)
+            .placeholder("例如 motor-speed 45")
+            .readonly(move || store.read(|s| s.installing))
+            .font_family(mono)
+            .text_size(body_size),
+        )
+        .child(when(
+            move || suggestions.with(|v| !v.is_empty()),
+            move || {
+                scroll()
+                    .horizontal()
+                    .child(view().flex_row().gap_1().child(each(
+                        suggestions,
+                        |name: &String| name.clone(),
+                        move |name, _| {
+                            nsh_base::button()
+                                .on_press(move || {
+                                    store.change(|s| {
+                                        s.set("command", format!("{} ", name.get_untracked()))
+                                    })
+                                })
+                                .h(px(20.))
+                                .px_2()
+                                .rounded(px(5.))
+                                .hover(|s| s.bg(move || theme().accent))
+                                .child(text(move || name.get()).text_size(caption_size))
+                        },
+                    )))
+            },
+        ))
+        .child(when(
+            move || preview.with(|p| !p.0.is_empty()),
+            move || {
+                view()
+                    .flex_row()
+                    .items_center()
+                    .gap(px(8.5))
+                    .child(
+                        when(
+                            move || preview.with(|p| p.1),
+                            || {
+                                icons::icon("warning-fill")
+                                    .size(px(12.))
+                                    .text_color(move || theme().destructive)
+                            },
+                        )
+                        .otherwise(|| icons::icon("up").size(px(12.))),
+                    )
+                    .child(
+                        text(move || preview.with(|p| p.0.clone()))
+                            .text_size(native_caption_size)
+                            .font_family(mono)
+                            .text_color(move || {
+                                if preview.with(|p| p.1) {
+                                    theme().destructive
+                                } else {
+                                    theme().muted_foreground
                                 }
                             }),
                     )
-                    .child(
-                        div()
-                            .w(px(1.))
-                            .h(px(16.))
-                            .bg(cx.theme().foreground.opacity(0.12)),
-                    )
-                    .child(
-                        Button::new("new-session")
-                            .ghost()
-                            .size(px(22.))
-                            .p_0()
-                            .text_color(cx.theme().foreground.opacity(0.7))
-                            .child(icons::icon("plus").size(px(14.)).flex_shrink_0())
-                            .tooltip("新建串口会话")
-                            .disabled(
-                                self.busy_lanes.contains(&Lane::Serial)
-                                    || self.sessions.len() >= 16,
-                            )
-                            .on_click(cx.listener(|s, _, _, cx| {
-                                s.submit(Command::NewSession(s.snapshot(cx)), cx)
-                            })),
-                    ),
-            )
-            .child(div().flex_1().min_h_0().child(workspace))
-            .child(self.serial_status_bar(cx))
-            .into_any_element()
-    }
+            },
+        ))
+        .child(when(
+            move || {
+                store.read(|s| {
+                    s.active_session()
+                        .and_then(|s| s.status.as_ref())
+                        .and_then(|s| s.feedback.as_ref())
+                        .is_some()
+                })
+            },
+            move || {
+                caption(move || {
+                    store.read(|s| {
+                        s.active_session()
+                            .and_then(|s| s.status.as_ref())
+                            .and_then(|s| s.feedback.clone())
+                            .unwrap_or_default()
+                    })
+                })
+            },
+        ))
+}
 
-    pub(super) fn open_serial_tool(
-        &mut self,
-        key: &'static str,
-        title: &'static str,
-        w: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if key == "protocol" {
-            self.open_protocol(w, cx);
+fn recall_command(store: Store, previous: bool) {
+    store.change(|s| {
+        let history = &s.preferences.command_history;
+        if history.is_empty() {
             return;
         }
-        self.serial_page = if key == "tools" { "checksum" } else { key };
-        self.show_text(String::new(), w, cx);
-        let owner = cx.entity().downgrade();
-        let closing = owner.clone();
-        if !w.has_active_dialog(cx) {
-            self.focus_handle.focus(w, cx);
-        }
-        w.open_dialog(cx, move |dialog, w, cx| {
-            let body = owner
-                .update(cx, |s, cx| s.serial_tool_body(w, cx))
-                .unwrap_or_else(|_| div().into_any_element());
-            let closing = closing.clone();
-            let tools = matches!(key, "tools" | "checksum" | "framing" | "modbus" | "capture");
-            let workflow = matches!(key, "packets" | "file" | "macro" | "replies");
-            let records = key == "records";
-            dialog
-                .when(!tools && !workflow && !records, |d| d.title(title))
-                .p_0()
-                .centered()
-                .close_button(!tools && !workflow && !records)
-                .w(px(if tools {
-                    540.
-                } else if workflow {
-                    660.
-                } else if records {
-                    920.
-                } else {
-                    760.
-                }))
-                .child(
-                    div()
-                        .id("serial-dialog-body")
-                        .text_size(px(13.))
-                        .line_height(relative(1.2))
-                        .max_h(px(640.))
-                        .overflow_y_scroll()
-                        .child(body),
-                )
-                .on_close(move |_, _, cx| {
-                    let _ = closing.update(cx, |s, cx| {
-                        s.serial_page = "terminal";
-                        cx.notify();
-                    });
-                })
-        });
-    }
-    fn serial_tool_body(&self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
-        if matches!(
-            self.serial_page,
-            "checksum" | "framing" | "modbus" | "capture"
-        ) {
-            return self.tools_page(cx);
-        }
-        if matches!(self.serial_page, "packets" | "file" | "macro" | "replies") {
-            return self.workflow_page(cx);
-        }
-        if self.serial_page == "records" {
-            return self.records_page(cx).into_any_element();
-        }
-        let body = match self.serial_page {
-            "terminal" => div().size_full().child(self.terminal_page(window,cx)),
-            "records" => self.records_page(cx),
-            "packets" => div()
-                .flex()
-                .flex_col()
-                .gap_3()
-                .child(self.editor("packets", cx))
-                .child(self.row(&["selected", "interval"]))
-                .child(self.button("validate-packets", "验证包库", cx, |s, _, cx| {
-                    s.serial_action("validatePackets", cx)
-                }))
-                .child(self.button("batch", "批量发送", cx, |s, _, cx| {
-                    s.serial_action("batch", cx)
-                })),
-            "file" => div()
-                .flex()
-                .flex_col()
-                .gap_3()
-                .child(self.row(&["file", "chunk", "interval"]))
-                .child(self.button("pick-file", "选择文件…", cx, |s, _, cx| {
-                    s.pick("file", cx)
-                }))
-                .child(self.button("send-file", "发送文件", cx, |s, _, cx| {
-                    s.serial_action("file", cx)
-                })),
-            "macro" => div()
-                .flex()
-                .flex_col()
-                .gap_3()
-                .child(self.editor("macro", cx))
-                .child(self.field("cycles"))
-                .child(self.button("run-macro", "执行宏", cx, |s, _, cx| {
-                    s.serial_action("macro", cx)
-                }))
-                .child(self.field("export"))
-                .child(self.button("macro-report", "导出宏报告", cx, |s, _, cx| {
-                    s.serial_action("exportMacro", cx)
-                })),
-            "replies" => div()
-                .flex()
-                .flex_col()
-                .gap_3()
-                .child(self.editor("replies", cx))
-                .child(
-                    self.button("apply-replies", "应用自动应答", cx, |s, _, cx| {
-                        s.serial_action("replies", cx)
-                    }),
-                ),
-            "protocol" => div()
-                .flex()
-                .flex_col()
-                .gap_3()
-                .child(self.editor("protocol", cx))
-                .child(
-                    self.button("apply-protocol", "应用协议模板", cx, |s, _, cx| {
-                        s.serial_action("protocol", cx)
-                    }),
-                )
-                .child(self.field("protocol_sample"))
-                .child(self.button("decode-sample","测试接收解析",cx,|s,_,cx|{let p=s.snapshot(cx);match serde_json::from_str::<Value>(p.get("protocol")){Ok(rules)=>s.submit(Command::Protocol(json!({"operation":"decode","rules":rules,"incoming":p.get("protocol_sample")})),cx),Err(e)=>s.report(e.to_string(),cx)}}))
-                 .child(self.field("protocol_rule"))
-                .child(self.button("inspect-protocol","查看协议帧布局",cx,|s,_,cx|{let p=s.snapshot(cx);match serde_json::from_str::<Value>(p.get("protocol")){Ok(rules)=>s.submit(Command::Protocol(json!({"operation":"inspect","rules":rules,"input":p.get("command"),"incoming":p.get("protocol_sample"),"rule":p.get("protocol_rule")})),cx),Err(e)=>s.report_error(e.to_string(),cx)}}))
-                .child(self.field("command"))
-                .child(div().flex().flex_wrap().gap_1().children(self.preferences.command_history.iter().take(12).enumerate().map(|(index,text)|{let text=text.clone();native_button(("command-history",index)).label(text.clone()).on_click(cx.listener(move |s,_,w,cx|s.set("command",text.clone(),w,cx)))})))
-                .child(self.button("preview-command","预览命令编码",cx,|s,_,cx|{let p=s.snapshot(cx);match serde_json::from_str::<Value>(p.get("protocol")){Ok(rules)=>s.submit(Command::Protocol(json!({"operation":"encode","rules":rules,"input":p.get("command")})),cx),Err(e)=>s.report(e.to_string(),cx)}}))
-                .child(self.button("command", "发送协议命令", cx, |s, _, cx| {
-                    s.serial_action("command", cx)
-                })),
-            "capture" => div()
-                .flex()
-                .flex_col()
-                .gap_3()
-                .child(self.row(&["capture_path", "roll"]))
-                .child(self.button("capture-directory","选择采集目录…",cx,|s,_,cx|s.pick_capture_directory(cx)))
-                .child(self.choice("capture_format", &["txt", "csv", "bin"], window, cx))
-                .child(
-                    div()
-                        .flex()
-                        .gap_2()
-                        .child(self.button("capture", "开始日志", cx, |s, _, cx| {
-                            s.serial_action("capture", cx)
-                        }))
-                        .child(self.button("stop-capture", "停止日志", cx, |s, _, cx| {
-                            s.serial_action("stopCapture", cx)
-                        }))
-                        .child(self.button("raw", "开始原始采集", cx, |s, _, cx| {
-                            s.serial_action("raw", cx)
-                        }))
-                        .child(self.button("stop-raw", "停止原始采集", cx, |s, _, cx| {
-                            s.serial_action("stopRaw", cx)
-                        })),
-                )
-                .child(self.field("export"))
-                .child(self.button("serial-export", "导出记录", cx, |s, _, cx| {
-                    s.serial_action("export", cx)
-                })),
-            "plot" => self.plot_page(cx),
-            _ => div()
-                .flex()
-                .flex_col()
-                .gap_3()
-                .child(self.button("calculate", "计算发送校验", cx, |s, _, cx| {
-                    s.serial_action("checksum", cx)
-                }))
-                .child(self.choice(
-                    "frame_mode",
-                    &["read", "idle", "header", "tail", "fixed"],
-                    window,
-                    cx,
-                ))
-                .child(self.field("frame_value"))
-                .child(self.button("framing", "应用分帧", cx, |s, _, cx| {
-                    s.serial_action("framing", cx)
-                }))
-                .child(div().text_lg().child("Modbus RTU"))
-                .child(self.row(&["station", "register", "quantity", "timeout"]))
-                .child(self.choice(
-                    "function",
-                    &["1", "2", "3", "4", "5", "6", "15", "16"],
-                    window,
-                    cx,
-                ))
-                .child(self.field("values"))
-                .child(self.button("modbus", "生成请求", cx, |s, _, cx| {
-                    s.serial_action("modbus", cx)
-                }))
-                .child(
-                    self.button("modbus-send", "发送并接收响应", cx, |s, _, cx| {
-                        s.serial_action("modbusSend", cx)
-                    }),
-                ),
+        let at = history
+            .iter()
+            .position(|v| v == s.preferences.get("command"));
+        let next = match (at, previous) {
+            (None, true) => Some(0),
+            (None, false) => None,
+            (Some(at), true) => Some((at + 1).min(history.len() - 1)),
+            (Some(at), false) => at.checked_sub(1),
         };
+        let value = next
+            .and_then(|at| history.get(at))
+            .cloned()
+            .unwrap_or_default();
+        s.set("command", value);
+    });
+}
 
-        div()
-            .flex()
-            .flex_col()
-            .gap_3()
-            .child(body)
-            .child(self.button("cancel-job", "停止发送任务", cx, |s, _, cx| {
-                s.serial_action("cancelJob", cx)
-            }))
-            .child(Textarea::new(&self.output).h(px(120.)).readonly(true))
-            .into_any_element()
+pub(super) fn command_preview(preferences: &crate::model::Preferences) -> (String, bool) {
+    let input = preferences.get("command");
+    let rules = match serde_json::from_str::<serde_json::Value>(preferences.get("protocol")) {
+        Ok(rules) => rules,
+        Err(error) => return (error.to_string(), true),
+    };
+    let request = serde_json::json!({"operation":"encode","rules":rules,"input":input});
+    match chipdock_core::serial::program::execute(&request.to_string()) {
+        Ok(result) => match serde_json::from_str::<serde_json::Value>(&result) {
+            Ok(value) => (value["hex"].as_str().unwrap_or("").into(), false),
+            Err(error) => (error.to_string(), true),
+        },
+        Err(error) => (error.to_string(), true),
+    }
+}
+
+fn record_time(timestamp: &str) -> String {
+    chrono::DateTime::parse_from_rfc3339(timestamp).map_or_else(
+        |_| timestamp.to_owned(),
+        |date| {
+            date.with_timezone(&chrono::Local)
+                .format("%H:%M:%S%.3f")
+                .to_string()
+        },
+    )
+}
+
+fn connection_uptime(milliseconds: u64) -> String {
+    let seconds = milliseconds / 1000;
+    format!(
+        "{}:{:02}:{:02}",
+        seconds / 3600,
+        seconds / 60 % 60,
+        seconds % 60
+    )
+}
+
+fn grouped(value: u64) -> String {
+    let digits = value.to_string();
+    let mut output = String::new();
+    for (index, digit) in digits.chars().enumerate() {
+        if index > 0 && (digits.len() - index).is_multiple_of(3) {
+            output.push(',');
+        }
+        output.push(digit);
+    }
+    output
+}
+
+fn config_summary(config: &chipdock_core::serial::types::SerialConfig) -> String {
+    use chipdock_core::serial::types::Parity;
+    format!(
+        "{} · {}{}{}",
+        config.baud_rate,
+        config.data_bits,
+        match config.parity {
+            Parity::Even => "E",
+            Parity::Odd => "O",
+            _ => "N",
+        },
+        config.stop_bits
+    )
+}
+
+fn status_bar(store: Store) -> View {
+    let separator = || view().w(px(1.)).h(px(12.)).bg(hairline);
+    let status_label = move || {
+        store.read(|state| {
+            let reconnecting = state
+                .active_session()
+                .and_then(|session| session.status.as_ref())
+                .is_some_and(|status| status.reconnecting);
+            if state.serial_busy() {
+                "正在处理…"
+            } else if reconnecting {
+                "正在重连…"
+            } else if state.serial_connected() {
+                "已连接"
+            } else {
+                "未连接"
+            }
+        })
+    };
+    view()
+        .h(px(27.))
+        .px(px(14.))
+        .flex_row()
+        .items_center()
+        .gap(px(10.))
+        .border_t_1()
+        .border_color(hairline)
+        .text_size(native_caption_size)
+        .text_color(move || theme().muted_foreground)
+        .role(AccessibilityRole::Text)
+        .accessibility_value(move || {
+            let label = status_label();
+            Some(nsh_core::AccessibilityValue {
+                text: Some(
+                    store
+                        .read(|state| {
+                            let status = state
+                                .active_session()
+                                .and_then(|session| session.status.as_ref());
+                            format!(
+                                "{}、{} B、{} B",
+                                label,
+                                grouped(status.map_or(0, |status| status.rx_bytes)),
+                                grouped(status.map_or(0, |status| status.tx_bytes))
+                            )
+                        })
+                        .into(),
+                ),
+                ..Default::default()
+            })
+        })
+        .accessibility_elements_hidden(true)
+        .child(
+            view()
+                .flex_row()
+                .items_center()
+                .gap(px(6.))
+                .child(view().size(px(7.)).rounded_full().bg(move || {
+                    store.read(|state| {
+                        let status = state
+                            .active_session()
+                            .and_then(|session| session.status.as_ref());
+                        if state.serial_connected() {
+                            theme().color("success").unwrap_or(theme().primary)
+                        } else if status.is_some_and(|status| status.reconnecting) {
+                            theme().color("warning").unwrap_or(theme().primary)
+                        } else {
+                            theme().muted_foreground.opacity(0.4)
+                        }
+                    })
+                }))
+                .child(text(status_label).text_color(move || theme().foreground)),
+        )
+        .child(when(
+            move || store.read(|state| state.serial_connected()),
+            move || {
+                view()
+                    .min_w_0()
+                    .flex_row()
+                    .items_center()
+                    .gap(px(10.))
+                    .child(separator())
+                    .child(text(move || {
+                        store.read(|state| {
+                            state
+                                .active_session()
+                                .and_then(|session| session.status.as_ref())
+                                .and_then(|status| status.path.clone())
+                                .unwrap_or_default()
+                        })
+                    }))
+                    .child(separator())
+                    .child(text(move || {
+                        store.read(|state| {
+                            state
+                                .active_session()
+                                .and_then(|session| session.status.as_ref())
+                                .and_then(|status| status.config.as_ref())
+                                .map(config_summary)
+                                .or_else(|| {
+                                    crate::backend::serial_config(&state.preferences)
+                                        .ok()
+                                        .map(|config| config_summary(&config))
+                                })
+                                .unwrap_or_default()
+                        })
+                    }))
+            },
+        ))
+        .child(view().flex_1().min_w(px(8.)))
+        .child(when(
+            move || {
+                store.read(|state| {
+                    state
+                        .active_session()
+                        .and_then(|session| session.status.as_ref())
+                        .is_some_and(|status| status.logging || status.capturing)
+                })
+            },
+            move || {
+                view()
+                    .flex_row()
+                    .items_center()
+                    .gap(px(10.))
+                    .child(
+                        view()
+                            .flex_row()
+                            .items_center()
+                            .gap(px(4.))
+                            .text_color(move || theme().destructive)
+                            .child(
+                                view()
+                                    .size(px(8.))
+                                    .rounded_full()
+                                    .border_1()
+                                    .border_color(move || theme().destructive),
+                            )
+                            .child(text("采集中")),
+                    )
+                    .child(separator())
+            },
+        ))
+        .child(when(
+            move || store.read(|state| state.serial_connected()),
+            move || {
+                view()
+                    .flex_row()
+                    .items_center()
+                    .gap(px(10.))
+                    .child(view().tooltip(text("连接时长")).child(text(move || {
+                        store.read(|state| {
+                            state
+                                .active_session()
+                                .and_then(|session| session.status.as_ref())
+                                .map_or_else(String::new, |status| {
+                                    connection_uptime(status.uptime_ms)
+                                })
+                        })
+                    })))
+                    .child(separator())
+                    .child(text(move || {
+                        store.read(|state| {
+                            state
+                                .active_session()
+                                .and_then(|session| session.status.as_ref())
+                                .map_or_else(String::new, |status| {
+                                    format!(
+                                        "{} / {} B/s",
+                                        status.rx_per_second, status.tx_per_second
+                                    )
+                                })
+                        })
+                    }))
+                    .child(separator())
+            },
+        ))
+        .children([(true, "arrow-down"), (false, "arrow-up")].into_iter().map(
+            move |(receive, icon)| {
+                view()
+                    .flex_row()
+                    .items_center()
+                    .gap(px(3.))
+                    .child(icons::icon(icon).size(px(11.)))
+                    .child(text(move || {
+                        store.read(|state| {
+                            format!(
+                                "{} B",
+                                grouped(
+                                    state
+                                        .active_session()
+                                        .and_then(|session| session.status.as_ref())
+                                        .map_or(0, |status| if receive {
+                                            status.rx_bytes
+                                        } else {
+                                            status.tx_bytes
+                                        })
+                                )
+                            )
+                        })
+                    }))
+            },
+        ))
+}
+fn error_banner(store: Store) -> impl IntoElement {
+    let dismissed = signal(String::new());
+    let error = computed(move || {
+        store.read(|s| {
+            s.active_session()
+                .and_then(|s| s.status.as_ref())
+                .and_then(|s| {
+                    s.last_error
+                        .as_ref()
+                        .or(s.job_error.as_ref())
+                        .or(s.capture_error.as_ref())
+                })
+                .cloned()
+                .or_else(|| {
+                    crate::serial::search(&s.preferences)
+                        .err()
+                        .map(|error| format!("搜索表达式无效：{error}"))
+                })
+                .or_else(|| {
+                    crate::presentation::Colors::new(
+                        s.preferences.get("colors"),
+                        s.preferences.get("tx_color"),
+                    )
+                    .err()
+                    .map(|error| format!("着色规则无效：{error}"))
+                })
+                .unwrap_or_default()
+        })
+    });
+    when(
+        move || !error.get().is_empty() && error.get() != dismissed.get(),
+        move || {
+            view()
+                .p_3()
+                .flex_row()
+                .items_start()
+                .gap(px(10.))
+                .bg(move || {
+                    theme()
+                        .color("warning")
+                        .unwrap_or(theme().primary)
+                        .opacity(0.08)
+                })
+                .child(icons::icon("warning"))
+                .child(text(move || error.get()).flex_1().text_size(caption_size))
+                .child(icon_button(
+                    "close",
+                    "关闭错误提示",
+                    || false,
+                    || false,
+                    move || dismissed.set(error.get_untracked()),
+                ))
+        },
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn copy_uses_visible_sequence_selection_and_keeps_empty_selection_untouched() {
+        let row = Record {
+            id: 9,
+            time: String::new(),
+            direction: "RX",
+            bytes: 0,
+            text: String::new(),
+            color: None,
+            json: String::new(),
+        };
+        assert_eq!(
+            super::selection_text(std::slice::from_ref(&row), &[99]),
+            None
+        );
+        assert_eq!(super::selection_text(std::slice::from_ref(&row), &[]), None);
+        assert_eq!(
+            super::selection_text(std::slice::from_ref(&row), &[9]),
+            Some(String::new())
+        );
+    }
+
+    #[test]
+    fn native_status_and_time_formats() {
+        assert_eq!(super::grouped(1_234_567), "1,234,567");
+        assert_eq!(super::connection_uptime(3_661_999), "1:01:01");
+        assert_eq!(super::config_summary(&Default::default()), "115200 · 8N1");
+        assert_eq!(super::record_time("invalid"), "invalid");
+        let timestamp = chrono::DateTime::parse_from_rfc3339("2026-11-14T12:34:56.123Z").unwrap();
+        assert_eq!(
+            super::record_time("2026-11-14T12:34:56.123Z"),
+            timestamp
+                .with_timezone(&chrono::Local)
+                .format("%H:%M:%S%.3f")
+                .to_string()
+        );
+    }
+
+    #[test]
+    fn search_navigation_uses_original_sequences_and_wraps() {
+        let ids = [12, 31, 98];
+        assert_eq!(next_sequence(&ids, None, false), Some(98));
+        assert_eq!(next_sequence(&ids, Some(31), true), Some(98));
+        assert_eq!(next_sequence(&ids, Some(98), true), Some(12));
+        assert_eq!(next_sequence(&ids, Some(7), true), Some(12));
+    }
+    #[test]
+    fn search_highlight_preserves_unicode_and_native_first_match() {
+        let query = regex::Regex::new("42").unwrap();
+        assert_eq!(
+            highlight_pieces("温度42°C 42", &query),
+            vec![
+                ("温度".into(), false),
+                ("42".into(), true),
+                ("°C 42".into(), false)
+            ]
+        );
+        assert_eq!(
+            highlight_pieces("温度", &regex::Regex::new("^").unwrap()),
+            vec![("温度".into(), false)]
+        );
+    }
+    #[test]
+    fn modifier_selection_preserves_domain_ids() {
+        let ids = [12, 31, 98, 105];
+        let (selected, anchor) = select_rows(&ids, &[12], Some(12), 2, true, false);
+        assert_eq!(selected, [12, 31, 98]);
+        let (selected, _) = select_rows(&ids, &selected, anchor, 1, false, true);
+        assert_eq!(selected, [12, 98]);
     }
 }

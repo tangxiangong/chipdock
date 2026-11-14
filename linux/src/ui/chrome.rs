@@ -1,492 +1,537 @@
 use super::*;
 
-impl Workbench {
-    pub(super) fn toolbar(&self, window: &Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let serial = self.page == "serial";
-        let leading = if cx.platform_info().os == OperatingSystem::Mac {
-            95.
-        } else {
-            80.
-        };
-        // AppKit centres the principal item but never lets it cover the title.
-        let status_left =
-            ((window.viewport_size().width - px(360.)) / 2. - px(leading)).max(px(388.));
-        let dark = cx.theme().is_dark();
-        let mut bar = gpui_kit::component::TitleBar::new()
-            .h(px(52.))
-            .pl(px(leading))
-            .pr(px(9.))
-            .bg(cx.theme().background)
-            .border_b(px(0.5))
-            .border_color(hsla(0., 0., if dark { 1. } else { 0. }, 0.11))
-            .child(
-                div()
-                    .relative()
-                    .flex()
-                    .items_center()
-                    .gap(px(12.))
-                    .w_full()
-                    .child(
-                        glass(cx).w(px(221.)).justify_center().children(
-                            [("flash", "固件烧录"), ("serial", "串口连接")]
-                                .into_iter()
-                                .map(|(page, label)| {
-                                    let selected = self.page == page;
-                                    Button::new(page)
-                                        .ghost()
-                                        .w(px(73.))
-                                        .h(px(28.))
-                                        .rounded_full()
-                                        .accessibility_label(label)
-                                        .toggled(selected)
-                                        .when(selected, |b| {
-                                            b.bg(rgb(if dark { 0x484848 } else { 0xe8e8e8 }))
-                                        })
-                                        .child(div().text_size(px(13.)).child(label))
-                                        .on_click(cx.listener(move |s, _, _, cx| {
-                                            s.confirmation = None;
-                                            s.page = page;
-                                            cx.notify();
-                                        }))
-                                }),
-                        ),
-                    )
-                    .when(serial, |bar| {
-                        let shown = !self.expanded.contains("hide-connection");
-                        bar.child(
-                            glass(cx)
-                                .w(px(36.))
-                                .justify_center()
-                                .when(shown, |g| g.bg(cx.theme().primary).border_0())
-                                .child(
-                                    Button::new("sidebar-toggle")
-                                        .ghost()
-                                        .size(px(34.))
-                                        .p_0()
-                                        .rounded_full()
-                                        .text_color(if shown {
-                                            gpui_kit::white()
-                                        } else {
-                                            cx.theme().foreground.opacity(0.85)
-                                        })
-                                        .toggled(shown)
-                                        .tooltip(if shown {
-                                            "收起连接区"
-                                        } else {
-                                            "展开连接区"
-                                        })
-                                        .child(icons::icon("sidebar").size(px(18.)).flex_shrink_0())
-                                        .on_click(cx.listener(|s, _, _, cx| {
-                                            if !s.expanded.remove("hide-connection") {
-                                                s.expanded.insert("hide-connection");
-                                            }
-                                            cx.notify();
-                                        })),
-                                ),
-                        )
-                    })
-                    .child(
-                        div()
-                            .text_size(px(15.))
-                            .font_weight(FontWeight::BOLD)
-                            .text_color(cx.theme().foreground.opacity(0.7))
-                            .flex_shrink_0()
-                            .child(match self.page {
-                                "serial" => "串口连接",
-                                "flash" => "固件烧录",
-                                "profiles" => "配置与历史",
-                                _ => "ChipDock",
-                            }),
-                    )
-                    .child(div().flex_1())
-                    .when(!serial, |bar| {
-                        bar.child(
-                            glass(cx)
-                                .absolute()
-                                .left(status_left)
-                                .w(px(360.))
-                                .px_3()
-                                .justify_center()
-                                .gap(px(8.))
-                                .text_size(px(12.))
-                                .text_color(cx.theme().muted_foreground)
-                                .overflow_hidden()
-                                .children(self.activity(cx)),
-                        )
-                    })
-                    .child(if serial {
-                        self.serial_toolbar(cx)
-                    } else {
-                        self.flash_toolbar(cx)
-                    }),
-            );
-        bar = bar.on_close_window(cx.listener(|s, _, w, cx| {
-            if !s.is_busy() {
-                s.save(w, cx);
-                w.remove_window();
+pub(super) fn toolbar(store: Store, mode: Signal<&'static str>) -> View {
+    let active = control_active();
+    let window = nsh_core::element::desktop::current_window();
+    let sidebar_active = computed(move || window.state().is_none_or(|state| state.focused));
+    view()
+        .relative()
+        .z_index(1)
+        .h(px(52.))
+        .flex_shrink_0()
+        // Keep the tuned Mac geometry; other desktop backends reserve their native caption-control area.
+        .pl(move || {
+            if cfg!(target_os = "macos") {
+                px(95.)
+            } else {
+                px(80_f32.max(nsh_core::element::desktop::title_bar().left.0))
             }
-        }));
-        bar
-    }
-    /// Xcode-style activity: live progress while a probe job runs, otherwise
-    /// the latest status.
-    fn activity(&self, cx: &App) -> Vec<AnyElement> {
-        let busy = self.busy_lanes.contains(&Lane::Probe);
-        if busy && let Some(progress) = self.progress {
-            let message = without_percentage(&self.message);
-            return vec![
-                div()
-                    .min_w_0()
-                    .truncate()
-                    .child(message.to_owned())
-                    .into_any_element(),
-                div()
-                    .w(px(90.))
-                    .flex_shrink_0()
-                    .child(
-                        gpui_kit::component::progress::Progress::new("activity-progress")
-                            .value(progress * 100.),
-                    )
-                    .into_any_element(),
-                div()
-                    .min_w(px(34.))
-                    .flex_shrink_0()
-                    .text_right()
-                    .child(format!("{:.0}%", progress * 100.))
-                    .into_any_element(),
-            ];
-        }
-        let completed = self.completed && !busy;
-        let mut items = vec![];
-        if busy {
-            items.push(
-                gpui_kit::component::spinner::Spinner::new()
-                    .small()
-                    .into_any_element(),
-            );
-        }
-        if completed {
-            items.push(
-                icons::icon("check")
-                    .size(px(14.))
-                    .text_color(rgb(0x34c759))
-                    .into_any_element(),
-            );
-        }
-        items.push(
-            div()
-                .min_w_0()
-                .truncate()
-                .when(completed, |d| {
-                    d.font_weight(FontWeight::SEMIBOLD)
-                        .text_color(cx.theme().foreground)
-                })
-                .child(self.message.clone())
-                .into_any_element(),
-        );
-        items
-    }
-    fn serial_toolbar(&self, cx: &mut Context<Self>) -> AnyElement {
-        let dark = cx.theme().is_dark();
-        let direction = self.fields["direction"].read(cx).value().to_string();
-        let searchless =
-            self.terminal_rows.is_empty() || self.fields["filter"].read(cx).value().is_empty();
-        div()
-            .flex()
-            .items_center()
-            .gap(px(8.))
-            .child(
-                glass(cx).px(px(4.)).children(
-                    [("all", "全部"), ("receive", "接收"), ("send", "发送")]
-                        .into_iter()
-                        .map(|(key, label)| {
-                            let selected = direction == key;
-                            Button::new(key)
-                                .ghost()
-                                .h(px(28.))
-                                .px(px(12.))
-                                .rounded_full()
-                                .toggled(selected)
-                                .when(selected, |b| {
-                                    b.bg(rgb(if dark { 0x484848 } else { 0xe8e8e8 }))
-                                })
-                                .child(div().text_size(px(13.)).child(label))
-                                .on_click(cx.listener(move |s, _, w, cx| {
-                                    s.set("direction", key, w, cx);
-                                    s.render_terminal(w, cx);
-                                }))
-                        }),
-                ),
-            )
-            .child(
-                glass(cx).child(
-                    Button::new("search-options")
-                        .ghost()
-                        .h(px(34.))
-                        .px(px(9.))
-                        .rounded_full()
-                        .text_color(cx.theme().foreground.opacity(0.85))
-                        .tooltip("搜索选项")
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap(px(3.))
-                                .child(icons::icon("filter").size(px(18.)).flex_shrink_0())
-                                .child(icons::icon("chevron-bold").size(px(9.)).flex_shrink_0()),
-                        )
-                        .dropdown_menu({
-                            let owner = cx.entity().downgrade();
-                            let regex = self.preferences.flag("search_regex");
-                            let case = self.preferences.flag("search_case");
-                            move |mut m, _, _| {
-                                for (key, label, checked) in [
-                                    ("search_case", "区分大小写", case),
-                                    ("search_regex", "正则表达式", regex),
-                                ] {
-                                    let owner = owner.clone();
-                                    m = m.item(
-                                        PopupMenuItem::new(label).checked(checked).on_click(
-                                            move |_, w, cx| {
-                                                let _ = owner.update(cx, |s, cx| {
-                                                    s.preferences
-                                                        .flags
-                                                        .insert(key.into(), !checked);
-                                                    s.render_terminal(w, cx);
-                                                    cx.notify();
-                                                });
-                                            },
-                                        ),
-                                    );
-                                }
-                                m
-                            }
-                        }),
-                ),
-            )
-            .child(
-                glass(cx)
-                    .w(px(254.))
-                    .pl(px(12.))
-                    .pr(px(4.))
-                    .gap(px(4.))
-                    .child(
-                        icons::icon("search")
-                            .size(px(16.))
-                            .flex_shrink_0()
-                            .text_color(cx.theme().foreground.opacity(0.7)),
-                    )
-                    .child(
-                        div().flex_1().min_w_0().child(
-                            Input::new(&self.fields["filter"])
-                                .appearance(false)
-                                .text_size(px(13.))
-                                .aria_label("搜索数据"),
-                        ),
-                    )
+        })
+        .pr(move || {
+            if cfg!(target_os = "macos") {
+                px(9.)
+            } else {
+                px(9. + nsh_core::element::desktop::title_bar().right.0)
+            }
+        })
+        .flex_row()
+        .items_center()
+        .gap_3()
+        .window_drag(true)
+        .border_b_1()
+        .border_color(hairline)
+        .child(
+            glass().w(px(221.)).mr(px(-4.)).justify_center().child(
+                nsh_base::radio_group()
+                    .flex_row()
+                    .items_center()
+                    .gap_1()
                     .children(
-                        [(false, "up", "上一条命中"), (true, "down", "下一条命中")]
+                        [("flash", "固件烧录"), ("serial", "串口连接")]
                             .into_iter()
-                            .map(|(next, icon, label)| {
-                                Button::new(icon)
-                                    .ghost()
-                                    .size(px(28.))
-                                    .p_0()
+                            .map(move |(key, label)| {
+                                nsh_base::radio()
+                                    .checked(move || mode.get() == key)
+                                    .on_change(move |checked: &bool| {
+                                        if *checked {
+                                            mode.set(key);
+                                        }
+                                    })
+                                    .w(px(73.))
+                                    .h(px(28.))
+                                    .items_center()
+                                    .justify_center()
                                     .rounded_full()
-                                    .text_color(cx.theme().foreground.opacity(0.85))
-                                    .child(icons::icon(icon).size(px(16.)).flex_shrink_0())
-                                    .tooltip(label)
-                                    .disabled(searchless)
-                                    .on_click(cx.listener(move |s, _, _, cx| {
-                                        let count = s.terminal_rows.len();
-                                        if count > 0 {
-                                            let index = s.selected_record.and_then(|seq| {
-                                                s.terminal_rows
-                                                    .iter()
-                                                    .position(|r| r.sequence == seq)
-                                            });
-                                            let next_index = match index {
-                                                None if next => 0,
-                                                None => count - 1,
-                                                Some(i) if next => (i + 1) % count,
-                                                Some(i) => (i + count - 1) % count,
-                                            };
-                                            s.selected_record =
-                                                Some(s.terminal_rows[next_index].sequence);
-                                            s.preferences.flags.insert("auto_scroll".into(), false);
-                                            s.terminal_scroll
-                                                .scroll_to_item(next_index, ScrollStrategy::Center);
-                                            cx.notify();
+                                    .checked_style(|style| {
+                                        style.bg(move || theme().foreground.opacity(0.09))
+                                    })
+                                    .hover(|s| s.bg(move || theme().accent))
+                                    .focus_visible(|s| {
+                                        s.outline(px(2.)).outline_color(move || theme().ring)
+                                    })
+                                    .child(text(label).text_size(body_size).text_color(move || {
+                                        if active.get() {
+                                            theme().foreground
+                                        } else {
+                                            theme()
+                                                .color(if mode.get() == key {
+                                                    "toolbar-selection-inactive-foreground"
+                                                } else {
+                                                    "toolbar-inactive-foreground"
+                                                })
+                                                .unwrap_or(theme().muted_foreground)
                                         }
                                     }))
                             }),
                     ),
-            )
-            .into_any_element()
-    }
-    fn flash_toolbar(&self, cx: &mut Context<Self>) -> AnyElement {
-        let mac = cx.platform_info().os == OperatingSystem::Mac;
-        let errors = self.unseen_errors;
-        div()
-            .flex()
-            .items_center()
-            .gap(px(8.))
-            .child(
-                glass(cx).child(
-                    Button::new("profiles-menu")
-                        .ghost()
-                        .h(px(34.))
-                        .px(px(7.))
-                        .rounded_full()
-                        .text_color(cx.theme().foreground.opacity(0.85))
-                        .accessibility_label("配置")
-                        .tooltip("存储或载入配置")
-                        .disabled(self.is_busy())
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap(px(3.))
-                                .child(icons::icon("bookmark").size(px(19.)))
-                                .child(icons::icon("chevron-bold").size(px(9.))),
-                        )
-                        .dropdown_menu({
-                            let owner = cx.entity().downgrade();
-                            let profiles = self.preferences.profiles.clone();
-                            move |mut menu, w, cx| {
-                                let save = owner.clone();
-                                menu = menu.item(PopupMenuItem::new("存储当前配置…").on_click(
-                                    move |_, w, cx| {
-                                        let _ = save.update(cx, |s, cx| s.open_save_profile(w, cx));
-                                    },
-                                ));
-                                if profiles.is_empty() {
-                                    return menu;
-                                }
-                                menu = menu.separator();
-                                for (name, p) in &profiles {
-                                    let owner = owner.clone();
-                                    let p = p.clone();
-                                    menu = menu.item(PopupMenuItem::new(name.clone()).on_click(
-                                        move |_, w, cx| {
-                                            let _ = owner
-                                                .update(cx, |s, cx| s.apply_profile(&p, w, cx));
-                                        },
-                                    ));
-                                }
-                                let names = profiles.keys().cloned().collect::<Vec<_>>();
-                                let owner = owner.clone();
-                                menu.separator().submenu(
-                                    "删除配置",
-                                    w,
-                                    cx,
-                                    move |mut menu, _, _| {
-                                        for name in &names {
-                                            let owner = owner.clone();
-                                            let name = name.clone();
-                                            menu = menu.item(
-                                                PopupMenuItem::new(name.clone()).on_click(
-                                                    move |_, w, cx| {
-                                                        let _ = owner.update(cx, |s, cx| {
-                                                            s.preferences.profiles.remove(&name);
-                                                            s.save(w, cx);
-                                                        });
-                                                    },
-                                                ),
-                                            );
-                                        }
-                                        menu
-                                    },
-                                )
-                            }
-                        }),
-                ),
-            )
-            .child(
-                glass(cx)
+            ),
+        )
+        .child(when(
+            move || mode.get() == "serial",
+            move || {
+                glass()
+                    .w(px(36.))
+                    .justify_center()
+                    .bg(move || {
+                        if store.sidebar.get() && sidebar_active.get() {
+                            theme().primary
+                        } else if store.sidebar.get() {
+                            theme()
+                                .color("toolbar-selection-inactive")
+                                .unwrap_or(theme().secondary)
+                        } else {
+                            theme().background.opacity(0.)
+                        }
+                    })
                     .child(
-                        div()
-                            .relative()
-                            .child(
-                                toolbar_icon("logs-window", "logs", cx)
-                                    .tooltip(match (errors, mac) {
-                                        (0, true) => "日志（⌘J）".to_owned(),
-                                        (0, false) => "日志（Ctrl+J）".to_owned(),
-                                        (n, true) => format!("{n} 条新错误（⌘J）"),
-                                        (n, false) => format!("{n} 条新错误（Ctrl+J）"),
-                                    })
-                                    .on_click(cx.listener(|s, _, _, cx| {
-                                        if let Err(e) = s.open_panel(auxiliary::Panel::Logs, cx) {
-                                            s.report_error(e.to_string(), cx);
-                                        }
-                                    })),
-                            )
-                            .when(errors > 0, |d| {
-                                d.child(
-                                    div()
-                                        .absolute()
-                                        .top(px(2.))
-                                        .right(px(2.))
-                                        .min_w(px(16.))
-                                        .h(px(16.))
-                                        .px(px(4.))
-                                        .rounded_full()
-                                        .bg(rgb(0xff3b30))
-                                        .text_color(gpui_kit::white())
-                                        .text_size(px(10.))
-                                        .font_weight(FontWeight::SEMIBOLD)
-                                        .flex()
-                                        .items_center()
-                                        .justify_center()
-                                        .child(errors.to_string()),
-                                )
-                            }),
+                        nsh_base::checkbox()
+                            .checked(move || store.sidebar.get())
+                            .indicator_style(|style| style.hidden())
+                            .on_change(move |checked: &bool| store.sidebar.set(*checked))
+                            .accessibility_label("连接区")
+                            .size(px(34.))
+                            .p_0()
+                            .items_center()
+                            .justify_center()
+                            .rounded_full()
+                            .text_color(move || {
+                                if store.sidebar.get() && sidebar_active.get() {
+                                    theme().primary_foreground
+                                } else if store.sidebar.get() {
+                                    theme()
+                                        .color("toolbar-sidebar-inactive")
+                                        .unwrap_or(theme().muted_foreground)
+                                } else {
+                                    if active.get() {
+                                        theme().foreground.opacity(0.85)
+                                    } else {
+                                        theme()
+                                            .color("toolbar-sidebar-inactive")
+                                            .unwrap_or(theme().muted_foreground)
+                                    }
+                                }
+                            })
+                            .focus_visible(|s| {
+                                s.outline(px(2.)).outline_color(move || theme().ring)
+                            })
+                            .child(icons::icon("sidebar").size(px(18.))),
+                    )
+            },
+        ))
+        .child(
+            text(move || {
+                if mode.get() == "flash" {
+                    "固件烧录"
+                } else {
+                    "串口连接"
+                }
+            })
+            .pl(px(1.))
+            .text_size(px(15.))
+            .font_weight(FontWeight::BOLD)
+            .text_color(move || {
+                if active.get() {
+                    theme().foreground
+                } else {
+                    theme()
+                        .color("toolbar-title-inactive")
+                        .unwrap_or(theme().muted_foreground)
+                }
+            }),
+        )
+        .child(view().flex_1())
+        .child(when(move || mode.get() == "flash", move || activity(store)))
+        .child(
+            when(move || mode.get() == "flash", move || flash_toolbar(store))
+                .otherwise(move || serial_toolbar(store)),
+        )
+}
+fn activity(store: Store) -> View {
+    glass()
+        .absolute()
+        .top(px(8.))
+        .left(move || px(((nsh_core::element::window().width.0 - 360.) / 2.).max(483.)))
+        .w(px(360.))
+        .px_3()
+        .justify_center()
+        .gap_2()
+        .child(when(
+            move || store.read(|s| s.progress.is_some()),
+            move || {
+                nsh_base::progress()
+                    .value(move || store.read(|s| s.progress.unwrap_or(0.) * 100.))
+                    .w(px(90.))
+                    .accessibility_label("操作进度")
+                    .track_class("h-1 bg-muted rounded-full")
+                    .indicator_class("h-1 bg-primary rounded-full")
+            },
+        ))
+        .child(
+            text(move || store.read(|s| s.message.clone()))
+                .text_size(caption_size)
+                .text_color(move || theme().muted_foreground),
+        )
+}
+fn flash_toolbar(store: Store) -> View {
+    use nsh_core::element::desktop::MenuItem;
+    view()
+        .flex_row()
+        .items_center()
+        .gap_2()
+        .child(
+            glass().child(native_menu_disabled(
+                view()
+                    .w(px(42.))
+                    .h(px(34.))
+                    .flex_row()
+                    .gap_1()
+                    .items_center()
+                    .justify_center()
+                    .child(
+                        icons::icon("bookmark")
+                            .size(px(20.))
+                            .scale_x(0.95)
+                            .translate_x(px(0.75))
+                            .translate_y(px(1.5)),
                     )
                     .child(
-                        toolbar_icon("memory-window", "memory", cx)
-                            .tooltip(if mac {
-                                "内存（⌥⌘M）"
-                            } else {
-                                "内存（Ctrl+Alt+M）"
-                            })
-                            .on_click(cx.listener(|s, _, _, cx| {
-                                if let Err(e) = s.open_panel(auxiliary::Panel::Memory, cx) {
-                                    s.report_error(e.to_string(), cx);
-                                }
-                            })),
-                    ),
-            )
-            .into_any_element()
-    }
+                        icons::icon("toolbar-down")
+                            .size(px(8.))
+                            .translate_x(px(-1.))
+                            .translate_y(px(1.)),
+                    )
+                    .label("配置")
+                    .tooltip(text("存储或载入配置").text_size(caption_size)),
+                move || !super::commands::probe_idle(store),
+                move || {
+                    let mut items = vec![
+                        MenuItem::new("存储当前配置…")
+                            .on_select(move || auxiliary::open(store, auxiliary::Panel::Profiles)),
+                    ];
+                    let profiles = store.read(|state| {
+                        state
+                            .preferences
+                            .profiles
+                            .keys()
+                            .cloned()
+                            .collect::<Vec<_>>()
+                    });
+                    if !profiles.is_empty() {
+                        items.push(MenuItem::separator());
+                        items.extend(profiles.iter().map(|name| {
+                            let name = name.clone();
+                            MenuItem::new(name.clone())
+                                .on_select(move || store.change(|state| state.apply_profile(&name)))
+                        }));
+                        items.push(MenuItem::separator());
+                        items.push(MenuItem::submenu(
+                            "删除配置",
+                            profiles.into_iter().map(|name| {
+                                MenuItem::new(name.clone()).on_select(move || {
+                                    super::commands::remove_profile(store, &name)
+                                })
+                            }),
+                        ));
+                    }
+                    items
+                },
+            )),
+        )
+        .child(glass().child(logs_control(store)).child(toolbar_icon(
+            "memory",
+            "内存（⌥⌘M）",
+            || false,
+            || false,
+            move || {
+                if !store.modal.get_untracked() {
+                    super::commands::toggle_panel(store, "memory", auxiliary::Panel::Memory);
+                }
+            },
+        )))
 }
 
-/// Drops a trailing "（45%）" that duplicates the progress bar.
-fn without_percentage(message: &str) -> &str {
-    let trimmed = message.trim_end();
-    let Some(body) = trimmed.strip_suffix(['）', ')']) else {
-        return message;
-    };
-    let Some(open) = body.rfind(['（', '(']) else {
-        return message;
-    };
-    let digits = &body[open..].trim_start_matches(['（', '(']);
-    match digits.strip_suffix('%') {
-        Some(n) if !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()) => {
-            body[..open].trim_end()
-        }
-        _ => message,
-    }
+fn logs_control(store: Store) -> View {
+    let active = control_active();
+    view()
+        .relative()
+        .w(px(38.))
+        .h(px(34.))
+        .role(AccessibilityRole::Button)
+        .focusable(true)
+        .label("日志")
+        .accessibility_value(move || {
+            let count = store.read(|state| state.unseen_errors);
+            (count > 0).then(|| nsh_core::AccessibilityValue {
+                text: Some(count.to_string().into()),
+                ..Default::default()
+            })
+        })
+        .tooltip(text(move || {
+            let count = store.read(|state| state.unseen_errors);
+            if count > 0 {
+                format!("{count} 条新错误（⌘J）")
+            } else {
+                "日志（⌘J）".into()
+            }
+        }))
+        .on_press(move |_: &()| {
+            if !store.modal.get_untracked() {
+                super::commands::toggle_panel(store, "logs", auxiliary::Panel::Logs);
+            }
+        })
+        .items_center()
+        .justify_center()
+        .rounded_full()
+        .text_color(move || {
+            if active.get() {
+                theme().foreground
+            } else {
+                theme().muted_foreground
+            }
+        })
+        .hover(|style| style.bg(move || theme().accent))
+        .active(|style| style.bg(move || theme().muted))
+        .focus_visible(|style| style.outline(px(2.)).outline_color(move || theme().ring))
+        .child(
+            icons::icon("logs")
+                .size(px(24.))
+                .scale_x(33. / 34.)
+                .scale_y(0.875)
+                .translate_x(px(1.25)),
+        )
+        .child(when(
+            move || store.read(|state| state.unseen_errors > 0),
+            move || {
+                view()
+                    .absolute()
+                    .right(px(1.))
+                    .top(px(-1.))
+                    .min_w(px(12.))
+                    .h(px(12.))
+                    .px(px(2.))
+                    .items_center()
+                    .justify_center()
+                    .rounded_full()
+                    .bg(move || {
+                        theme()
+                            .color("notification-badge")
+                            .unwrap_or(theme().destructive)
+                    })
+                    .text_color(move || theme().primary_foreground)
+                    .accessibility_elements_hidden(true)
+                    .child(
+                        text(move || store.read(|state| state.unseen_errors.to_string()))
+                            .text_size(px(8.))
+                            .font_weight(FontWeight::SEMIBOLD),
+                    )
+            },
+        ))
 }
 
-#[cfg(test)]
-mod tests {
-    use super::without_percentage;
+fn serial_toolbar(store: Store) -> View {
+    let active = control_active();
+    let narrow = computed(|| nsh_core::element::window().width.0 < 997.);
+    view()
+        .style_with(move |style| {
+            if narrow.get() {
+                style.absolute().left(px(528.)).right(px(9.)).top(px(8.))
+            } else {
+                style
+            }
+        })
+        .flex_row()
+        .items_center()
+        .gap_2()
+        .child(
+            glass().child(
+                nsh_base::radio_group().flex_row().items_center().children(
+                    [("all", "全部"), ("receive", "接收"), ("send", "发送")]
+                        .into_iter()
+                        .map(move |(key, label)| {
+                            nsh_base::radio()
+                                .checked(move || store.field("direction") == key)
+                                .on_change(move |checked: &bool| {
+                                    if *checked {
+                                        store.change(|s| s.set("direction", key.into()));
+                                    }
+                                })
+                                .w(px(49.))
+                                .h(px(28.))
+                                .p_0()
+                                .items_center()
+                                .justify_center()
+                                .rounded_full()
+                                .checked_style(|s| s.bg(move || theme().foreground.opacity(0.09)))
+                                .hover(|s| s.bg(move || theme().accent))
+                                .focus_visible(|s| {
+                                    s.outline(px(2.)).outline_color(move || theme().ring)
+                                })
+                                .child(text(label).text_size(body_size).text_color(move || {
+                                    if active.get() {
+                                        theme().foreground
+                                    } else {
+                                        theme()
+                                            .color(if store.field("direction") == key {
+                                                "toolbar-selection-inactive-foreground"
+                                            } else {
+                                                "toolbar-inactive-foreground"
+                                            })
+                                            .unwrap_or(theme().muted_foreground)
+                                    }
+                                }))
+                        }),
+                ),
+            ),
+        )
+        .child(
+            glass().child(native_menu(
+                view()
+                    .w(px(45.))
+                    .h(px(36.))
+                    .p_0()
+                    .rounded_full()
+                    .flex_row()
+                    .gap(px(3.))
+                    .items_center()
+                    .justify_center()
+                    .text_color(move || {
+                        if active.get() {
+                            theme().foreground
+                        } else {
+                            theme()
+                                .color("toolbar-menu-inactive")
+                                .unwrap_or(theme().muted_foreground)
+                        }
+                    })
+                    .label("搜索选项")
+                    .child(icons::icon("filter").size(px(18.)))
+                    .child(icons::icon("down").size(px(9.))),
+                move || {
+                    vec![
+                        native_toggle(store, "search_case", "区分大小写"),
+                        native_toggle(store, "search_regex", "正则表达式"),
+                    ]
+                },
+            )),
+        )
+        .child(dynamic(move || {
+            if narrow.get() {
+                view()
+                    .flex_1()
+                    .flex_row()
+                    .items_center()
+                    .justify_end()
+                    .child(
+                        glass()
+                            .w(px(36.))
+                            .justify_center()
+                            .child(native_toolbar_menu(
+                                view()
+                                    .size(px(36.))
+                                    .flex_row()
+                                    .items_center()
+                                    .justify_center()
+                                    .rounded_full()
+                                    .gap(px(-5.))
+                                    .text_color(move || {
+                                        if active.get() {
+                                            theme().foreground
+                                        } else {
+                                            theme()
+                                                .color("toolbar-inactive-foreground")
+                                                .unwrap_or(theme().muted_foreground)
+                                        }
+                                    })
+                                    .label("更多工具栏项目")
+                                    .child(icons::icon("right").size(px(11.)))
+                                    .child(icons::icon("right").size(px(11.))),
+                                move || {
+                                    vec![
+                                        nsh_core::element::desktop::MenuItem::new("上一条命中")
+                                            .disabled(!can_navigate(store))
+                                            .on_select(move || {
+                                                super::serial::navigate(store, false)
+                                            }),
+                                        nsh_core::element::desktop::MenuItem::new("下一条命中")
+                                            .disabled(!can_navigate(store))
+                                            .on_select(move || {
+                                                super::serial::navigate(store, true)
+                                            }),
+                                    ]
+                                },
+                            )),
+                    )
+                    .into_element()
+            } else {
+                glass()
+                    .w(px(254.))
+                    .ml(px(-2.))
+                    .pl(px(2.))
+                    .gap(px(0.))
+                    .child(
+                        search_field(
+                            "搜索数据",
+                            move || store.field("filter"),
+                            move |value: &str| store.change(|s| s.set("filter", value.into())),
+                            store.search,
+                        )
+                        .w(px(180.)),
+                    )
+                    .child(search_navigation(store, false))
+                    .child(search_navigation(store, true))
+                    .into_element()
+            }
+        }))
+}
 
-    #[test]
-    fn progress_message_drops_only_a_trailing_percentage() {
-        assert_eq!(without_percentage("正在写入（45%）"), "正在写入");
-        assert_eq!(without_percentage("Programming (7%)"), "Programming");
-        assert_eq!(without_percentage("正在写入（扇区）"), "正在写入（扇区）");
-        assert_eq!(without_percentage("准备就绪"), "准备就绪");
-    }
+fn can_navigate(store: Store) -> bool {
+    !store.field("filter").is_empty()
+        && store.read(|state| {
+            state.active_session().is_some_and(|session| {
+                crate::presentation::filtered(session.records(), &state.preferences)
+                    .is_ok_and(|rows| !rows.is_empty())
+            })
+        })
+}
+
+fn search_navigation(store: Store, next: bool) -> impl IntoElement {
+    let disabled = move || {
+        store.field("filter").is_empty()
+            || store.read(|s| {
+                s.active_session().is_none_or(|session| {
+                    crate::presentation::filtered(session.records(), &s.preferences)
+                        .map_or(true, |rows| rows.is_empty())
+                })
+            })
+    };
+    nsh_base::button()
+        .disabled(disabled)
+        .on_press(move || super::serial::navigate(store, next))
+        .accessibility_label(if next {
+            "下一条命中"
+        } else {
+            "上一条命中"
+        })
+        .w(px(36.))
+        .h(px(28.))
+        .p_0()
+        .rounded_full()
+        .items_center()
+        .justify_center()
+        .text_color(move || theme().foreground.opacity(0.85))
+        .disabled_style(|view| view.opacity(0.35))
+        .hover(|view| view.bg(move || theme().accent))
+        .active(|view| view.bg(move || theme().muted))
+        .focus_visible(|view| view.outline(px(2.)).outline_color(move || theme().ring))
+        .child(icons::icon(if next { "down" } else { "up" }).size(px(16.)))
 }

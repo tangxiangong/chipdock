@@ -9,12 +9,12 @@ validate_binary "$test_dir/binary" linux x86_64
 if validate_binary "$test_dir/binary" linux aarch64; then exit 1; fi
 if validate_binary "$test_dir/binary" macos x86_64; then exit 1; fi
 stage_linux "$test_dir/portable" "$test_dir/binary"
-install -m 755 "$gpui_repo/linux/install.sh" "$test_dir/portable/install.sh"
+install -m 755 "$desktop_repo/linux/install.sh" "$test_dir/portable/install.sh"
 install_home="$test_dir/user space \"quote\" \$dollar \`tick\` 100% \\slash"
 HOME="$install_home" XDG_DATA_HOME="$test_dir/xdg data" bash "$test_dir/portable/install.sh"
 cmp "$test_dir/binary" "$install_home/.local/bin/ChipDock"
-cmp "$gpui_repo/windows/ChipDock/Assets/ChipDock.png" "$test_dir/xdg data/icons/hicolor/256x256/apps/$linux_app_id.png"
-cmp "$gpui_repo/assets/app-icons/ChipDock.icon/Assets/AppIcon.svg" "$test_dir/xdg data/icons/hicolor/scalable/apps/$linux_app_id.svg"
+cmp "$desktop_repo/windows/ChipDock/Assets/ChipDock.png" "$test_dir/xdg data/icons/hicolor/256x256/apps/$linux_app_id.png"
+cmp "$desktop_repo/assets/app-icons/ChipDock.icon/Assets/AppIcon.svg" "$test_dir/xdg data/icons/hicolor/scalable/apps/$linux_app_id.svg"
 desktop="$test_dir/xdg data/applications/$linux_app_id.desktop"
 grep -Fx "Icon=$linux_app_id" "$desktop"
 grep -Fx "StartupWMClass=$linux_app_id" "$desktop"
@@ -33,25 +33,53 @@ test ! -e "$legacy_desktop"
 test ! -e "$legacy_binary"
 cmp "$test_dir/binary" "$install_home/.local/bin/ChipDock"
 if HOME="$install_home" XDG_DATA_HOME=relative bash "$test_dir/portable/install.sh"; then exit 1; fi
-echo 'Packaging and user installer logic passed'
+# Exercise the build-to-packager handoff without compiling or launching anything.
+mkdir "$test_dir/tools"
+cat > "$test_dir/tools/cargo" <<'EOF'
+#!/bin/bash
+case "$1" in
+  build)
+    printf '%s\n' '{"reason":"compiler-artifact","target":{"name":"dependency"},"executable":null}'
+    printf '%s\n' '{"reason":"compiler-artifact","target":{"name":"ChipDock"},"executable":"/private/tmp/shared cargo output/ChipDock"}'
+    ;;
+  pkgid) printf '%s\n' 'path+file:///workspace/linux#chipdock-nsh@0.3.0' ;;
+  *) exit 1 ;;
+esac
+EOF
+cat > "$test_dir/tools/bash" <<'EOF'
+#!/bin/bash
+[[ "$1" == linux/package.sh ]] || exit 1
+printf '%s\n' "$@" > "$NSH_BUILD_CAPTURE"
+EOF
+chmod +x "$test_dir/tools/cargo" "$test_dir/tools/bash"
+PATH="$test_dir/tools:$PATH" SOURCE_DATE_EPOCH=0 CARGO_TARGET_DIR="$test_dir/ignored target" \
+  CARGO_BUILD_TARGET=aarch64-apple-darwin OUTPUT_DIR="$test_dir/output" \
+  NSH_BUILD_CAPTURE="$test_dir/handoff" /bin/bash "$desktop_repo/linux/build.sh"
+test "$(sed -n '2p' "$test_dir/handoff")" == '/private/tmp/shared cargo output/ChipDock'
+test "$(sed -n '3p' "$test_dir/handoff")" == 0.3.0
+test "$(sed -n '4p' "$test_dir/handoff")" == aarch64-apple-darwin
+test "$(sed -n '5p' "$test_dir/handoff")" == "$test_dir/output"
+echo 'Packaging, user installer and Cargo artifact handoff logic passed'
 
 if [[ "$#" == 0 ]]; then exit 0; fi
 [[ "$#" == 2 && "$(uname -s)" == Linux ]]
 output="$(cd "$1" && pwd)"
 arch="$2"
-package_id="$(cd "$gpui_repo" && cargo pkgid --locked -p chipdock-gpui)"
+package_id="$(cd "$desktop_repo" && cargo pkgid --locked -p chipdock-nsh)"
 version="${package_id##*@}"
 name="ChipDock-$version-linux-$arch"
 case "$arch" in x86_64) deb_arch=amd64 ;; aarch64) deb_arch=arm64 ;; *) exit 1 ;; esac
 test "$(dpkg-deb -f "$output/$name.deb" Package)" == chipdock
 test "$(dpkg-deb -f "$output/$name.deb" Version)" == "$version"
 test "$(dpkg-deb -f "$output/$name.deb" Architecture)" == "$deb_arch"
-dpkg-deb -f "$output/$name.deb" Depends | grep -F libvulkan1
+dpkg-deb -f "$output/$name.deb" Depends | grep -F 'libgtk-4-1 (>= 4.14)'
+dpkg-deb -f "$output/$name.deb" Depends | grep -F gstreamer1.0-plugins-base
 for field in Provides Conflicts Replaces; do
   test "$(dpkg-deb -f "$output/$name.deb" "$field")" == chipdock-gpui
 done
 test "$(rpm -qp --queryformat '%{NAME} %{VERSION} %{ARCH}' "$output/$name.rpm")" == "ChipDock $version $arch"
-rpm -qp --requires "$output/$name.rpm" | grep -F 'libvulkan.so.1()(64bit)'
+rpm -qp --requires "$output/$name.rpm" | grep -Fx 'gtk4 >= 4.14'
+rpm -qp --requires "$output/$name.rpm" | grep -Fx gstreamer1-plugins-base
 rpm -qp --obsoletes "$output/$name.rpm" | grep -Fx "chipdock-gpui <= $version-1"
 dpkg-deb -x "$output/$name.deb" "$test_dir/deb"
 mkdir "$test_dir/rpm" "$test_dir/archive"
@@ -63,8 +91,8 @@ for prefix in "$test_dir/deb/usr" "$test_dir/rpm/usr" "$test_dir/archive/$name";
   test ! -e "$prefix/bin/chipdock-gpui"
   desktop-file-validate "$prefix/share/applications/$linux_app_id.desktop"
   grep -Fx 'Exec=ChipDock %f' "$prefix/share/applications/$linux_app_id.desktop"
-  cmp "$gpui_repo/windows/ChipDock/Assets/ChipDock.png" "$prefix/share/icons/hicolor/256x256/apps/$linux_app_id.png"
-  cmp "$gpui_repo/assets/app-icons/ChipDock.icon/Assets/AppIcon.svg" "$prefix/share/icons/hicolor/scalable/apps/$linux_app_id.svg"
+  cmp "$desktop_repo/windows/ChipDock/Assets/ChipDock.png" "$prefix/share/icons/hicolor/256x256/apps/$linux_app_id.png"
+  cmp "$desktop_repo/assets/app-icons/ChipDock.icon/Assets/AppIcon.svg" "$prefix/share/icons/hicolor/scalable/apps/$linux_app_id.svg"
   test -s "$prefix/share/doc/chipdock/LICENSE-MIT"
   test -s "$prefix/share/doc/chipdock/LICENSE-APACHE"
 done

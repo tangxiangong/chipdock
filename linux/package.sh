@@ -2,7 +2,7 @@
 set -euo pipefail
 umask 022
 
-gpui_repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+desktop_repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 linux_app_id=com.xiaoyu.chipdock
 
 validate_binary() {
@@ -23,10 +23,10 @@ stage_linux() {
     "$prefix/share/icons/hicolor/256x256/apps" "$prefix/share/icons/hicolor/scalable/apps" \
     "$prefix/share/doc/chipdock"
   install -m 755 "$binary" "$prefix/bin/ChipDock"
-  install -m 644 "$gpui_repo/linux/ChipDock.desktop" "$prefix/share/applications/$linux_app_id.desktop"
-  install -m 644 "$gpui_repo/windows/ChipDock/Assets/ChipDock.png" "$prefix/share/icons/hicolor/256x256/apps/$linux_app_id.png"
-  install -m 644 "$gpui_repo/assets/app-icons/ChipDock.icon/Assets/AppIcon.svg" "$prefix/share/icons/hicolor/scalable/apps/$linux_app_id.svg"
-  install -m 644 "$gpui_repo/LICENSE-MIT" "$gpui_repo/LICENSE-APACHE" "$gpui_repo/NOTICE" "$prefix/share/doc/chipdock/"
+  install -m 644 "$desktop_repo/linux/ChipDock.desktop" "$prefix/share/applications/$linux_app_id.desktop"
+  install -m 644 "$desktop_repo/windows/ChipDock/Assets/ChipDock.png" "$prefix/share/icons/hicolor/256x256/apps/$linux_app_id.png"
+  install -m 644 "$desktop_repo/assets/app-icons/ChipDock.icon/Assets/AppIcon.svg" "$prefix/share/icons/hicolor/scalable/apps/$linux_app_id.svg"
+  install -m 644 "$desktop_repo/LICENSE-MIT" "$desktop_repo/LICENSE-APACHE" "$desktop_repo/NOTICE" "$prefix/share/doc/chipdock/"
 }
 
 package_linux() {
@@ -36,8 +36,8 @@ package_linux() {
   top="$work/rpm"
   case "$arch" in x86_64) deb_arch=amd64 ;; aarch64) deb_arch=arm64 ;; esac
   stage_linux "$work/$name" "$binary"
-  install -m 755 "$gpui_repo/linux/install.sh" "$work/$name/install.sh"
-  install -m 644 "$gpui_repo/linux/README.md" "$work/$name/README.md"
+  install -m 755 "$desktop_repo/linux/install.sh" "$work/$name/install.sh"
+  install -m 644 "$desktop_repo/linux/README.md" "$work/$name/README.md"
   tar --sort=name --mtime="@${SOURCE_DATE_EPOCH:-0}" --owner=0 --group=0 --numeric-owner \
     -cf - -C "$work" "$name" | gzip -n > "$output/$name.tar.gz"
   install -m 755 "$binary" "$output/$name"
@@ -69,8 +69,8 @@ EOF
   dependencies="$(cd "$work" && dpkg-shlibdeps -O "$payload/usr/bin/ChipDock")"
   dependencies="$(sed -n 's/^shlibs:Depends=//p' <<< "$dependencies")"
   test -n "$dependencies"
-  # These libraries are also loaded dynamically and may be absent from shlibdeps output.
-  printf 'Depends: %s, libvulkan1, libfontconfig1, libwayland-client0, libxkbcommon-x11-0, libx11-xcb1, hicolor-icon-theme\n' "$dependencies" >> "$payload/DEBIAN/control"
+  # GTK 4.14 is the NSH API baseline; media plugins are discovered at runtime.
+  printf 'Depends: %s, libgtk-4-1 (>= 4.14), gstreamer1.0-plugins-base, hicolor-icon-theme\n' "$dependencies" >> "$payload/DEBIAN/control"
   (cd "$payload" && find usr -type f -print0 | LC_ALL=C sort -z | xargs -0 md5sum) > "$payload/DEBIAN/md5sums"
   dpkg-deb --root-owner-group --build "$payload" "$output/$name.deb"
   rm -r "$payload/DEBIAN"
@@ -88,8 +88,8 @@ Summary: Firmware programming and serial workbench
 License: MIT OR Apache-2.0
 URL: https://github.com/tangxiangong/chipdock
 BuildArch: $arch
-Requires: libvulkan.so.1()(64bit), libfontconfig.so.1()(64bit)
-Requires: libwayland-client.so.0()(64bit), libxkbcommon-x11.so.0()(64bit), libX11-xcb.so.1()(64bit)
+Requires: gtk4 >= 4.14
+Requires: gstreamer1-plugins-base
 Requires: hicolor-icon-theme
 Provides: chipdock-gpui = %{version}-%{release}
 Obsoletes: chipdock-gpui <= %{version}-%{release}
@@ -118,18 +118,9 @@ EOF
 
 package_macos() {
   local binary="$1" version="$2" output="$3" work="$4"
-  local bundle="$work/ChipDock.app" bundle_id=com.xiaoyu.chipdock.gpui size scale suffix pixels
-  mkdir -p "$bundle/Contents/MacOS" "$bundle/Contents/Resources" "$work/ChipDock.iconset"
+  local bundle="$work/ChipDock.app" bundle_id=com.xiaoyu.chipdock.gpui
+  mkdir -p "$bundle/Contents/MacOS" "$bundle/Contents/Resources"
   install -m 755 "$binary" "$bundle/Contents/MacOS/ChipDock"
-  for size in 16 32 128 256 512; do
-    for scale in 1 2; do
-      suffix=""; [[ "$scale" == 1 ]] || suffix=@2x
-      pixels=$((size * scale))
-      sips -z "$pixels" "$pixels" "$gpui_repo/windows/ChipDock/Assets/ChipDock.png" \
-        --out "$work/ChipDock.iconset/icon_${size}x$size$suffix.png" >/dev/null
-    done
-  done
-  iconutil -c icns "$work/ChipDock.iconset" -o "$bundle/Contents/Resources/ChipDock.icns"
   cat > "$bundle/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -137,8 +128,10 @@ package_macos() {
 <key>CFBundleIdentifier</key><string>$bundle_id</string>
 <key>CFBundleName</key><string>ChipDock</string>
 <key>CFBundleDisplayName</key><string>ChipDock</string>
+<key>CFBundleDevelopmentRegion</key><string>zh-Hans</string>
 <key>CFBundleExecutable</key><string>ChipDock</string>
-<key>CFBundleIconFile</key><string>ChipDock.icns</string>
+<key>CFBundleIconName</key><string>ChipDock</string>
+<key>CFBundleIconFile</key><string>ChipDock</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleShortVersionString</key><string>$version</string>
 <key>CFBundleVersion</key><string>$version</string>
@@ -146,6 +139,7 @@ package_macos() {
 <key>NSHighResolutionCapable</key><true/>
 </dict></plist>
 EOF
+  bash "$desktop_repo/linux/build-macos-assets.sh" "$work/macos-assets" "$bundle"
   plutil -lint "$bundle/Contents/Info.plist"
   codesign --force --sign - "$bundle"
   codesign --verify --strict "$bundle"
@@ -159,7 +153,7 @@ EOF
   cp -R "$bundle" "$output/"
 }
 
-package_gpui() {
+package_desktop() {
   if [[ "$#" != 4 ]]; then
     echo 'Usage: package.sh <binary> <version> <target-triple> <output-directory>' >&2
     return 1
@@ -193,4 +187,4 @@ package_gpui() {
   echo "Packaged ChipDock $version for $platform-$arch: $output"
 }
 
-if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then package_gpui "$@"; fi
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then package_desktop "$@"; fi
