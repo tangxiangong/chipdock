@@ -44,29 +44,58 @@ ihex = "3.0"
 interoptopus = "0.16"
 interoptopus_csharp = "0.16"
 libc = "0.2"
-nsh-core = "=0.5.1"
-nsh-base = { version = "=0.5.1", default-features = false, features = [
+nsh-core = "0.6"
+nsh-base = { version = "0.6", default-features = false, features = [
     "editor",
     "plot",
 ] }
-nsh-platform-macos = { version = "=0.5.1", default-features = false, features = [
+nsh-platform-macos = { version = "0.6", default-features = false, features = [
     "editor",
     "plot",
 ] }
-nsh-platform-linux = { version = "=0.5.1", default-features = false, features = [
+nsh-platform-linux = { version = "0.6", default-features = false, features = [
     "editor",
     "plot",
 ] }
-nsh-platform-windows = { version = "=0.5.1", default-features = false, features = [
+nsh-platform-windows = { version = "0.6", default-features = false, features = [
     "editor",
     "plot",
 ] }
 nusb = "0.2"
-object = "0.40"
-objc2 = { version = "0.6.5", default-features = false, features = ["std"] }
-objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSApplication", "NSButton", "NSControl", "NSMenu", "NSMenuItem", "NSFont", "NSImage", "NSResponder", "NSWindow", "NSPasteboard", "NSAccessibilityProtocols", "NSTextField", "NSTextView", "NSView", "NSSavePanel", "NSOpenPanel", "NSPopUpButton", "objc2-uniform-type-identifiers"] }
-objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSObject", "NSNotification", "NSString"] }
-objc2-uniform-type-identifiers = { version = "0.3.2", default-features = false, features = ["std", "UTType", "UTCoreTypes"] }
+object = "0.41"
+objc2 = { version = "0.6", default-features = false, features = ["std"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = [
+    "std",
+    "NSApplication",
+    "NSButton",
+    "NSControl",
+    "NSMenu",
+    "NSMenuItem",
+    "NSFont",
+    "NSImage",
+    "NSResponder",
+    "NSWindow",
+    "NSPasteboard",
+    "NSAccessibilityProtocols",
+    "NSTextField",
+    "NSTextView",
+    "NSView",
+    "NSSavePanel",
+    "NSOpenPanel",
+    "NSPopUpButton",
+    "objc2-uniform-type-identifiers",
+] }
+objc2-foundation = { version = "0.3", default-features = false, features = [
+    "std",
+    "NSObject",
+    "NSNotification",
+    "NSString",
+] }
+objc2-uniform-type-identifiers = { version = "0.3", default-features = false, features = [
+    "std",
+    "UTType",
+    "UTCoreTypes",
+] }
 p256 = { version = "0.14", features = ["ecdsa", "pkcs8"] }
 probe-rs = "0.32"
 probe-rs-espressif = "0.32"
@@ -76,7 +105,7 @@ reqwest = { version = "0.13", default-features = false, features = [
     "blocking",
     "rustls",
 ] }
-rmcp = { version = "3.9", default-features = false, features = [
+rmcp = { version = "3.11", default-features = false, features = [
     "server",
     "macros",
     "transport-io",
