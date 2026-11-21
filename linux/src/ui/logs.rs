@@ -1,6 +1,13 @@
 use super::*;
 
-pub(super) fn page(store: Store) -> View {
+#[derive(Clone, Copy)]
+struct LogWindow {
+    entries: Memo<Vec<String>>,
+    scroll: ElementRef,
+    search: ElementRef,
+}
+
+pub(super) fn prepare(store: Store) {
     let entries = computed(move || {
         store.read(|s| {
             let query = s.preferences.get("log_search").to_lowercase();
@@ -15,7 +22,7 @@ pub(super) fn page(store: Store) -> View {
         })
     });
     let scroll_ref = element_ref();
-    let previous = stored(0.0_f32);
+
     let search = element_ref();
     crate::ui::commands::watch_window(store, "logs", Some(search));
     on_key("mod+f", move |_| {
@@ -27,167 +34,147 @@ pub(super) fn page(store: Store) -> View {
             scroll_ref.scroll_to_end(false);
         }
     });
-    let leading = if cfg!(target_os = "macos") { 108. } else { 16. };
-    view()
-        .flex_1()
-        .min_h_0()
-        .bg(move || {
-            theme()
-                .color("logs-background")
-                .unwrap_or(theme().background)
-        })
+    provide_context(LogWindow {
+        entries,
+        scroll: scroll_ref,
+        search,
+    });
+}
+
+#[derive(Debug, Clone, PartialEq, Event)]
+pub enum LogEntriesEvent {
+    /// Visible and error counts for the log window's subtitle.
+    #[args(visible, errors)]
+    Summary(u32, u32),
+}
+
+/// Selectable log output with follow-tail scrolling and the native empty states.
+#[component]
+pub fn LogEntries(cx: Scope<LogEntriesEvent>) -> impl IntoElement {
+    let store = auxiliary_store();
+    let LogWindow {
+        entries,
+        scroll: scroll_ref,
+        ..
+    } = use_context().expect("log window context");
+    let previous = stored(0.0_f32);
+    let counts = computed(move || {
+        (
+            entries.with(Vec::len) as u32,
+            store.read(|s| s.logs.iter().filter(|line| line.contains("[错误]")).count() as u32),
+        )
+    });
+    effect(move || {
+        let (visible, errors) = counts.get();
+        cx.emit(LogEntriesEvent::Summary(visible, errors));
+    });
+    when(move || entries.with(Vec::is_empty), move || empty(store)).otherwise(move || {
+        scroll()
+            .element_ref(&scroll_ref)
+            .on_scroll(move |event: &nsh_core::element::ScrollEvent| {
+                let old = previous.replace(event.offset.y.0);
+                if event.offset.y.0 + 1. < old {
+                    store.change(|s| s.flag("follow_logs", false));
+                }
+            })
+            .flex_1()
+            .child(
+                view()
+                    .px(px(21.))
+                    .py(px(10.))
+                    .font_family(mono)
+                    .text_size(caption_size)
+                    .line_height(px(15.))
+                    .selectable(true)
+                    .child(each(
+                        computed(move || {
+                            entries
+                                .with(|rows| rows.iter().cloned().enumerate().collect::<Vec<_>>())
+                        }),
+                        |line: &(usize, String)| line.0,
+                        move |line, _| {
+                            text(move || line.with(|row| row.1.clone())).text_color(move || {
+                                if line.with(|row| row.1.contains("[错误]")) {
+                                    theme().destructive
+                                } else {
+                                    theme().foreground
+                                }
+                            })
+                        },
+                    )),
+            )
+    })
+}
+
+/// Native search, filters, clipboard, export and clear commands.
+#[component]
+pub fn LogActions() -> impl IntoElement {
+    let store = auxiliary_store();
+    let LogWindow { search, .. } = use_context().expect("log window context");
+    glass()
+        .pr(px(3.))
+        .child(search_control(store, search))
+        .child(view().w(px(3.5)))
         .child(
             view()
-                .h(px(52.))
-                .pl(px(leading))
-                .pr(px(9.))
                 .flex_row()
                 .items_center()
-                .gap_3()
-                .window_drag(true)
-                .child(
-                    view()
-                        .flex_1()
-                        .min_w_0()
-                        .child(
-                            text("活动日志")
-                                .text_size(body_size)
-                                .font_weight(FontWeight::BOLD)
-                                .text_color(move || {
-                                    theme().color("logs-title").unwrap_or(theme().foreground)
-                                }),
-                        )
-                        .child(
-                            text(move || {
-                                store.read(|s| {
-                                    format!(
-                                        "{} 条日志 · {} 条错误",
-                                        entries.with(Vec::len),
-                                        s.logs.iter().filter(|l| l.contains("[错误]")).count()
-                                    )
-                                })
-                            })
-                            .text_size(px(11.))
-                            .text_color(move || {
-                                theme()
-                                    .color("logs-subtitle")
-                                    .unwrap_or(theme().muted_foreground)
-                            }),
-                        ),
-                )
-                .child(
-                    glass()
-                        .pr(px(3.))
-                        .child(search_control(store, search))
-                        .child(view().w(px(3.5)))
-                        .child(
-                            view()
-                                .flex_row()
-                                .items_center()
-                                .gap(px(6.))
-                                .child(log_toggle(
-                                    store,
-                                    "errors_only",
-                                    "error-circle",
-                                    "仅显示错误",
-                                ))
-                                .child(log_toggle(
-                                    store,
-                                    "follow_logs",
-                                    "arrow-down-to-line",
-                                    "跟随最新日志",
-                                )),
-                        )
-                        .child(view().w(px(5.5)))
-                        .child(
-                            view()
-                                .flex_row()
-                                .items_center()
-                                .gap(px(6.))
-                                .child(log_tool(
-                                    "logs-copy-document",
-                                    "复制全部日志",
-                                    || false,
-                                    move || store.read(|s| s.logs.is_empty()),
-                                    move || {
-                                        set_clipboard(store.read(|s| {
-                                            s.logs.iter().cloned().collect::<Vec<_>>().join("\n")
-                                        }))
-                                    },
-                                ))
-                                .child(log_tool(
-                                    "logs-export",
-                                    "导出日志…",
-                                    || false,
-                                    move || store.read(|s| s.logs.is_empty()),
-                                    move || {
-                                        store.export_as(
-                                            "ChipDock.log",
-                                            store
-                                                .read(|s| {
-                                                    s.logs
-                                                        .iter()
-                                                        .cloned()
-                                                        .collect::<Vec<_>>()
-                                                        .join("\n")
-                                                })
-                                                .into_bytes(),
-                                            crate::ui::file_dialogs::ExportKind::DocumentText,
-                                        )
-                                    },
-                                ))
-                                .child(log_tool(
-                                    "logs-trash",
-                                    "清空日志",
-                                    || false,
-                                    move || store.read(|s| s.logs.is_empty()),
-                                    move || store.change(|s| s.logs.clear()),
-                                )),
-                        ),
-                ),
+                .gap(px(6.))
+                .child(log_toggle(
+                    store,
+                    "errors_only",
+                    "error-circle",
+                    "仅显示错误",
+                ))
+                .child(log_toggle(
+                    store,
+                    "follow_logs",
+                    "arrow-down-to-line",
+                    "跟随最新日志",
+                )),
         )
+        .child(view().w(px(5.5)))
         .child(
-            when(move || entries.with(Vec::is_empty), move || empty(store)).otherwise(move || {
-                scroll()
-                    .element_ref(&scroll_ref)
-                    .on_scroll(move |event: &nsh_core::element::ScrollEvent| {
-                        let old = previous.replace(event.offset.y.0);
-                        if event.offset.y.0 + 1. < old {
-                            store.change(|s| s.flag("follow_logs", false));
-                        }
-                    })
-                    .flex_1()
-                    .child(
-                        view()
-                            .px(px(21.))
-                            .py(px(10.))
-                            .font_family(mono)
-                            .text_size(caption_size)
-                            .line_height(px(15.))
-                            .selectable(true)
-                            .child(each(
-                                computed(move || {
-                                    entries.with(|rows| {
-                                        rows.iter().cloned().enumerate().collect::<Vec<_>>()
-                                    })
-                                }),
-                                |line: &(usize, String)| line.0,
-                                move |line, _| {
-                                    text(move || line.with(|row| row.1.clone())).text_color(
-                                        move || {
-                                            if line.with(|row| row.1.contains("[错误]")) {
-                                                theme().destructive
-                                            } else {
-                                                theme().foreground
-                                            }
-                                        },
-                                    )
-                                },
-                            )),
-                    )
-            }),
+            view()
+                .flex_row()
+                .items_center()
+                .gap(px(6.))
+                .child(log_tool(
+                    "logs-copy-document",
+                    "复制全部日志",
+                    || false,
+                    move || store.read(|s| s.logs.is_empty()),
+                    move || {
+                        set_clipboard(
+                            store.read(|s| s.logs.iter().cloned().collect::<Vec<_>>().join("\n")),
+                        )
+                    },
+                ))
+                .child(log_tool(
+                    "logs-export",
+                    "导出日志…",
+                    || false,
+                    move || store.read(|s| s.logs.is_empty()),
+                    move || {
+                        store.export_as(
+                            "ChipDock.log",
+                            store
+                                .read(|s| s.logs.iter().cloned().collect::<Vec<_>>().join("\n"))
+                                .into_bytes(),
+                            crate::ui::file_dialogs::ExportKind::DocumentText,
+                        )
+                    },
+                ))
+                .child(log_tool(
+                    "logs-trash",
+                    "清空日志",
+                    || false,
+                    move || store.read(|s| s.logs.is_empty()),
+                    move || store.change(|s| s.logs.clear()),
+                )),
         )
 }
+
 /// The native search field's frame includes its icon and clear button; keep the whole region at the measured native 180 pt.
 fn search_control(store: Store, search: ElementRef) -> View {
     let focused = signal(false);
@@ -367,4 +354,8 @@ fn log_tool(
             "logs-export" | "logs-trash" => 21.75,
             _ => 17.,
         })))
+}
+
+pub(super) fn register(registry: &mut Registry) {
+    registry.register::<LogEntries>().register::<LogActions>();
 }

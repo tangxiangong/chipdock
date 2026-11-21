@@ -182,16 +182,16 @@ pub(crate) fn linux_fixture(tag: &str, feed_name: &str) -> (tempfile::TempDir, U
     };
     let bytes = b"portable ELF fixture";
     fs::write(directory.path().join(&name), bytes).unwrap();
-    let feed = chipdock_gpui_update::Feed {
+    let feed = legacy_linux::Feed {
         identity: "com.xiaoyu.chipdock.gpui".into(),
         version: version.into(),
         notes: "Linux notes".into(),
         assets: BTreeMap::from([(
             "linux-x86_64".into(),
-            chipdock_gpui_update::Asset {
+            legacy_linux::Asset {
                 name,
                 size: bytes.len() as u64,
-                sha256: chipdock_gpui_update::digest(bytes),
+                sha256: legacy_linux::digest(bytes),
             },
         )]),
         packages: ["tar.gz", "deb", "rpm"]
@@ -199,16 +199,16 @@ pub(crate) fn linux_fixture(tag: &str, feed_name: &str) -> (tempfile::TempDir, U
                 let name = format!("{product}-{version}-linux-x86_64.{extension}");
                 let bytes = format!("{extension} package fixture").into_bytes();
                 fs::write(directory.path().join(&name), &bytes).unwrap();
-                chipdock_gpui_update::Asset {
+                legacy_linux::Asset {
                     name,
                     size: bytes.len() as u64,
-                    sha256: chipdock_gpui_update::digest(&bytes),
+                    sha256: legacy_linux::digest(&bytes),
                 }
             })
             .into(),
     };
     let payload = serde_json::to_vec(&feed).unwrap();
-    let signed = chipdock_gpui_update::SignedFeed {
+    let signed = legacy_linux::SignedFeed {
         payload: STANDARD.encode(&payload),
         signature: STANDARD.encode(signing.sign(&payload).to_bytes()),
     };
@@ -233,10 +233,12 @@ fn historical_linux_release_verifies_signature_and_binary_digest() {
 }
 
 #[test]
-fn gpui_and_sparkle_embed_the_same_release_public_key() {
+fn linux_updaters_and_sparkle_embed_the_same_release_public_key() {
+    let config: Value = serde_json::from_str(include_str!("../../linux/nsh.json")).unwrap();
+    assert_eq!(config["updater"]["publicKey"], legacy_linux::PUBLIC_KEY);
     assert_eq!(
         UpdateKeys::from_project().unwrap().sparkle,
-        chipdock_gpui_update::PUBLIC_KEY
+        legacy_linux::PUBLIC_KEY
     );
 }
 
@@ -255,4 +257,54 @@ fn all_platforms_include_linux_packages_and_reject_altered_installers() {
         fs::write(path, original).unwrap();
     }
     assert!("linux".parse::<Platform>().unwrap() == Platform::Gpui);
+}
+
+pub(crate) fn nsh_fixture(tag: &str) -> (tempfile::TempDir, UpdateKeys) {
+    let (directory, keys) = fixture(tag);
+    let value = tag.strip_prefix('v').unwrap();
+    let mut platforms = serde_json::Map::new();
+    for arch in ["x86_64", "aarch64"] {
+        let platform = format!("linux-{arch}");
+        for extension in ["tar.gz", "deb", "rpm"] {
+            let name = format!("ChipDock-{value}-{platform}.{extension}");
+            let path = directory.path().join(&name);
+            fs::write(&path, name.as_bytes()).unwrap();
+            if extension == "tar.gz" {
+                platforms.insert(
+                    platform.clone(),
+                    json!({
+                        "url": name, "size": name.len(), "sha256": hash(&path).unwrap()
+                    }),
+                );
+            }
+        }
+    }
+    let manifest = serde_json::to_vec(&json!({
+        "id": "com.xiaoyu.chipdock", "version": value, "platforms": platforms
+    }))
+    .unwrap();
+    let signature = nsh_updater::sign(&STANDARD.encode([17; 32]), &manifest).unwrap();
+    fs::write(directory.path().join("latest.json"), manifest).unwrap();
+    fs::write(directory.path().join("latest.json.sig"), signature).unwrap();
+    (directory, keys)
+}
+
+#[test]
+fn standard_nsh_manifest_authenticates_both_relative_archive_urls_and_bytes() {
+    let (directory, keys) = nsh_fixture("v0.3.1");
+    let plan = prepare(directory.path(), "v0.3.1", Platform::Gpui, &keys).unwrap();
+    for arch in ["x86_64", "aarch64"] {
+        let name = format!("ChipDock-0.3.1-linux-{arch}.tar.gz");
+        assert_eq!(
+            plan.assets[&format!("updates/{name}")],
+            plan.assets[&format!("releases/v0.3.1/{name}")]
+        );
+        let path = directory.path().join(name);
+        let saved = fs::read(&path).unwrap();
+        fs::write(&path, vec![0; saved.len()]).unwrap();
+        assert!(prepare(directory.path(), "v0.3.1", Platform::Gpui, &keys).is_err());
+        fs::write(path, saved).unwrap();
+    }
+    fs::write(directory.path().join("latest.json.sig"), "unverified").unwrap();
+    assert!(prepare(directory.path(), "v0.3.1", Platform::Gpui, &keys).is_err());
 }

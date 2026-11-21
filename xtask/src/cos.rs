@@ -298,7 +298,18 @@ fn publish_to_with_replacement(
             predecessors.push(previous.clone());
         }
         if let Some(previous) = store.read(&format!("updates/{name}"))? {
-            match identity(name, &previous, keys) {
+            let verified = if name == "latest.json" {
+                store
+                    .read("updates/latest.json.sig")?
+                    .ok_or_else(|| "Missing NSH signature".into())
+                    .and_then(|sig| {
+                        nsh_updater::verify(&keys.sparkle, &previous, &sig)?;
+                        crate::nsh_identity(&previous)
+                    })
+            } else {
+                identity(name, &previous, keys)
+            };
+            match verified {
                 Ok(previous) => predecessors.push(previous),
                 // Like BibCiTeX's catalog, an existing reservation remains authoritative
                 // when a client-facing pointer is corrupt and needs regeneration.
@@ -351,6 +362,13 @@ fn publish_to_with_replacement(
     // Reserve all target versions first: older repairs cannot downgrade a partial publication.
     store.upload(CATALOG, &catalog, false)?;
     for name in promoted {
+        if name == "latest.json" {
+            store.upload(
+                "updates/latest.json.sig",
+                &plan.feeds["latest.json.sig"],
+                false,
+            )?;
+        }
         store.upload(&format!("updates/{name}"), &plan.feeds[name], false)?;
     }
     Ok(())

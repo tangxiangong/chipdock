@@ -21,29 +21,44 @@ struct Rule {
     color: String,
 }
 
-pub(super) fn page(store: Store) -> View {
+#[derive(Clone, Copy)]
+struct ColorDraft {
+    rows: Signal<Vec<Rule>>,
+    next: Stored<u64>,
+    tx: Signal<String>,
+    failure: Signal<String>,
+    captured: Option<u64>,
+}
+impl ColorDraft {
+    fn current() -> Self {
+        use_context().expect("color controls require ColorRulesHost")
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Props)]
+pub struct ColorRulesHostProps {
+    /// The content of this color settings sheet.
+    pub children: Prop<Children>,
+}
+#[derive(Debug, Clone, PartialEq, Event)]
+pub enum ColorRulesHostEvent {
+    /// Draft presentation state; row contents remain with the virtualized native list.
+    #[args(empty, failure, loadError)]
+    State(bool, String, Option<String>),
+}
+
+/// Owns the color draft, its stable row identities and captured session.
+#[component]
+pub fn ColorRulesHost(
+    props: ColorRulesHostProps,
+    cx: Scope<ColorRulesHostEvent>,
+) -> impl IntoElement {
+    let (store, _) = workbench_context();
+    provide_context(components::ModalControls);
     let captured = store.tool_session.get_untracked();
-    let initial = match serde_json::from_str::<Vec<Rule>>(&store.field("colors")) {
-        Ok(rules) => rules,
-        Err(error) => {
-            return view()
-                .w(px(620.))
-                .h(px(420.))
-                .p_5()
-                .gap_3()
-                .child(
-                    text(format!("着色规则无效：{error}"))
-                        .text_size(body_size)
-                        .text_color(move || theme().destructive),
-                )
-                .child(view().flex_1())
-                .child(action(
-                    "完成",
-                    Variant::Default,
-                    || false,
-                    move || tools::close(store),
-                ));
-        }
+    let (initial, load_error) = match serde_json::from_str::<Vec<Rule>>(&store.field("colors")) {
+        Ok(rows) => (rows, None),
+        Err(error) => (Vec::new(), Some(error.to_string())),
     };
     let rows = signal(
         initial
@@ -58,327 +73,316 @@ pub(super) fn page(store: Store) -> View {
     let next = stored(rows.with_untracked(|r| r.len() as u64));
     let tx = signal(store.field("tx_color"));
     let failure = signal(String::new());
-    let valid_session = move || store.read(|s| s.active == captured && !s.installing);
+    provide_context(ColorDraft {
+        rows,
+        next,
+        tx,
+        failure,
+        captured,
+    });
+    let empty = computed(move || rows.with(Vec::is_empty));
+    effect(move || {
+        cx.emit(ColorRulesHostEvent::State(
+            empty.get(),
+            failure.get(),
+            load_error.clone(),
+        ))
+    });
+    view().child(props.children)
+}
 
+/// Selects or replaces the rule collection through the workbench's native preset menu.
+#[component]
+pub fn ColorPresets() -> impl IntoElement {
+    let ColorDraft {
+        rows,
+        next,
+        failure,
+        ..
+    } = ColorDraft::current();
+    native_menu(
+        view()
+            .w(px(73.5))
+            .h(px(24.))
+            .px(px(12.))
+            .rounded(px(7.))
+            .bg(move || theme().color("colors-control").unwrap_or(theme().secondary))
+            .flex_row()
+            .items_center()
+            .gap_1()
+            .label("着色预设")
+            .child(text("预设").text_size(body_size))
+            .child(view().flex_1())
+            .child(icons::icon("down").size(px(10.))),
+        move || {
+            ["ESP-IDF", "日志等级", "AT 响应"]
+                .into_iter()
+                .map(move |name| {
+                    nsh_core::element::desktop::MenuItem::new(name).on_select(move || {
+                        rows.set(preset(name));
+                        next.replace(rows.with_untracked(|r| r.len() as u64));
+                        failure.set(String::new());
+                    })
+                })
+                .collect()
+        },
+    )
+}
+
+/// Appends a draft rule with a stable identity.
+#[component]
+pub fn AddColorRule() -> impl IntoElement {
+    let ColorDraft { rows, next, .. } = ColorDraft::current();
+    color_action(
+        "添加规则",
+        Some("plus"),
+        97.5,
+        move || rows.with(|r| r.len() >= 32),
+        move || {
+            let id = next.with(|n| {
+                let id = *n;
+                *n += 1;
+                id
+            });
+            rows.update(|r| {
+                r.push(Rule {
+                    id,
+                    pattern: String::new(),
+                    regex: false,
+                    color: "orange".into(),
+                })
+            });
+        },
+    )
+}
+
+/// Native palette menu for transmitted data.
+#[component]
+pub fn TransmitColorPicker() -> impl IntoElement {
+    let tx = ColorDraft::current().tx;
+    picker(move || tx.get(), move |v| tx.set(v), true)
+}
+
+#[derive(Debug, Clone, PartialEq, Props)]
+pub struct ColorRuleTableProps {
+    /// Overlay content shown by the page when there are no rows.
+    pub children: Prop<Children>,
+}
+
+/// Recyclable editable rows and native alternating list stripes.
+#[component]
+pub fn ColorRuleTable(props: ColorRuleTableProps) -> impl IntoElement {
+    let rows = ColorDraft::current().rows;
     view()
-        .w(px(620.))
-        .h(px(420.))
-        .p_5()
-        .gap_3()
+        .relative()
+        .flex_1()
+        .min_h_0()
+        .border_1()
+        .border_color(hairline)
         .child(
-            view()
-                .flex_row()
-                .items_center()
-                .gap_2()
-                .child(native_menu(
+            virtual_list(
+                move || rows.with(Vec::len),
+                move |at| {
+                    let current = computed(move || rows.with(|r| r.get(at.index()).cloned()));
                     view()
-                        .w(px(73.5))
-                        .h(px(24.))
-                        .px(px(12.))
-                        .rounded(px(7.))
-                        .bg(move || theme().color("colors-control").unwrap_or(theme().secondary))
+                        .h(px(32.))
+                        .px(px(6.))
                         .flex_row()
                         .items_center()
-                        .gap_1()
-                        .label("着色预设")
-                        .child(text("预设").text_size(body_size))
-                        .child(view().flex_1())
-                        .child(icons::icon("down").size(px(10.))),
-                    move || {
-                        ["ESP-IDF", "日志等级", "AT 响应"]
-                            .into_iter()
-                            .map(move |name| {
-                                nsh_core::element::desktop::MenuItem::new(name).on_select(
-                                    move || {
-                                        rows.set(preset(name));
-                                        next.replace(rows.with_untracked(|r| r.len() as u64));
-                                        failure.set(String::new());
-                                    },
-                                )
-                            })
-                            .collect()
-                    },
-                ))
-                .child(color_action(
-                    "添加规则",
-                    Some("plus"),
-                    97.5,
-                    move || rows.with(|r| r.len() >= 32),
-                    move || {
-                        let id = next.with(|n| {
-                            let id = *n;
-                            *n += 1;
-                            id
-                        });
-                        rows.update(|r| {
-                            r.push(Rule {
-                                id,
-                                pattern: String::new(),
-                                regex: false,
-                                color: "orange".into(),
-                            })
-                        });
-                    },
-                ))
-                .child(view().flex_1())
-                .child(text("TX 颜色").text_size(body_size))
-                .child(picker(move || tx.get(), move |v| tx.set(v), true)),
-        )
-        .child(
-            view()
-                .relative()
-                .flex_1()
-                .min_h_0()
-                .border_1()
-                .border_color(hairline)
-                .child(
-                    virtual_list(
-                        move || rows.with(Vec::len),
-                        move |at| {
-                            let current =
-                                computed(move || rows.with(|r| r.get(at.index()).cloned()));
-                            view()
-                                .h(px(32.))
-                                .px(px(6.))
-                                .flex_row()
-                                .items_center()
-                                .gap_2()
-                                .bg(move || {
-                                    if at.index() % 2 == 1 {
-                                        theme().color("table-stripe").unwrap_or(theme().muted)
-                                    } else {
-                                        theme().background
+                        .gap_2()
+                        .bg(move || {
+                            if at.index() % 2 == 1 {
+                                theme().color("table-stripe").unwrap_or(theme().muted)
+                            } else {
+                                theme().background
+                            }
+                        })
+                        .child(
+                            draft_input(
+                                "匹配关键字",
+                                move || {
+                                    current.with(|r| {
+                                        r.as_ref().map(|r| r.pattern.clone()).unwrap_or_default()
+                                    })
+                                },
+                                move |v: &str| {
+                                    rows.update(|r| {
+                                        if let Some(row) = r.get_mut(at.index()) {
+                                            row.pattern = v.into();
+                                        }
+                                    })
+                                },
+                            )
+                            .placeholder("匹配关键字")
+                            .flex_1()
+                            .min_w_0(),
+                        )
+                        .child(draft_toggle(
+                            "正则",
+                            move || current.with(|r| r.as_ref().is_some_and(|r| r.regex)),
+                            move |v| {
+                                rows.update(|r| {
+                                    if let Some(row) = r.get_mut(at.index()) {
+                                        row.regex = v;
                                     }
                                 })
-                                .child(
-                                    draft_input(
-                                        "匹配关键字",
-                                        move || {
-                                            current.with(|r| {
-                                                r.as_ref()
-                                                    .map(|r| r.pattern.clone())
-                                                    .unwrap_or_default()
-                                            })
-                                        },
-                                        move |v: &str| {
-                                            rows.update(|r| {
-                                                if let Some(row) = r.get_mut(at.index()) {
-                                                    row.pattern = v.into();
-                                                }
-                                            })
-                                        },
-                                    )
-                                    .placeholder("匹配关键字")
-                                    .flex_1()
-                                    .min_w_0(),
-                                )
-                                .child(draft_toggle(
-                                    "正则",
-                                    move || current.with(|r| r.as_ref().is_some_and(|r| r.regex)),
-                                    move |v| {
-                                        rows.update(|r| {
-                                            if let Some(row) = r.get_mut(at.index()) {
-                                                row.regex = v;
-                                            }
-                                        })
-                                    },
-                                ))
-                                .child(picker(
-                                    move || {
-                                        current.with(|r| {
-                                            r.as_ref().map(|r| r.color.clone()).unwrap_or_default()
-                                        })
-                                    },
-                                    move |v| {
-                                        rows.update(|r| {
-                                            if let Some(row) = r.get_mut(at.index()) {
-                                                row.color = v;
-                                            }
-                                        })
-                                    },
-                                    false,
-                                ))
-                                .child(row_button(
-                                    "up",
-                                    "上移",
-                                    14.,
-                                    move || at.index() == 0,
-                                    move || {
-                                        rows.update(|r| {
-                                            let i = at.index();
-                                            if i > 0 && i < r.len() {
-                                                r.swap(i, i - 1);
-                                            }
-                                        })
-                                    },
-                                ))
-                                .child(row_button(
-                                    "trash",
-                                    "删除",
-                                    16.,
-                                    || false,
-                                    move || {
-                                        rows.update(|r| {
-                                            let i = at.index();
-                                            if i < r.len() {
-                                                r.remove(i);
-                                            }
-                                        })
-                                    },
-                                ))
-                        },
-                    )
-                    .keys(move || rows.with(|r| r.iter().map(|r| r.id).collect::<Vec<_>>()))
-                    .estimated_item_size(px(32.))
-                    .flex_1(),
-                )
-                // Native List continues its 24pt alternating empty rows below its data.
-                .child(
-                    view()
-                        .absolute()
-                        .inset_0()
-                        .overflow_hidden()
-                        .pointer_events(nsh_core::PointerEvents::None)
-                        .accessibility_elements_hidden(true)
-                        .child(
-                            view()
-                                .h(move || px(rows.with(Vec::len) as f32 * 32.))
-                                .flex_shrink_0(),
-                        )
-                        .children((0..14).map(move |index| {
-                            view().h(px(24.)).flex_shrink_0().bg(move || {
-                                if (rows.with(Vec::len) + index) % 2 == 1 {
-                                    theme().color("table-stripe").unwrap_or(theme().muted)
-                                } else {
-                                    theme().background
-                                }
-                            })
-                        })),
-                )
-                .child(when(
-                    move || rows.with(Vec::is_empty),
-                    || {
-                        view()
-                            .absolute()
-                            .inset_0()
-                            .items_center()
-                            .justify_center()
-                            .child(
-                                // Measured native ContentUnavailableView: 44pt symbol,
-                                // 18.25pt label gap, two 19pt lines, 6pt description gap.
-                                view()
-                                    .h(px(121.))
-                                    .items_center()
-                                    .child(
-                                        icons::icon("palette")
-                                            .size(px(44.))
-                                            .mb(px(18.25))
-                                            .text_color(move || {
-                                                theme()
-                                                    .color("empty-symbol")
-                                                    .unwrap_or(theme().muted_foreground)
-                                            }),
-                                    )
-                                    .child(
-                                        text("没有着色规则")
-                                            .text_size(px(15.))
-                                            .line_height(px(19.))
-                                            .font_weight(FontWeight::BOLD)
-                                            .text_color(move || {
-                                                theme()
-                                                    .color("empty-foreground")
-                                                    .unwrap_or(theme().muted_foreground)
-                                            }),
-                                    )
-                                    .child(
-                                        text("接收数据匹配关键字时按指定颜色显示。")
-                                            .mt(px(6.))
-                                            .text_size(px(15.))
-                                            .line_height(px(19.))
-                                            .text_color(move || {
-                                                theme()
-                                                    .color("empty-foreground")
-                                                    .unwrap_or(theme().muted_foreground)
-                                            }),
-                                    ),
-                            )
-                    },
-                )),
+                            },
+                        ))
+                        .child(picker(
+                            move || {
+                                current.with(|r| {
+                                    r.as_ref().map(|r| r.color.clone()).unwrap_or_default()
+                                })
+                            },
+                            move |v| {
+                                rows.update(|r| {
+                                    if let Some(row) = r.get_mut(at.index()) {
+                                        row.color = v;
+                                    }
+                                })
+                            },
+                            false,
+                        ))
+                        .child(row_button(
+                            "up",
+                            "上移",
+                            14.,
+                            move || at.index() == 0,
+                            move || {
+                                rows.update(|r| {
+                                    let i = at.index();
+                                    if i > 0 && i < r.len() {
+                                        r.swap(i, i - 1);
+                                    }
+                                })
+                            },
+                        ))
+                        .child(row_button(
+                            "trash",
+                            "删除",
+                            16.,
+                            || false,
+                            move || {
+                                rows.update(|r| {
+                                    let i = at.index();
+                                    if i < r.len() {
+                                        r.remove(i);
+                                    }
+                                })
+                            },
+                        ))
+                },
+            )
+            .keys(move || rows.with(|r| r.iter().map(|r| r.id).collect::<Vec<_>>()))
+            .estimated_item_size(px(32.))
+            .flex_1(),
         )
-        .child(when(
-            move || !failure.get().is_empty(),
-            move || {
-                view()
-                    .flex_row()
-                    .items_start()
-                    .gap_2()
-                    .child(icons::icon("warning-fill").text_color(move || theme().destructive))
-                    .child(
-                        text(move || failure.get())
-                            .text_size(body_size)
-                            .text_color(move || theme().destructive),
-                    )
-            },
-        ))
+        // Native List continues its 24pt alternating empty rows below its data.
         .child(
             view()
-                .flex_row()
-                .items_center()
-                .justify_end()
-                .gap_2()
-                .child(color_action(
-                    "取消",
-                    None,
-                    50.,
-                    || false,
-                    move || tools::close(store),
-                ))
-                .child(action(
-                    "保存",
-                    Variant::DefaultAction,
-                    move || !valid_session(),
-                    move || {
-                        let draft = rows.get_untracked();
-                        if let Some(message) = draft_error(&draft) {
-                            failure.set(message.into());
-                            return;
+                .absolute()
+                .inset_0()
+                .overflow_hidden()
+                .pointer_events(nsh_core::PointerEvents::None)
+                .accessibility_elements_hidden(true)
+                .child(
+                    view()
+                        .h(move || px(rows.with(Vec::len) as f32 * 32.))
+                        .flex_shrink_0(),
+                )
+                .children((0..14).map(move |index| {
+                    view().h(px(24.)).flex_shrink_0().bg(move || {
+                        if (rows.with(Vec::len) + index) % 2 == 1 {
+                            theme().color("table-stripe").unwrap_or(theme().muted)
+                        } else {
+                            theme().background
                         }
-                        let source = match serde_json::to_string(&draft) {
-                            Ok(source) => source,
-                            Err(e) => {
-                                failure.set(e.to_string());
-                                return;
-                            }
-                        };
-                        let tx_value = tx.get_untracked();
-                        if let Err(e) = crate::presentation::Colors::new(&source, &tx_value) {
-                            failure.set(e.to_string());
-                            return;
-                        }
-                        let result = store.change(|s| -> anyhow::Result<()> {
-                            anyhow::ensure!(s.active == captured, "会话已切换，请重新打开着色规则");
-                            anyhow::ensure!(!s.installing, "正在安装更新，请稍后保存");
-                            let previous = s.preferences.clone();
-                            s.set("colors", source);
-                            s.set("tx_color", tx_value);
-                            if let Err(error) = s.save() {
-                                s.preferences = previous.clone();
-                                if let Some(session) =
-                                    captured.and_then(|id| s.sessions.get_mut(&id))
-                                {
-                                    session.preferences = previous;
-                                }
-                                return Err(error);
-                            }
-                            Ok(())
-                        });
-                        match result {
-                            Ok(()) => tools::close(store),
-                            Err(e) => failure.set(format!("{e:#}")),
-                        }
-                    },
-                )),
+                    })
+                })),
         )
+        .child(props.children)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, PropEnum)]
+pub enum ColorCommand {
+    #[default]
+    Cancel,
+    Save,
+    Done,
+}
+#[derive(Debug, Clone, PartialEq, Props)]
+pub struct ColorRuleActionProps {
+    /// The action on this dialog's unsaved draft.
+    pub command: Prop<ColorCommand>,
+}
+/// Actions for closing or persisting this draft, with the original session checks.
+#[component]
+pub fn ColorRuleAction(props: ColorRuleActionProps) -> impl IntoElement {
+    let (store, _) = workbench_context();
+    let ColorDraft {
+        rows,
+        tx,
+        failure,
+        captured,
+        ..
+    } = ColorDraft::current();
+    let valid_session = move || store.read(|s| s.active == captured && !s.installing);
+    match props.command.get() {
+        ColorCommand::Cancel => {
+            color_action("取消", None, 50., || false, move || tools::close(store)).into_element()
+        }
+        ColorCommand::Done => action(
+            "完成",
+            Variant::Default,
+            || false,
+            move || tools::close(store),
+        )
+        .into_element(),
+        ColorCommand::Save => action(
+            "保存",
+            Variant::DefaultAction,
+            move || !valid_session(),
+            move || {
+                let draft = rows.get_untracked();
+                if let Some(message) = draft_error(&draft) {
+                    failure.set(message.into());
+                    return;
+                }
+                let source = match serde_json::to_string(&draft) {
+                    Ok(source) => source,
+                    Err(e) => {
+                        failure.set(e.to_string());
+                        return;
+                    }
+                };
+                let tx_value = tx.get_untracked();
+                if let Err(e) = crate::presentation::Colors::new(&source, &tx_value) {
+                    failure.set(e.to_string());
+                    return;
+                }
+                let result = store.change(|s| -> anyhow::Result<()> {
+                    anyhow::ensure!(s.active == captured, "会话已切换，请重新打开着色规则");
+                    anyhow::ensure!(!s.installing, "正在安装更新，请稍后保存");
+                    let previous = s.preferences.clone();
+                    s.set("colors", source);
+                    s.set("tx_color", tx_value);
+                    if let Err(error) = s.save() {
+                        s.preferences = previous.clone();
+                        if let Some(session) = captured.and_then(|id| s.sessions.get_mut(&id)) {
+                            session.preferences = previous;
+                        }
+                        return Err(error);
+                    }
+                    Ok(())
+                });
+                match result {
+                    Ok(()) => tools::close(store),
+                    Err(e) => failure.set(format!("{e:#}")),
+                }
+            },
+        )
+        .into_element(),
+    }
 }
 
 fn draft_error(rules: &[Rule]) -> Option<&'static str> {
@@ -587,6 +591,16 @@ fn preset(name: &str) -> Vec<Rule> {
             color: (*color).into(),
         })
         .collect()
+}
+
+pub(super) fn register(registry: &mut Registry) {
+    registry
+        .register::<ColorRulesHost>()
+        .register::<ColorPresets>()
+        .register::<AddColorRule>()
+        .register::<TransmitColorPicker>()
+        .register::<ColorRuleTable>()
+        .register::<ColorRuleAction>();
 }
 
 #[cfg(test)]

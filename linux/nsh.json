@@ -4,7 +4,6 @@
   "version": "0.3.0",
   "build": 1,
   "rust": ".",
-  "root": "App",
   "theme": "theme.json",
   "appearance": "system",
   "window": {
@@ -27,5 +26,34 @@
       "height": 780
     }
   },
-  "icon": "../windows/ChipDock/Assets/ChipDock.png"
+  "icon": "../windows/ChipDock/Assets/ChipDock.png",
+  "features": [
+    "svg",
+    "plot",
+    "editor",
+    "updater"
+  ],
+  "updater": {
+    "url": "https://app-release-1302963684.cos.ap-guangzhou.myqcloud.com/chipdock/updates/latest.json",
+    "publicKey": "NgorrvaZPObmbOUEmKbbCvPbPqcD+kcw7E2NRTfxlKI=",
+    "channels": {
+      "github": "https://github.com/tangxiangong/chipdock/releases/latest/download/latest.json"
+    }
+  },
+  "capabilities": {
+    "windows": true,
+    "clipboard": true,
+    "application": true,
+    "openUrl": {
+      "schemes": [
+        "https"
+      ]
+    },
+    "picker": true
+  },
+  "macos": {
+    "infoPlist": {
+      "LSMinimumSystemVersion": "15.0"
+    }
+  }
 }

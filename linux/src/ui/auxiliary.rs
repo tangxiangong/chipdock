@@ -1,6 +1,6 @@
 //! Auxiliary windows keep the native client's individual geometry and content.
 use super::*;
-use nsh_core::element::desktop::{open_window, window};
+use nsh_core::element::desktop::window;
 
 #[path = "logs.rs"]
 mod logs;
@@ -10,6 +10,7 @@ mod memory;
 mod plot;
 #[path = "settings.rs"]
 mod settings;
+pub use settings::UpdatePresentation;
 
 #[derive(Clone, Copy)]
 pub(super) enum Panel {
@@ -21,8 +22,11 @@ pub(super) enum Panel {
 }
 
 #[cfg(debug_assertions)]
-pub(super) fn preview_available(feed: crate::update::Feed) -> View {
-    settings::preview_available(feed)
+pub(super) fn preview_available(
+    feed: crate::update::Feed,
+    renderer: Prop<Option<Renderer<UpdatePresentation>>>,
+) -> View {
+    settings::preview_available(feed, renderer)
 }
 
 pub(super) fn erase_memory(store: Store) {
@@ -87,10 +91,11 @@ pub(super) fn open(store: Store, panel: Panel) {
         attributes.maximizable = Some(false);
         attributes.max_size = attributes.min_size;
     }
-    let closed_id = id.clone();
-    let opened = open_window(
+    let id_for_renderer = id.clone();
+    let opened = super::windows::open(
+        store,
+        &id,
         window()
-            .id(id.clone())
             .title(title.to_owned())
             .parent("main")
             .default_position(nsh_core::desktop::WindowPosition::Center)
@@ -99,51 +104,61 @@ pub(super) fn open(store: Store, panel: Panel) {
             .default_size(Size {
                 width: px(width),
                 height: px(height),
-            })
-            .on_open_change(move |event| {
-                if !event.open {
-                    store.windows.with(|windows| {
-                        windows.remove(&closed_id);
-                    });
-                    store.change(|s| {
-                        if matches!(panel, Panel::Logs) {
-                            s.set_logs_visible(false);
-                        }
-                        if let Panel::Plot(id) = panel
-                            && let Some(session) = s.sessions.get_mut(&id)
-                        {
-                            session.plotting = false;
-                            session.plot_revision += 1;
-                        }
-                    });
-                }
-            })
-            .content(move || {
-                match panel {
-                    Panel::Settings => crate::ui::commands::watch_window(store, "settings", None),
-                    Panel::Plot(_) => crate::ui::commands::watch_window(store, "plot", None),
-                    _ => {}
-                }
-                view()
-                    .flex_1()
-                    .min_h_0()
-                    .bg(move || theme().background)
-                    .text_color(move || theme().foreground)
-                    .text_size(body_size)
-                    .line_height(nsh_core::LineHeight::Multiple(1.2))
-                    .child(match panel {
-                        Panel::Memory => memory::page(store).into_element(),
-                        Panel::Logs => logs::page(store).into_element(),
-                        Panel::Settings => settings::page(store).into_element(),
-                        Panel::Plot(id) => plot::page(store, id).into_element(),
-                        Panel::Profiles => view().into_element(),
-                    })
             }),
+        move || {
+            store.change(|s| {
+                if matches!(panel, Panel::Logs) {
+                    s.set_logs_visible(false);
+                }
+                if let Panel::Plot(id) = panel
+                    && let Some(session) = s.sessions.get_mut(&id)
+                {
+                    session.plotting = false;
+                    session.plot_revision += 1;
+                }
+            });
+        },
+        move || {
+            provide_context(store);
+            match panel {
+                Panel::Memory => crate::ui::commands::watch_window(store, "memory", None),
+                Panel::Logs => logs::prepare(store),
+                Panel::Settings => crate::ui::commands::watch_window(store, "settings", None),
+                Panel::Plot(id) => {
+                    crate::ui::commands::watch_window(store, "plot", None);
+                    plot::prepare(store, id);
+                }
+                _ => {}
+            }
+            view()
+                .flex_1()
+                .min_h_0()
+                .bg(move || theme().background)
+                .text_color(move || theme().foreground)
+                .text_size(body_size)
+                .line_height(nsh_core::LineHeight::Multiple(1.2))
+                .child(match panel {
+                    Panel::Settings => settings::page(store).into_element(),
+                    Panel::Memory | Panel::Logs | Panel::Plot(_) => {
+                        let kind = match panel {
+                            Panel::Memory => "memory",
+                            Panel::Logs => "logs",
+                            _ => "plot",
+                        };
+                        store
+                            .auxiliary_view
+                            .get()
+                            .expect("App.tsx supplies auxiliary pages")
+                            .render(id_for_renderer.clone(), kind.to_owned())
+                            .flex_1()
+                            .min_h_0()
+                            .into_element()
+                    }
+                    Panel::Profiles => view().into_element(),
+                })
+        },
     );
-    if let Some(window) = opened {
-        store.windows.with(|windows| {
-            windows.insert(id, window);
-        });
+    if opened {
         store.change(|s| {
             if matches!(panel, Panel::Logs) {
                 s.set_logs_visible(true);
@@ -224,4 +239,15 @@ fn empty_view_with_layout(
                 .text_size(px(15.))
             },
         ))
+}
+
+pub(super) fn register(registry: &mut Registry) {
+    settings::register(registry);
+    logs::register(registry);
+    memory::register(registry);
+    plot::register(registry);
+}
+
+fn auxiliary_store() -> Store {
+    use_context().expect("auxiliary window owns the workbench context")
 }

@@ -1,4 +1,5 @@
 mod auxiliary;
+pub use auxiliary::UpdatePresentation;
 mod chrome;
 mod colors;
 mod commands;
@@ -14,6 +15,7 @@ mod records;
 mod serial;
 mod target;
 mod tools;
+mod windows;
 
 use crate::{
     backend::{Command, Lane},
@@ -34,6 +36,9 @@ struct StorageFailure {
 #[derive(Clone, Copy)]
 pub(super) struct Store {
     data: Stored<Workbench>,
+    settings_view: Prop<Option<Renderer<String>>>,
+    auxiliary_view: Prop<Option<Renderer<String>>>,
+    update_view: Prop<Option<Renderer<UpdatePresentation>>>,
     owner: Owner,
     revision: Signal<u64>,
     sidebar: Signal<bool>,
@@ -55,6 +60,7 @@ pub(super) struct Store {
     probe_scan_target: Stored<Option<Option<Signal<crate::model::Preferences>>>>,
     command_context: Signal<commands::Context>,
     edit_actions: Signal<Option<commands::EditActions>>,
+    window_queue: windows::WindowQueue,
     windows: Stored<std::collections::BTreeMap<String, nsh_core::element::desktop::WindowRef>>,
 }
 impl Store {
@@ -196,9 +202,15 @@ impl Store {
     }
 }
 
-pub fn workbench() -> impl IntoElement {
+pub fn workbench(
+    props: crate::WorkbenchProps,
+    cx: Scope<crate::WorkbenchEvent>,
+) -> impl IntoElement {
     let store = Store {
         data: stored(Workbench::new()),
+        settings_view: props.render_settings,
+        auxiliary_view: props.render_auxiliary,
+        update_view: props.render_update,
         owner: Owner::current(),
         revision: signal(0),
         sidebar: signal(true),
@@ -220,6 +232,7 @@ pub fn workbench() -> impl IntoElement {
         probe_scan_target: stored(None),
         command_context: signal(commands::Context::main()),
         edit_actions: signal(None),
+        window_queue: windows::WindowQueue::new(),
         windows: stored(std::collections::BTreeMap::new()),
     };
     provide_context(components::MainWindowModal(store.modal, store.file_dialog));
@@ -267,6 +280,7 @@ pub fn workbench() -> impl IntoElement {
         Err(error) => store.report(format!("主题配置无效：{error}")),
     }
     let mode = signal("flash");
+    cx.methods(WorkbenchApi { store });
     let main = nsh_core::element::desktop::main_window();
     let mut attributes = nsh_core::desktop::WindowAttributes::default();
     attributes.min_size = Some(Some(Size {
@@ -306,7 +320,7 @@ pub fn workbench() -> impl IntoElement {
             auxiliary::open(store, auxiliary::Panel::Plot(id));
         }
         if restart {
-            nsh_core::element::desktop::quit();
+            nsh_core::element::desktop::restart();
         }
     });
     nsh_core::element::desktop::on_app_quit(move || async move {
@@ -379,37 +393,39 @@ pub fn workbench() -> impl IntoElement {
             });
         }
     });
+    provide_context((store, mode));
+    let layout = computed(move || {
+        (
+            mode.get(),
+            store.sidebar.get(),
+            store.composer.get(),
+            store.modal.get() || store.file_dialog.get(),
+            store.target_setup.get(),
+            store.field("firmware").is_empty(),
+        )
+    });
+    effect(move || {
+        let (mode, sidebar, composer, modal, target_setup, empty) = layout.get();
+        cx.emit(crate::WorkbenchEvent::StateChanged(
+            mode.into(),
+            sidebar,
+            composer,
+            modal,
+            target_setup,
+            empty,
+        ));
+    });
+    effect(move || {
+        cx.emit(crate::WorkbenchEvent::ToolChange(
+            store.tool.get().map(str::to_owned),
+            store.native_sheet.get(),
+        ))
+    });
     view()
-        .flex_1()
-        .bg(move || theme().background)
-        .text_color(move || theme().foreground)
         .text_size(body_size)
         .line_height(nsh_core::LineHeight::Multiple(1.2))
-        .child(chrome::toolbar(store, mode))
-        .child(
-            when(move || mode.get() == "flash", move || flash::page(store))
-                .otherwise(move || serial::page(store)),
-        )
-        .child(when(
-            move || store.modal.get() || store.file_dialog.get(),
-            move || {
-                // Native sheets mute the underlying workbench before the
-                // dialog curtain; the separate NSH modal layer stays intact.
-                view()
-                    .absolute()
-                    .left(px(0.))
-                    .right(px(0.))
-                    .top(px(0.))
-                    .bottom(px(0.))
-                    .pointer_events(nsh_core::PointerEvents::None)
-                    .bg(move || {
-                        theme()
-                            .color("modal-background-veil")
-                            .unwrap_or(theme().background.opacity(0.5))
-                    })
-            },
-        ))
-        .child(tools::overlay(store))
+        .child(props.children)
+        .child(store.window_queue.host())
         .on_file_drop(move |event: &nsh_core::prelude::FileDropEvent| {
             if store.modal.get_untracked()
                 || store.file_dialog.get_untracked()
@@ -486,6 +502,75 @@ fn shortcuts(store: Store, mode: Signal<&'static str>) {
 }
 
 #[cfg(debug_assertions)]
-pub(crate) fn preview_available(feed: crate::update::Feed) -> View {
-    auxiliary::preview_available(feed)
+pub(crate) fn preview_available(
+    feed: crate::update::Feed,
+    render_update: Prop<Option<Renderer<UpdatePresentation>>>,
+) -> View {
+    auxiliary::preview_available(feed, render_update)
+}
+
+#[derive(Debug, Clone, PartialEq, Props)]
+pub struct WorkbenchIconProps {
+    /// Name in ChipDock's compiled SVG catalog.
+    pub name: Prop<SharedString>,
+    /// Description for an icon that carries meaning without adjacent text.
+    pub accessibility_label: Prop<Option<SharedString>>,
+}
+
+/// ChipDock's original vector artwork, inheriting its foreground from the surrounding control.
+#[component]
+pub fn WorkbenchIcon(props: WorkbenchIconProps) -> impl IntoElement {
+    svg(move || icons::source(&props.name.get()))
+        .optional_label(props.accessibility_label)
+        .size(px(16.))
+        .flex_shrink_0()
+}
+
+/// Opens the native firmware chooser when the probe lane is available.
+#[component]
+pub fn ChooseFirmware() -> impl IntoElement {
+    let (store, _) = workbench_context();
+    labeled_button(
+        "folder",
+        "选择文件…",
+        false,
+        move || store.locked("firmware"),
+        move || store.pick("firmware"),
+    )
+}
+
+/// Recent firmware files for the current session.
+#[component]
+pub fn FirmwareHistory() -> impl IntoElement {
+    let (store, _) = workbench_context();
+    firmware_history::page(store)
+}
+
+/// Commands on the workbench that owns the mounted screens.
+pub struct WorkbenchApi {
+    store: Store,
+}
+
+#[methods]
+impl WorkbenchApi {
+    /// Dismisses the active serial tool and releases its modal guard.
+    pub fn close_tool(&self) {
+        tools::close(self.store);
+    }
+}
+fn workbench_context() -> (Store, Signal<&'static str>) {
+    use_context().expect("workbench content requires WorkbenchHost")
+}
+pub(crate) fn register_regions(registry: &mut Registry) {
+    registry
+        .register::<WorkbenchIcon>()
+        .register::<ChooseFirmware>()
+        .register::<FirmwareHistory>();
+    flash::register(registry);
+    target::register(registry);
+    serial::register(registry);
+    records::register(registry);
+    chrome::register(registry);
+    tools::register(registry);
+    auxiliary::register(registry);
 }

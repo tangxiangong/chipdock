@@ -120,7 +120,7 @@ pub struct Workbench {
     pub output: String,
     pub update: Option<crate::update::Available>,
     pub update_state: UpdateState,
-    pub downloaded: Option<PathBuf>,
+    pub downloaded: bool,
     pub installing: bool,
     pub restart: bool,
     pub plot_request: Option<u64>,
@@ -222,7 +222,7 @@ impl Workbench {
             output: String::new(),
             update: None,
             update_state: UpdateState::Idle,
-            downloaded: None,
+            downloaded: false,
             installing: false,
             restart: false,
             plot_request: None,
@@ -457,7 +457,7 @@ impl Workbench {
             }
             return;
         }
-        if matches!(&command, Command::InstallUpdate(..)) {
+        if matches!(&command, Command::InstallUpdate) {
             if !self.can_install_update() {
                 self.report("请先断开全部串口并停止任务和采集，再安装更新");
                 return;
@@ -477,9 +477,9 @@ impl Workbench {
             Command::CheckUpdate => Some(UpdateState::Checking),
             Command::DownloadUpdate(update) => Some(UpdateState::Downloading {
                 done: 0,
-                total: update.asset.size,
+                total: update.asset.size.unwrap_or_default(),
             }),
-            Command::InstallUpdate(..) => Some(UpdateState::Installing),
+            Command::InstallUpdate => Some(UpdateState::Installing),
             _ => None,
         };
         let connect_request = if let Command::Connect(preferences) = &command {
@@ -542,7 +542,7 @@ impl Workbench {
                 }
                 if let Some(update_state) = update_state {
                     if matches!(update_state, UpdateState::Downloading { .. }) {
-                        self.downloaded = None;
+                        self.downloaded = false;
                     }
                     self.update_state = update_state;
                 }
@@ -665,9 +665,9 @@ impl Workbench {
             self.report("请先断开全部串口并停止任务和采集，再安装更新");
             return;
         }
-        if let (Some(path), Some(update)) = (self.downloaded.clone(), self.update.clone()) {
+        if self.downloaded && self.update.as_ref().is_some_and(|u| u.can_install) {
             match self.save() {
-                Ok(()) => self.submit(Command::InstallUpdate(path, update)),
+                Ok(()) => self.submit(Command::InstallUpdate),
                 Err(e) => {
                     self.preferences.flags.insert("auto_install".into(), false);
                     let message = format!("保存设置失败，已取消安装：{e:#}");
@@ -834,8 +834,8 @@ impl Workbench {
         matches!(self.update_state, UpdateState::Downloaded)
             && self.preferences.flag("auto_install")
             && self.should_automate_update()
-            && crate::update::can_self_update()
-            && self.downloaded.is_some()
+            && self.update.as_ref().is_some_and(|u| u.can_install)
+            && self.downloaded
             && self.can_install_update()
     }
     fn dispatch_startup(&mut self) -> bool {
@@ -1294,7 +1294,7 @@ impl Workbench {
                     self.update_state = UpdateState::Cancelled;
                     return;
                 }
-                self.downloaded = None;
+                self.downloaded = false;
                 self.update = update;
                 self.update_state = if self.update.is_some() {
                     UpdateState::Available
@@ -1308,23 +1308,23 @@ impl Workbench {
                 });
                 if self.preferences.flag("auto_download")
                     && self.should_automate_update()
-                    && crate::update::can_self_update()
+                    && self.update.as_ref().is_some_and(|u| u.can_install)
                     && let Some(update) = self.update.clone()
                 {
                     self.submit(Command::DownloadUpdate(update));
                 }
             }
-            Output::Downloaded(path) => {
+            Output::Downloaded => {
                 if self
                     .worker
                     .cancel_update
                     .load(std::sync::atomic::Ordering::Relaxed)
                 {
-                    self.downloaded = None;
+                    self.downloaded = false;
                     self.update_state = UpdateState::Cancelled;
                     self.report("下载已取消");
                 } else {
-                    self.downloaded = Some(path);
+                    self.downloaded = true;
                     self.update_state = UpdateState::Downloaded;
                     self.report("更新已下载并校验，安装前请断开串口");
                 }
@@ -1600,11 +1600,9 @@ mod tests {
         crate::update::Available {
             version: version.into(),
             notes: "Release notes".into(),
-            asset: crate::update::Asset {
-                name: "ChipDock-test".into(),
-                size: 10,
-                sha256: "00".into(),
-            },
+            can_install: true,
+            asset: nsh_updater::Available::default(),
+            github: false,
         }
     }
     fn preview() -> FirmwarePreview {
@@ -2021,15 +2019,12 @@ mod tests {
         ));
         assert_eq!(
             state.update_state,
-            UpdateState::Downloading { done: 0, total: 10 }
+            UpdateState::Downloading { done: 0, total: 0 }
         );
         state.cancel_update();
-        state.finish_result(
-            Lane::Update,
-            Ok(Output::Downloaded("unused.pending".into())),
-        );
+        state.finish_result(Lane::Update, Ok(Output::Downloaded));
         assert_eq!(state.update_state, UpdateState::Cancelled);
-        assert!(state.downloaded.is_none());
+        assert!(!state.downloaded);
     }
     #[test]
     fn update_install_requires_disconnected_sessions_and_a_successful_preferences_save() {
@@ -2038,7 +2033,7 @@ mod tests {
         state.active = Some(1);
         state.sessions.get_mut(&1).unwrap().status = Some(status(1, true));
         state.update = Some(available("2.0.0"));
-        state.downloaded = Some("unused.pending".into());
+        state.downloaded = true;
         state.update_state = UpdateState::Downloaded;
         state.request_install();
         assert!(commands.try_recv().is_err());
@@ -2113,7 +2108,7 @@ mod tests {
         assert!(commands.try_recv().is_err());
         state.update = Some(available("2.1.0"));
         assert!(state.should_automate_update());
-        state.downloaded = Some("unused.pending".into());
+        state.downloaded = true;
         state.preferences.flags.insert("auto_install".into(), true);
         state.update_state = UpdateState::Cancelled;
         assert!(!state.automatic_install_ready());

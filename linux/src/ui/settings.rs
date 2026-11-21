@@ -5,7 +5,6 @@ use nsh_base::{SelectEntry, SelectItem};
 use nsh_core::element::ImageSrc;
 
 pub(super) fn page(store: Store) -> View {
-    let tab = signal("general");
     let saved = stored(settings_key(store));
     effect(move || {
         let key = settings_key(store);
@@ -15,90 +14,16 @@ pub(super) fn page(store: Store) -> View {
         }
     });
 
-    view()
-        .flex_1()
-        .min_h_0()
-        .bg(move || theme().background)
-        .text_color(move || theme().foreground)
-        .text_size(body_size)
-        .line_height(nsh_core::LineHeight::Multiple(1.2))
-        .child(
-            view()
-                .h(px(32.))
-                .flex_shrink_0()
-                .px(px(80.))
-                .items_center()
-                .justify_center()
-                .bg(move || settings_toolbar(tab.get() == "about"))
-                .window_drag(true)
-                .child(
-                    text(move || {
-                        if tab.get() == "general" {
-                            "通用"
-                        } else {
-                            "关于"
-                        }
-                    })
-                    .font_weight(FontWeight::BOLD)
-                    .text_size(body_size)
-                    .text_color(move || theme().foreground.opacity(0.7)),
-                ),
-        )
-        .child(
-            nsh_base::tabs()
-                .h(px(56.))
-                .flex_shrink_0()
-                .flex_row()
-                .items_start()
-                .justify_center()
-                .bg(move || settings_toolbar(tab.get() == "about"))
-                .gap_0()
-                .border_b_1()
-                .border_color(move || theme().border)
-                .style_when(move || tab.get() == "general", |s| s.border_b(px(0.)))
-                .children([("general", "通用"), ("about", "关于")].into_iter().map(
-                    move |(key, label)| {
-                        nsh_base::tab()
-                            .selected(move || tab.get() == key)
-                            .on_press(move || tab.set(key))
-                            .w(px(56.))
-                            .h(px(48.))
-                            .rounded(px(8.))
-                            .items_center()
-                            .justify_center()
-                            .gap_1()
-                            .text_color(move || theme().muted_foreground)
-                            .selected_style(|s| {
-                                s.bg(move || theme().background.opacity(0.))
-                                    .glass_effect(nsh_core::GlassEffect::Regular)
-                                    .text_color(move || theme().primary)
-                                    .border_1()
-                                    .border_color(move || theme().foreground.opacity(0.1))
-                            })
-                            .hover(|s| s.bg(move || theme().accent))
-                            .active(|s| s.bg(move || theme().muted))
-                            .focus_visible(|s| {
-                                s.outline(px(2.)).outline_color(move || theme().ring)
-                            })
-                            .child(settings_icon(key).size(px(22.)))
-                            .child(text(label).text_size(caption_size))
-                    },
-                )),
-        )
-        .child(
-            when(move || tab.get() == "general", move || general(store))
-                .otherwise(move || about(store)),
-        )
-}
-
-fn settings_toolbar(about: bool) -> nsh_core::element::AdaptiveColor {
-    if about {
-        theme()
-            .color("settings-toolbar")
-            .unwrap_or(theme().background)
-    } else {
-        theme().background
-    }
+    provide_context(store);
+    view().flex_1().min_h_0().child(
+        store
+            .settings_view
+            .get()
+            .expect("App.tsx supplies the settings page")
+            .render("settings", env!("CARGO_PKG_VERSION").to_owned())
+            .flex_1()
+            .min_h_0(),
+    )
 }
 
 fn settings_key(store: Store) -> (String, bool, bool, bool, bool, bool) {
@@ -114,65 +39,7 @@ fn settings_key(store: Store) -> (String, bool, bool, bool, bool, bool) {
     })
 }
 
-fn settings_icon(key: &str) -> Svg {
-    svg(ImageSrc::svg_markup(match key {
-        "general" => include_str!("../../assets/icons/gear.svg"),
-        _ => include_str!("../../assets/icons/info.svg"),
-    }))
-    .flex_shrink_0()
-}
-
-fn general(store: Store) -> View {
-    let header = |title: &'static str| {
-        text(title)
-            .px(px(10.))
-            .text_size(body_size)
-            .font_weight(FontWeight::SEMIBOLD)
-            .role(AccessibilityRole::Header)
-    };
-    view()
-        .p_5()
-        .gap(px(31.))
-        .child(
-            view().gap(px(10.)).child(header("外观")).child(
-                view()
-                    .h(px(37.))
-                    .px(px(10.))
-                    .rounded(px(10.))
-                    .bg(move || theme().color("group").unwrap_or(theme().card))
-                    .flex_row()
-                    .items_center()
-                    .justify_between()
-                    .child(text("主题").text_size(body_size))
-                    .child(theme_picker(store)),
-            ),
-        )
-        .child(
-            view()
-                .gap(px(10.))
-                .child(header("新会话的烧录默认值"))
-                .child(
-                    view()
-                        .px(px(10.))
-                        .rounded(px(10.))
-                        .bg(move || theme().color("group").unwrap_or(theme().card))
-                        .child(preference_switch(
-                            store,
-                            "default_verify",
-                            "写入后校验",
-                            true,
-                        ))
-                        .child(preference_switch(
-                            store,
-                            "default_reset",
-                            "完成后复位",
-                            false,
-                        )),
-                ),
-        )
-}
-
-fn theme_picker(store: Store) -> impl IntoElement {
+fn appearance_menu(store: Store) -> impl IntoElement {
     #[cfg(target_os = "macos")]
     {
         native_choice_menu(
@@ -327,83 +194,6 @@ fn preference_switch(
         )
 }
 
-fn about(store: Store) -> impl IntoElement {
-    view()
-        .flex_1()
-        .min_h_0()
-        .items_center()
-        .justify_center()
-        .child(
-            view()
-                .w_full()
-                .px_5()
-                .items_center()
-                .gap(px(14.))
-                .child(
-                    view().size(px(76.)).items_center().justify_center().child(
-                        image(app_icon())
-                            .size(app_icon_extent(true))
-                            .label("ChipDock 应用图标"),
-                    ),
-                )
-                .child(
-                    text("ChipDock")
-                        .text_size(px(17.))
-                        .h(px(20.5))
-                        .font_weight(FontWeight::SEMIBOLD),
-                )
-                .child(
-                    text(format!("版本 {}", env!("CARGO_PKG_VERSION")))
-                        .text_size(body_size)
-                        .text_color(move || theme().muted_foreground),
-                )
-                .child(
-                    text("Rust · NSH")
-                        .text_size(px(10.))
-                        .text_color(move || theme().muted_foreground),
-                )
-                .child(
-                    view()
-                        .mt_1()
-                        .flex_row()
-                        .items_center()
-                        .gap(px(20.))
-                        .child(external_link(
-                            "源代码",
-                            "https://github.com/tangxiangong/chipdock",
-                        ))
-                        .child(external_link(
-                            "发布记录",
-                            "https://github.com/tangxiangong/chipdock/releases",
-                        ))
-                        .child(action(
-                            "检查更新…",
-                            Variant::Default,
-                            move || store.read(|s| s.lane_busy(Lane::Update)),
-                            move || manual_check(store),
-                        )),
-                )
-                .child(automatic_update_toggle(store, false))
-                .child(automatic_update_toggle(store, true))
-                .child(
-                    text("MIT OR Apache-2.0")
-                        .text_size(small_size)
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(move || theme().muted_foreground),
-                ),
-        )
-}
-
-fn external_link(label: &'static str, href: &'static str) -> impl IntoElement {
-    nsh_base::link()
-        .href(href)
-        .accessibility_label(label)
-        .text_color(move || theme().primary)
-        .hover(|s| s.opacity(0.8))
-        .focus_visible(|s| s.outline(px(2.)).outline_color(move || theme().ring))
-        .child(text(label).text_size(body_size))
-}
-
 fn app_icon() -> ImageSrc {
     static SOURCE: std::sync::LazyLock<SharedString> = std::sync::LazyLock::new(|| {
         use base64::Engine as _;
@@ -505,10 +295,11 @@ pub(super) fn manual_check(store: Store) {
 }
 
 fn open_update_window(store: Store, system_dark: bool) {
-    use nsh_core::element::desktop::{open_window, window};
-    let opened = open_window(
+    use nsh_core::element::desktop::window;
+    let opened = super::super::windows::open(
+        store,
+        "software-update",
         window()
-            .id("software-update")
             .title("软件更新".to_owned())
             .parent("main")
             .restore_bounds(false)
@@ -517,15 +308,11 @@ fn open_update_window(store: Store, system_dark: bool) {
                 width: px(400.),
                 height: px(146.),
             })
-            .attributes(move || update_window_attributes(store))
-            .on_open_change(move |event| {
-                if !event.open {
-                    store.change(Workbench::cancel_update);
-                }
-            })
-            .content(move || update_window(store, system_dark)),
+            .attributes(move || update_window_attributes(store)),
+        move || store.change(Workbench::cancel_update),
+        move || update_window(store, system_dark),
     );
-    if opened.is_none() {
+    if !opened {
         store.report("无法打开软件更新窗口");
     }
 }
@@ -606,6 +393,54 @@ fn update_theme() -> std::sync::Arc<nsh_base::Theme> {
     theme()
 }
 
+/// Content a software-update window presents while the host owns its operation.
+#[derive(Debug, Clone, Default, PartialEq, JsObject)]
+pub struct UpdatePresentation {
+    /// Checking, downloading, installing or available.
+    pub phase: UpdatePhase,
+    /// Version offered by the verified update feed.
+    pub version: String,
+    /// Installed ChipDock version.
+    pub current_version: String,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PropEnum)]
+pub enum UpdatePhase {
+    #[default]
+    Checking,
+    Downloading,
+    Installing,
+    Available,
+}
+
+#[derive(Clone, Copy)]
+struct UpdateControls {
+    store: Option<Store>,
+    notes: Memo<String>,
+}
+
+fn render_update(
+    renderer: Prop<Option<Renderer<UpdatePresentation>>>,
+    presentation: impl Fn() -> UpdatePresentation + 'static,
+) -> View {
+    let presentation = computed(presentation);
+    view()
+        .flex_1()
+        .min_h_0()
+        .bg(move || update_theme().background)
+        .text_color(move || update_theme().foreground)
+        .text_size(body_size)
+        .line_height(nsh_core::LineHeight::Multiple(1.2))
+        .child(dynamic(move || {
+            renderer
+                .get()
+                .expect("App.tsx supplies the update window")
+                .render("software-update", presentation.get())
+                .flex_1()
+                .min_h_0()
+        }))
+}
+
 fn update_window(store: Store, system_dark: bool) -> View {
     use crate::workbench::UpdateState;
     crate::ui::commands::watch_window(store, "update", None);
@@ -669,91 +504,32 @@ fn update_window(store: Store, system_dark: bool) -> View {
             });
         }
     });
-    view()
-        .flex_1()
-        .min_h_0()
-        .bg(move || update_theme().background)
-        .text_color(move || update_theme().foreground)
-        .text_size(body_size)
-        .line_height(nsh_core::LineHeight::Multiple(1.2))
-        .child(
-            when(
-                move || {
-                    matches!(
-                        state.get(),
-                        UpdateState::Available | UpdateState::Downloaded
-                    )
-                },
-                move || available_update(store),
-            )
-            .otherwise(move || update_progress(store, state)),
-        )
-}
-
-fn update_progress(store: Store, state: Memo<crate::workbench::UpdateState>) -> View {
-    use crate::workbench::UpdateState;
-    let window = nsh_core::element::desktop::current_window();
-    view()
-        .flex_1()
-        .min_h_0()
-        .child(
-            view()
-                .h(px(32.))
-                .px_5()
-                .window_drag(true)
-                .justify_center()
-                .border_b_1()
-                .border_color(move || update_theme().foreground.opacity(0.1))
-                .bg(move || update_theme().foreground.opacity(0.035))
-                .child(
-                    text("软件更新")
-                        .text_size(body_size)
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(move || update_theme().muted_foreground),
-                ),
-        )
-        .child(
-            view()
-                .flex_1()
-                .px_5()
-                .pt(px(4.))
-                .pb(px(20.))
-                .flex_row()
-                .gap_2()
-                .child(
-                    view()
-                        .size(px(64.))
-                        .items_center()
-                        .justify_center()
-                        .child(image(app_icon()).size(app_icon_extent(false))),
-                )
-                .child(
-                    view()
-                        .flex_1()
-                        .min_w_0()
-                        .pt(px(10.))
-                        .gap(px(14.))
-                        .child(
-                            text(move || match state.get() {
-                                UpdateState::Downloading { .. } => "正在下载更新…",
-                                UpdateState::Installing => "正在安装更新…",
-                                _ => "正在检查更新…",
-                            })
-                            .text_size(body_size)
-                            .font_weight(FontWeight::BOLD),
-                        )
-                        .child(update_progress_bar(state))
-                        .child(view().flex_row().justify_end().child(update_action(
-                            "取消",
-                            false,
-                            move || matches!(state.get(), UpdateState::Installing),
-                            move || {
-                                store.change(Workbench::cancel_update);
-                                window.close();
-                            },
-                        ))),
-                ),
-        )
+    provide_context(UpdateControls {
+        store: Some(store),
+        notes: computed(move || {
+            store.read(|s| {
+                s.update
+                    .as_ref()
+                    .map(|u| u.notes.clone())
+                    .unwrap_or_default()
+            })
+        }),
+    });
+    render_update(store.update_view, move || UpdatePresentation {
+        phase: match state.get() {
+            UpdateState::Available | UpdateState::Downloaded => UpdatePhase::Available,
+            UpdateState::Downloading { .. } => UpdatePhase::Downloading,
+            UpdateState::Installing => UpdatePhase::Installing,
+            _ => UpdatePhase::Checking,
+        },
+        version: store.read(|s| {
+            s.update
+                .as_ref()
+                .map(|u| u.version.clone())
+                .unwrap_or_default()
+        }),
+        current_version: env!("CARGO_PKG_VERSION").into(),
+    })
 }
 
 fn update_progress_bar(state: Memo<crate::workbench::UpdateState>) -> impl IntoElement {
@@ -816,87 +592,89 @@ fn update_progress_bar(state: Memo<crate::workbench::UpdateState>) -> impl IntoE
         )
 }
 
-fn available_update(store: Store) -> View {
-    let window = nsh_core::element::desktop::current_window();
-    let skip_window = window.clone();
-    available_surface(
-        move || {
-            store.read(|s| {
-                s.update
-                    .as_ref()
-                    .map(|u| u.version.clone())
-                    .unwrap_or_default()
-            })
-        },
-        move || {
-            store.read(|s| {
-                s.update
-                    .as_ref()
-                    .map(|u| u.notes.clone())
-                    .unwrap_or_default()
-            })
-        },
-        false,
-        move || {
-            !crate::update::can_self_update()
-                || store.read(|s| s.lane_busy(Lane::Update) || !s.can_install_update())
-        },
-        move || {
-            let result = store.change(|s| {
-                let Some(version) = s.update.as_ref().map(|u| u.version.clone()) else {
-                    return Ok(());
-                };
-                let previous = s
-                    .preferences
-                    .fields
-                    .insert("skipped_update_version".into(), version);
-                if let Err(error) = s.save() {
-                    match previous {
-                        Some(value) => {
-                            s.preferences
-                                .fields
-                                .insert("skipped_update_version".into(), value);
-                        }
-                        None => {
-                            s.preferences.fields.remove("skipped_update_version");
-                        }
-                    }
-                    return Err(error);
+fn skip_update(store: Store, window: &nsh_core::element::desktop::WindowRef) {
+    let result = store.change(|s| {
+        let Some(version) = s.update.as_ref().map(|u| u.version.clone()) else {
+            return Ok(());
+        };
+        let previous = s
+            .preferences
+            .fields
+            .insert("skipped_update_version".into(), version);
+        if let Err(error) = s.save() {
+            match previous {
+                Some(value) => {
+                    s.preferences
+                        .fields
+                        .insert("skipped_update_version".into(), value);
                 }
-                Ok(())
-            });
-            match result {
-                Ok(()) => skip_window.close(),
-                Err(error) => {
-                    let message = format!("无法保存跳过的版本：{error:#}");
-                    store.report(&message);
-                    spawn(async move {
-                        let _ = modal_update_alert("无法保存跳过的版本", message, "好").await;
-                    });
+                None => {
+                    s.preferences.fields.remove("skipped_update_version");
                 }
             }
-        },
-        move || {
-            store.change(|s| {
-                if s.downloaded.is_some() {
-                    s.request_install();
-                } else if let Some(update) = s.update.clone() {
-                    s.submit(Command::DownloadUpdate(update));
-                }
-            })
-        },
-    )
+            return Err(error);
+        }
+        Ok(())
+    });
+    match result {
+        Ok(()) => window.close(),
+        Err(error) => {
+            let message = format!("无法保存跳过的版本：{error:#}");
+            store.report(&message);
+            spawn(async move {
+                let _ = modal_update_alert("无法保存跳过的版本", message, "好").await;
+            });
+        }
+    }
 }
 
-/// The same renderer serves verified production state and the action-disabled review surface.
-fn available_surface(
-    version: impl Fn() -> String + 'static,
-    notes: impl Fn() -> String + 'static,
-    readonly: bool,
-    install_disabled: impl Fn() -> bool + 'static,
-    skip: impl Fn() + 'static,
-    install: impl Fn() + 'static,
-) -> View {
+fn install_update(store: Store) {
+    store.change(|s| {
+        if s.downloaded {
+            s.request_install();
+        } else if let Some(update) = s.update.clone() {
+            s.submit(Command::DownloadUpdate(update));
+        }
+    });
+}
+
+#[derive(Debug, Clone, PartialEq, Props)]
+pub struct UpdateTitleProps {
+    /// Title shown using the update window's system appearance.
+    pub children: Prop<Children>,
+}
+
+/// Applies the system appearance to the update title bar independently of the application theme.
+#[component]
+pub fn UpdateTitle(props: UpdateTitleProps) -> impl IntoElement {
+    view()
+        .window_drag(true)
+        .border_b_1()
+        .border_color(move || update_theme().foreground.opacity(0.1))
+        .bg(move || update_theme().foreground.opacity(0.035))
+        .text_color(move || update_theme().muted_foreground)
+        .child(props.children)
+}
+
+/// Application artwork sized for the update window's platform.
+#[component]
+pub fn UpdateIcon() -> impl IntoElement {
+    image(app_icon()).size(app_icon_extent(false))
+}
+
+/// An accessible native progress indicator with reduced-motion animation policy.
+#[component]
+pub fn DownloadProgress() -> impl IntoElement {
+    let store = update_controls()
+        .store
+        .expect("progress belongs to an active update");
+    update_progress_bar(computed(move || store.read(|s| s.update_state.clone())))
+}
+
+/// Selectable, themed Markdown from the verified release feed.
+#[component]
+pub fn ReleaseNotes() -> impl IntoElement {
+    let notes = update_controls().notes;
     use nsh_base::{TextViewPart, TextViewParts};
     provide_context(
         TextViewParts::new()
@@ -929,85 +707,77 @@ fn available_surface(
                     .pe(px(10.))
             }),
     );
-    view()
+    scroll()
         .flex_1()
         .min_h_0()
-        .child(view().h(px(32.)).window_drag(true))
+        .rounded(px(5.))
+        .border_1()
+        .border_color(move || update_theme().foreground.opacity(0.13))
         .child(
-            view()
-                .flex_1()
-                .min_h_0()
-                .px_5()
-                .pb_5()
-                .gap_3()
-                .child(
-                    view()
-                        .h(px(64.))
-                        .flex_row()
-                        .gap_2()
-                        .child(
-                            view()
-                                .size(px(64.))
-                                .items_center()
-                                .justify_center()
-                                .child(image(app_icon()).size(app_icon_extent(false))),
-                        )
-                        .child(
-                            view()
-                                .flex_1()
-                                .min_w_0()
-                                .pt(px(13.))
-                                .gap(px(8.))
-                                .child(
-                                    text("新版本的ChipDock已经发布")
-                                        .text_size(body_size)
-                                        .font_weight(FontWeight::SEMIBOLD),
-                                )
-                                .child(
-                                    text(move || {
-                                        format!(
-                                            "ChipDock {}可供下载，您现在的版本是{}。要现在下载吗？",
-                                            version(),
-                                            env!("CARGO_PKG_VERSION")
-                                        )
-                                    })
-                                    .text_size(caption_size),
-                                ),
-                        ),
-                )
-                .child(
-                    scroll()
-                        .flex_1()
-                        .min_h_0()
-                        .rounded(px(5.))
-                        .border_1()
-                        .border_color(move || update_theme().foreground.opacity(0.13))
-                        .child(
-                            nsh_base::text_view()
-                                .markdown(move || Some(notes().into()))
-                                .selectable(true)
-                                .text_color(update_notes_ink)
-                                .px(px(9.))
-                                .py(px(8.)),
-                        ),
-                )
-                .child(
-                    view()
-                        .h(px(28.))
-                        .flex_row()
-                        .items_center()
-                        .child(update_action("跳过这个版本", false, move || readonly, skip))
-                        .child(view().flex_1())
-                        .child(update_action(
-                            "安装更新",
-                            true,
-                            move || readonly || install_disabled(),
-                            install,
-                        )),
-                ),
+            nsh_base::text_view()
+                .markdown(move || Some(notes.get().into()))
+                .selectable(true)
+                .text_color(update_notes_ink)
+                .px(px(9.))
+                .py(px(8.)),
         )
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PropEnum)]
+pub enum UpdateCommand {
+    #[default]
+    Cancel,
+    Skip,
+    Install,
+}
+
+#[derive(Debug, Clone, PartialEq, Props)]
+pub struct UpdateButtonProps {
+    /// The guarded workbench command.
+    pub command: Prop<UpdateCommand>,
+    /// Visible and accessible title.
+    pub label: Prop<SharedString>,
+}
+
+/// Update button with native window appearance and installation guards.
+#[component]
+pub fn UpdateButton(props: UpdateButtonProps) -> impl IntoElement {
+    let live = update_controls().store;
+    let command = props.command.get();
+    let window = nsh_core::element::desktop::current_window();
+    update_action(
+        props.label,
+        command == UpdateCommand::Install,
+        move || {
+            live.is_none_or(|store| match command {
+                UpdateCommand::Cancel => store
+                    .read(|s| matches!(s.update_state, crate::workbench::UpdateState::Installing)),
+                UpdateCommand::Skip => false,
+                UpdateCommand::Install => store.read(|s| {
+                    !s.update.as_ref().is_some_and(|u| u.can_install)
+                        || s.lane_busy(Lane::Update)
+                        || !s.can_install_update()
+                }),
+            })
+        },
+        move || {
+            if let Some(store) = live {
+                match command {
+                    UpdateCommand::Cancel => {
+                        store.change(Workbench::cancel_update);
+                        window.close();
+                    }
+                    UpdateCommand::Skip => skip_update(store, &window),
+                    UpdateCommand::Install => install_update(store),
+                }
+            }
+        },
+    )
+}
+
+fn update_controls() -> UpdateControls {
+    use_context().expect("update control belongs to a software-update window")
+}
 fn update_notes_ink() -> nsh_core::element::AdaptiveColor {
     update_theme()
         .color("update-notes-foreground")
@@ -1016,7 +786,10 @@ fn update_notes_ink() -> nsh_core::element::AdaptiveColor {
 
 /// Renderer inspection only: no Workbench, transport, update selection, or enabled actions.
 #[cfg(debug_assertions)]
-pub(crate) fn preview_available(feed: crate::update::Feed) -> View {
+pub(crate) fn preview_available(
+    feed: crate::update::Feed,
+    renderer: Prop<Option<Renderer<UpdatePresentation>>>,
+) -> View {
     if let Ok(tokens) = nsh_base::theme_overrides(include_str!("../../theme.json")) {
         set_tokens(tokens);
     }
@@ -1028,8 +801,11 @@ pub(crate) fn preview_available(feed: crate::update::Feed) -> View {
             super::set_appearance(&preferences.theme);
         }
     }
-    let version = signal(SharedString::from(feed.version));
-    let notes = signal(SharedString::from(feed.notes));
+    let version = feed.version;
+    provide_context(UpdateControls {
+        store: None,
+        notes: computed(move || feed.notes.clone()),
+    });
     let window = nsh_core::element::desktop::main_window();
     let mut attributes = nsh_core::desktop::WindowAttributes::default();
     let mut titlebar = nsh_core::desktop::TitleBarOptions::default();
@@ -1054,25 +830,15 @@ pub(crate) fn preview_available(feed: crate::update::Feed) -> View {
         ..Default::default()
     });
     window.center(None);
-    view()
-        .flex_1()
-        .min_h_0()
-        .bg(move || update_theme().background)
-        .text_color(move || update_theme().foreground)
-        .text_size(body_size)
-        .line_height(nsh_core::LineHeight::Multiple(1.2))
-        .child(available_surface(
-            move || version.get().to_string(),
-            move || notes.get().to_string(),
-            true,
-            || true,
-            || {},
-            || {},
-        ))
+    render_update(renderer, move || UpdatePresentation {
+        phase: UpdatePhase::Available,
+        version: version.clone(),
+        current_version: env!("CARGO_PKG_VERSION").into(),
+    })
 }
 
 fn update_action(
-    label: &'static str,
+    label: Prop<SharedString>,
     primary: bool,
     disabled: impl Fn() -> bool + 'static,
     press: impl Fn() + 'static,
@@ -1080,7 +846,7 @@ fn update_action(
     nsh_base::button()
         .on_press(press)
         .disabled(disabled)
-        .accessibility_label(label)
+        .accessibility_label(move || Some(label.get()))
         .min_w(px(100.))
         .h(px(28.))
         .px(px(14.))
@@ -1371,4 +1137,78 @@ mod system_update_appearance {
             }
         }
     }
+}
+
+/// Theme picker with the platform's native menu and appearance policy.
+#[component]
+pub fn ThemePicker() -> impl IntoElement {
+    appearance_menu(settings_store())
+}
+
+#[derive(Debug, Clone, PartialEq, Props)]
+pub struct FlashDefaultProps {
+    /// True for write verification, false for reset after writing.
+    pub verify: Prop<bool>,
+}
+
+/// A persisted default for newly created flashing sessions.
+#[component]
+pub fn FlashDefault(props: FlashDefaultProps) -> impl IntoElement {
+    let verify = props.verify.get();
+    let (key, label) = if verify {
+        ("default_verify", "写入后校验")
+    } else {
+        ("default_reset", "完成后复位")
+    };
+    preference_switch(settings_store(), key, label, verify)
+}
+
+#[derive(Debug, Clone, PartialEq, Props)]
+pub struct AutomaticUpdateProps {
+    /// Controls download and installation together.
+    pub combined: Prop<bool>,
+}
+
+/// Persisted automatic update preference.
+#[component]
+pub fn AutomaticUpdate(props: AutomaticUpdateProps) -> impl IntoElement {
+    automatic_update_toggle(settings_store(), props.combined.get())
+}
+
+/// Platform-specific application artwork at its measured About size.
+#[component]
+pub fn AboutIcon() -> impl IntoElement {
+    image(app_icon())
+        .size(app_icon_extent(true))
+        .label("ChipDock 应用图标")
+}
+
+/// Opens the update window and starts a guarded manual check.
+#[component]
+pub fn CheckForUpdates() -> impl IntoElement {
+    let store = settings_store();
+    action(
+        "检查更新…",
+        Variant::Default,
+        move || store.read(|s| s.lane_busy(Lane::Update)),
+        move || manual_check(store),
+    )
+}
+
+fn settings_store() -> Store {
+    use_context().expect("settings window owns the workbench context")
+}
+
+pub(super) fn register(registry: &mut Registry) {
+    registry
+        .register::<ThemePicker>()
+        .register::<FlashDefault>()
+        .register::<AutomaticUpdate>()
+        .register::<AboutIcon>()
+        .register::<UpdateTitle>()
+        .register::<UpdateIcon>()
+        .register::<DownloadProgress>()
+        .register::<ReleaseNotes>()
+        .register::<UpdateButton>()
+        .register::<CheckForUpdates>();
 }

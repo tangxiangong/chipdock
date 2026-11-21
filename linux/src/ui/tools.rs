@@ -15,191 +15,101 @@ pub(super) fn close(store: Store) {
     store.tool.set(None);
     store.modal.set(false);
 }
-pub(super) fn overlay(store: Store) -> impl IntoElement {
-    dynamic(move || {
-        let Some(key) = store.tool.get() else {
-            return view().into_element();
-        };
-        untracked(move || {
-            provide_context(components::ModalControls);
-            let content = match key {
-                "protocol" => super::protocol::page(store).into_element(),
-                "colors" => super::colors::page(store).into_element(),
-                "records" => super::records::page(store).into_element(),
-                "profile" => profile(store).into_element(),
-                _ => grouped(store, key).into_element(),
-            };
-            nsh_base::dialog()
-                .on_cancel(move || close(store))
-                .flex_1()
-                .items_center()
-                .justify_center()
-                .bg(move || modal_backdrop(store))
-                .text_color(move || theme().foreground)
-                .text_size(body_size)
-                .line_height(nsh_core::LineHeight::Multiple(1.2))
-                .child(
-                    view()
-                        .bg(move || theme().background)
-                        .rounded(px(16.))
-                        .overflow_hidden()
-                        .child(content),
-                )
-                .into_element()
-        })
-    })
-}
+
+/// Per-dialog packet and framing drafts and the captured session's feedback.
 #[derive(Clone, Copy)]
-struct FramingDraft {
-    mode: Signal<String>,
-    value: Signal<String>,
+struct ToolSession {
+    store: Store,
+    packets: Signal<String>,
+    framing_mode: Signal<String>,
+    framing_value: Signal<String>,
+    feedback: Feedback,
 }
 
-fn grouped(store: Store, key: &'static str) -> View {
-    let workflow = matches!(key, "packets" | "file" | "macro" | "replies");
-    let page = signal(key);
-    let packets_draft = signal(store.field("packets"));
-    let framing = FramingDraft {
-        mode: signal(store.field("frame_mode")),
-        value: signal(store.field("frame_value")),
-    };
+impl ToolSession {
+    fn current() -> Self {
+        use_context().expect("serial tool controls require SerialToolSession")
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Props)]
+pub struct SerialToolSessionProps {
+    /// Visible tool, used to invalidate stale async feedback on tab changes.
+    pub page: Prop<SharedString>,
+    /// The tool page and its controls.
+    pub children: Prop<Children>,
+}
+
+#[derive(Debug, Clone, PartialEq, Event)]
+pub enum SerialToolSessionEvent {
+    /// Feedback and job geometry for the current tool.
+    #[args(page, result, error, label_height, job_height)]
+    FeedbackChange(SharedString, bool, bool, f32, f32),
+}
+
+/// Owns the session-specific drafts and operation revisions while TSX arranges the tools.
+#[component]
+pub fn SerialToolSession(
+    props: SerialToolSessionProps,
+    cx: Scope<SerialToolSessionEvent>,
+) -> impl IntoElement {
+    let (store, _) = workbench_context();
     let feedback = Feedback::new(store);
+    provide_context(components::ModalControls);
+    provide_context(ToolSession {
+        store,
+        packets: signal(store.field("packets")),
+        framing_mode: signal(store.field("frame_mode")),
+        framing_value: signal(store.field("frame_value")),
+        feedback,
+    });
     effect(move || {
-        page.get();
+        props.page.get();
         untracked(move || feedback.reset(store));
     });
-    view()
-        .w(px(if workflow { 660. } else { 540. }))
-        .h(move || {
-            let base = match page.get() {
-                "checksum" => 456.,
-                "packets" => 505.,
-                "file" => 392.,
-                "macro" => 451.,
-                "replies" => 414.,
-                _ => 411.,
-            };
-            let has_result = !feedback.result.get().is_empty();
-            let has_error = !feedback.error.get().is_empty();
-            let job = if workflow {
-                feedback::job_height(store, feedback)
-            } else {
-                0.
-            };
-            px(if workflow && (has_result || has_error) {
-                base + job + 12. + feedback.label_height.get()
-            } else if !workflow && has_result {
-                562.
-            } else if !workflow && has_error && page.get() != "capture" {
-                411. + 14. + feedback.label_height.get()
-            } else {
-                base + job
-            })
-        })
-        .p_5()
-        .gap(px(if workflow { 12. } else { 14. }))
-        .child(tool_tabs(page, workflow))
-        .child((!workflow).then(|| view().h(px(1.)).bg(hairline)))
-        .child(dynamic(move || {
-            let key = page.get();
-            untracked(move || {
-                scroll().flex_1().min_h_0().child(
-                    view()
-                        .p_5()
-                        .child(form(store, key, packets_draft, framing, feedback).key(key)),
-                )
-            })
-        }))
-        .child(workflow.then(|| feedback::job(store, feedback)))
-        .child(when(
-            move || !feedback.result.get().is_empty(),
-            move || {
-                if workflow {
-                    feedback::message(feedback, false)
-                } else {
-                    feedback::result_box(feedback)
-                }
-            },
-        ))
-        .child(when(
-            move || !feedback.error.get().is_empty() && page.get() != "capture",
-            move || feedback::message(feedback, true),
-        ))
-        .child(view().flex_row().justify_end().child(action(
-            "完成",
-            Variant::Default,
-            || false,
-            move || close(store),
-        )))
-}
-fn tool_tabs(page: Signal<&'static str>, workflow: bool) -> impl IntoElement {
-    let entries = if workflow {
-        &[
-            ("packets", "常用包库"),
-            ("file", "发送文件"),
-            ("macro", "宏命令"),
-            ("replies", "自动应答"),
-        ][..]
-    } else {
-        &[
-            ("checksum", "发送校验"),
-            ("framing", "接收分帧"),
-            ("modbus", "Modbus RTU"),
-            ("capture", "持续采集"),
-        ][..]
-    };
-    nsh_base::tabs()
-        .self_start()
-        .h(px(24.))
-        .p_0()
-        .flex_row()
-        .rounded(px(7.))
-        .bg(move || theme().color("tools-tab").unwrap_or(theme().secondary))
-        .indicator_style(|s| {
-            s.top_0()
-                .bottom_0()
-                .rounded(px(6.))
-                .bg(move || theme().primary)
-                .transition_transform()
-                .duration(BASE)
-        })
-        .children(
-            entries
-                .iter()
-                .enumerate()
-                .map(move |(index, (key, label))| {
-                    nsh_base::tab()
-                        .relative()
-                        .selected(move || page.get() == *key)
-                        .on_press(move || page.set(key))
-                        .w(px(if workflow { 76. } else { 103. }))
-                        .h(px(24.))
-                        .items_center()
-                        .justify_center()
-                        .rounded(px(6.))
-                        .selected_style(|s| s.text_color(move || theme().primary_foreground))
-                        .child(when(
-                            move || {
-                                index > 0
-                                    && page.get() != *key
-                                    && page.get() != entries[index - 1].0
-                            },
-                            move || {
-                                view()
-                                    .absolute()
-                                    .left_0()
-                                    .top(px(5.))
-                                    .w(px(1.))
-                                    .h(px(14.))
-                                    .bg(move || {
-                                        theme().color("tools-tab-divider").unwrap_or(theme().border)
-                                    })
-                            },
-                        ))
-                        .child(text(*label).text_size(body_size))
-                }),
+    let metrics = computed(move || {
+        let page = props.page.get();
+        let job_height = if matches!(page.as_ref(), "packets" | "file" | "macro" | "replies") {
+            feedback::job_height(store, feedback)
+        } else {
+            0.
+        };
+        (
+            page,
+            !feedback.result.get().is_empty(),
+            !feedback.error.get().is_empty(),
+            feedback.label_height.get(),
+            job_height,
         )
+    });
+    effect(move || {
+        let (page, result, error, label_height, job_height) = metrics.get();
+        cx.emit(SerialToolSessionEvent::FeedbackChange(
+            page,
+            result,
+            error,
+            label_height,
+            job_height,
+        ));
+    });
+    view().child(props.children)
 }
+
+pub(super) fn register(registry: &mut Registry) {
+    registry
+        .register::<ProfileSession>()
+        .register::<ProfileName>()
+        .register::<ProfileAction>()
+        .register::<SerialToolSession>()
+        .register::<ToolParameter>()
+        .register::<ToolCommandButton>()
+        .register::<ToolOutcome>()
+        .register::<SerialJobStatus>()
+        .register::<ToolDone>();
+    super::protocol::register(registry);
+    super::colors::register(registry);
+}
+
 fn tool_action(
     label: impl IntoReactive<SharedString>,
     feedback: Feedback,
@@ -215,7 +125,7 @@ fn tool_action(
 fn run(
     store: Store,
     key: &'static str,
-    label: &'static str,
+    label: impl IntoReactive<SharedString>,
     feedback: Feedback,
 ) -> impl IntoElement {
     tool_action(
@@ -269,7 +179,7 @@ fn json_editor(store: Store, key: &'static str) -> impl IntoElement {
         .border(px(0.5))
         .border_color(tool_separator)
 }
-fn tool_row(label: &'static str) -> View {
+fn tool_row(label: impl IntoReactive<SharedString>) -> View {
     view()
         .min_h(px(37.))
         .flex_row()
@@ -279,7 +189,7 @@ fn tool_row(label: &'static str) -> View {
         .border_color(tool_separator)
         .child(text(label).text_size(body_size))
 }
-fn tool_input(store: Store, key: &'static str, label: &'static str) -> View {
+fn tool_input(store: Store, key: &'static str, label: Prop<SharedString>) -> View {
     if key == "selected" {
         return view()
             .min_h(px(53.5))
@@ -341,7 +251,7 @@ fn tool_input(store: Store, key: &'static str, label: &'static str) -> View {
 fn tool_pick(
     store: Store,
     key: &'static str,
-    label: &'static str,
+    label: Prop<SharedString>,
     values: &'static [&'static str],
 ) -> View {
     tool_select(
@@ -355,7 +265,7 @@ fn tool_pick(
 
 fn tool_select(
     key: &'static str,
-    label: &'static str,
+    label: Prop<SharedString>,
     values: &'static [&'static str],
     value: impl Fn() -> String + Copy + 'static,
     change: impl Fn(String) + Copy + 'static,
@@ -377,7 +287,7 @@ fn tool_select(
                         change(v.to_string())
                     }
                 })
-                .accessibility_label(label)
+                .accessibility_label(move || Some(label.get()))
                 .popup_style(popup)
                 .render_item(|item: &nsh_base::SelectEntry| {
                     text(item.title.clone()).text_size(body_size).px_2().py_1()
@@ -404,61 +314,340 @@ fn tool_select(
                 ),
         )
 }
-fn form(
-    store: Store,
-    key: &'static str,
-    packets_draft: Signal<String>,
-    framing: FramingDraft,
-    feedback: Feedback,
-) -> View {
-    match key {
-        "packets"=>form_group()
-            .child(view().py_3().border_b_1().border_color(tool_separator).child(tool_note("每个包可设置 name、group、note、order、enabled、text、format。format 使用 hex 或 utf-8。")))
-            .child(view().py(px(10.)).border_b_1().border_color(tool_separator).child(nsh_base::input().caret_color(|| color(theme().primary)).multiline(true).auto_correct(false).auto_capitalize(AutoCapitalize::None).label("常用包库").auto_focus(true).value(packets_draft).on_change(move |v:&str|packets_draft.set(v.into())).h(px(160.)).px(px(8.5)).py(px(3.5)).font_family(mono).text_size(body_size).line_height(px(16.5)).text_color(move ||theme().color("editor-foreground").unwrap_or(theme().foreground)).bg(move ||theme().color("editor-background").unwrap_or(theme().background)).rounded(px(5.)).border(px(0.5)).border_color(tool_separator)))
-            .child(tool_input(store,"selected","按发送顺序填写包名（逗号分隔，留空发送全部启用包）"))
-            .child(tool_input(store,"interval","包间隔 (ms)"))
-            .child(row().py(px(10.)).child(tool_action("示例",feedback,||false,move ||packets_draft.set(r#"[{"name":"读状态","group":"调试","note":"","order":0,"enabled":true,"text":"AA 01","format":"hex"}]"#.into())))
-                .child(tool_action("导入 JSON…",feedback,||false,move ||import_packets(store,packets_draft,feedback)))
-                .child(tool_action("保存",feedback,||false,move ||save_packets(store,packets_draft,false,feedback)))
-                .child(tool_action("导出 JSON…",feedback,||false,move ||export_packets(store,feedback)))
-                .child(tool_action("批量发送",feedback,move ||store.read(|s|s.serial_busy()||!s.serial_connected()),move ||save_packets(store,packets_draft,true,feedback)))),
-        "file"=>form_group().child(tool_row("文件路径").min_h(px(45.)).child(nsh_base::input().caret_color(|| color(theme().primary)).label("文件路径").value(move ||store.field("file")).on_change(move |v:&str|store.change(|s|s.set("file",v.into()))).flex_1().min_w_0().text_size(body_size))
-            .child(tool_action("选择文件…",feedback,||false,move ||pick_file(store))))
-            .child(tool_input(store,"chunk","块大小 (字节)")).child(tool_input(store,"interval","块间隔 (ms)"))
-            .child(view().py(px(10.)).items_start().child(run(store,"file","发送文件",feedback))),
-        "macro"=>form_group().child(view().py_3().border_b_1().border_color(tool_separator).child(tool_note("步骤可包含 send、delayMs、wait 和 timeoutMs。匹配方式为 text、hex 或 regex。")))
-            .child(view().py(px(10.)).border_b_1().border_color(tool_separator).child(json_editor(store,"macro")))
-            .child(tool_input(store,"cycles","循环次数"))
-            .child(row().py(px(10.)).child(run(store,"macro","运行宏",feedback)).child(tool_action("导出结果 CSV…",feedback,||false,move ||save_macro(store,feedback)))),
-        "replies"=>form_group().child(view().py_3().border_b_1().border_color(tool_separator).child(tool_note("按顺序匹配，支持 text、hex 或 regex。delayMs 用于延时，enabled 控制是否启用。")))
-            .child(view().py(px(10.)).border_b_1().border_color(tool_separator).child(json_editor(store,"replies")))
-            .child(row().py(px(10.)).child(tool_action("示例",feedback,||false,move ||store.change(|s|s.set("replies",r#"[{"name":"pong","enabled":true,"trigger":{"kind":"text","pattern":"PING"},"reply":{"text":"OK","format":"utf-8"},"delayMs":20}]"#.into()))))
-                .child(run(store,"replies","应用应答规则",feedback))),
-        "framing"=>form_group().child(tool_select("frame_mode","分帧方式",&["read","idle","header","tail","fixed"],move ||framing.mode.get(),move |value|framing.mode.set(value)))
-            .child(when(move ||framing.mode.get()!="read",move ||dynamic(move ||{let label=match framing.mode.get().as_str(){"idle"=>"间隔 (ms)","fixed"=>"字节数",_=>"标记 (HEX)"};tool_row(label).child(nsh_base::input().caret_color(||color(theme().primary)).label(label).value(framing.value).on_change(move |value:&str|framing.value.set(value.into())).flex_1().min_w_0().h(px(24.)).text_right().text_size(body_size))})))
-            .child(view().py(px(10.)).items_start().child(tool_action("应用",feedback,move ||store.read(Workbench::serial_busy),move ||feedback.dispatch_framing(store,framing.mode.get_untracked(),framing.value.get_untracked())))),
-        "modbus"=>form_group().child(tool_input(store,"station","站号")).child(tool_pick(store,"function","功能码",&["1","2","3","4","5","6","15","16"]))
-            .child(tool_input(store,"register","起始地址")).child(when(move ||["1","2","3","4"].contains(&store.field("function").as_str()),move ||tool_input(store,"quantity","读取数量")).otherwise(move ||tool_input(store,"values","写入值（十进制，以逗号分隔）")))
-            .child(tool_input(store,"timeout","超时 (ms)"))
-            .child(row().py(px(10.)).child(run(store,"modbus","生成请求",feedback)).child(run(store,"modbusSend","发送并等待响应",feedback))),
-        "capture"=>form_group().child(tool_toggle(store,"raw_capture","仅捕获原始 RX"))
-            .child(when(move ||!store.flag("raw_capture"),move ||tool_pick(store,"capture_format","日志格式",&["csv","txt","bin"])))
-            .child(view().min_h(px(45.)).flex_row().gap_2().items_center().border_b_1().border_color(tool_separator).child(text("新文件路径").text_size(body_size)).child(nsh_base::input().caret_color(|| color(theme().primary)).auto_correct(false).auto_capitalize(AutoCapitalize::None).label("新文件路径").value(move ||store.field("capture_path")).on_change(move |v:&str|store.change(|s|s.set("capture_path",v.into()))).flex_1().text_size(body_size))
-                .child(tool_action("选择文件夹",feedback,||false,move ||capture_directory(store))))
-            .child(tool_input(store,"roll_mib","按大小滚动 (MiB)"))
-            .child(view().py(px(10.)).items_start().child(tool_action(move ||if capturing(store){"停止采集"}else{"开始采集"},feedback,move ||store.read(Workbench::serial_busy)||(!capturing(store)&&store.field("capture_path").is_empty()),move ||{
-                let raw=store.flag("raw_capture");let running=capturing(store);feedback.dispatch(store,match(raw,running){(true,true)=>"stopRaw",(true,false)=>"raw",(false,true)=>"stopCapture",_=>"capture"});
-            })))
-            .child(when(move ||!feedback.error.get().is_empty(),move ||view().py(px(10.)).child(feedback::message(feedback,true)))),
-        _=>form_group().child(view().min_h(px(53.)).flex_row().items_start().pt(px(10.)).gap_3().border_b_1().border_color(tool_separator).child(text("试算内容").text_size(body_size))
-            .child(nsh_base::input().caret_color(|| color(theme().primary)).multiline(true).auto_correct(false).auto_capitalize(AutoCapitalize::None).label("试算内容").auto_focus(true).text_right().value(move ||store.field("checksum_input")).on_change(move |v:&str|store.change(|s|s.set("checksum_input",v.into()))).h(px(40.)).flex_1().text_size(body_size)))
-            .child(tool_pick(store,"format","编码",&["hex","utf-8","ascii","gbk","latin-1"]))
-            .child(tool_pick(store,"checksum","算法",&["sum8","xor8","oddParity","evenParity","crc16Modbus","crc16Ccitt","crc32","lrc"]))
-            .child(tool_input(store,"prefix","跳过开头字节")).child(tool_input(store,"suffix","跳过结尾字节"))
-            .child(tool_toggle(store,"hex_ending","HEX 发送时允许附加行尾"))
-            .child(view().py(px(10.)).items_start().child(run(store,"checksum","计算",feedback))),
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PropEnum)]
+pub enum ToolParameterId {
+    #[default]
+    Packets,
+    Selected,
+    Interval,
+    FilePath,
+    Chunk,
+    Macro,
+    Cycles,
+    Replies,
+    FramingMode,
+    FramingValue,
+    Station,
+    Function,
+    Register,
+    ModbusValue,
+    Timeout,
+    RawCapture,
+    CaptureFormat,
+    CapturePath,
+    RollMib,
+    ChecksumInput,
+    Format,
+    Checksum,
+    Prefix,
+    Suffix,
+    HexEnding,
+}
+
+#[derive(Debug, Clone, PartialEq, Props)]
+pub struct ToolParameterProps {
+    /// Serial field or draft represented by this control.
+    pub field: Prop<ToolParameterId>,
+    /// Label visible in the row and announced by the editor.
+    pub label: Prop<SharedString>,
+}
+
+/// A native editor or picker bound to the captured tool session.
+#[component]
+pub fn ToolParameter(props: ToolParameterProps) -> impl IntoElement {
+    use ToolParameterId::*;
+    let ToolSession {
+        store,
+        packets,
+        framing_mode,
+        framing_value,
+        feedback,
+    } = ToolSession::current();
+    let label = props.label;
+    match props.field.get() {
+        Packets => nsh_base::input()
+            .caret_color(|| color(theme().primary))
+            .multiline(true)
+            .auto_correct(false)
+            .auto_capitalize(AutoCapitalize::None)
+            .label(label)
+            .auto_focus(true)
+            .value(packets)
+            .on_change(move |v: &str| packets.set(v.into()))
+            .h(px(160.))
+            .px(px(8.5))
+            .py(px(3.5))
+            .font_family(mono)
+            .text_size(body_size)
+            .line_height(px(16.5))
+            .text_color(move || {
+                theme()
+                    .color("editor-foreground")
+                    .unwrap_or(theme().foreground)
+            })
+            .bg(move || {
+                theme()
+                    .color("editor-background")
+                    .unwrap_or(theme().background)
+            })
+            .rounded(px(5.))
+            .border(px(0.5))
+            .border_color(tool_separator)
+            .into_element(),
+        Macro => json_editor(store, "macro").into_element(),
+        Replies => json_editor(store, "replies").into_element(),
+        Selected => tool_input(store, "selected", label).into_element(),
+        Interval => tool_input(store, "interval", label).into_element(),
+        Chunk => tool_input(store, "chunk", label).into_element(),
+        Cycles => tool_input(store, "cycles", label).into_element(),
+        Station => tool_input(store, "station", label).into_element(),
+        Register => tool_input(store, "register", label).into_element(),
+        Timeout => tool_input(store, "timeout", label).into_element(),
+        RollMib => tool_input(store, "roll_mib", label).into_element(),
+        Prefix => tool_input(store, "prefix", label).into_element(),
+        Suffix => tool_input(store, "suffix", label).into_element(),
+        HexEnding => tool_toggle(store, "hex_ending", label).into_element(),
+        RawCapture => tool_toggle(store, "raw_capture", label).into_element(),
+        Format => tool_pick(
+            store,
+            "format",
+            label,
+            &["hex", "utf-8", "ascii", "gbk", "latin-1"],
+        )
+        .into_element(),
+        Checksum => tool_pick(
+            store,
+            "checksum",
+            label,
+            &[
+                "sum8",
+                "xor8",
+                "oddParity",
+                "evenParity",
+                "crc16Modbus",
+                "crc16Ccitt",
+                "crc32",
+                "lrc",
+            ],
+        )
+        .into_element(),
+        Function => tool_pick(
+            store,
+            "function",
+            label,
+            &["1", "2", "3", "4", "5", "6", "15", "16"],
+        )
+        .into_element(),
+        ModbusValue => when(
+            move || ["1", "2", "3", "4"].contains(&store.field("function").as_str()),
+            move || tool_input(store, "quantity", "读取数量".into()),
+        )
+        .otherwise(move || tool_input(store, "values", "写入值（十进制，以逗号分隔）".into()))
+        .into_element(),
+        FramingMode => tool_select(
+            "frame_mode",
+            label,
+            &["read", "idle", "header", "tail", "fixed"],
+            move || framing_mode.get(),
+            move |v| framing_mode.set(v),
+        )
+        .into_element(),
+        FramingValue => when(
+            move || framing_mode.get() != "read",
+            move || {
+                dynamic(move || {
+                    let label = match framing_mode.get().as_str() {
+                        "idle" => "间隔 (ms)",
+                        "fixed" => "字节数",
+                        _ => "标记 (HEX)",
+                    };
+                    tool_row(label).child(
+                        nsh_base::input()
+                            .caret_color(|| color(theme().primary))
+                            .label(label)
+                            .value(framing_value)
+                            .on_change(move |v: &str| framing_value.set(v.into()))
+                            .flex_1()
+                            .min_w_0()
+                            .h(px(24.))
+                            .text_right()
+                            .text_size(body_size),
+                    )
+                })
+            },
+        )
+        .into_element(),
+        CaptureFormat => when(
+            move || !store.flag("raw_capture"),
+            move || tool_pick(store, "capture_format", label, &["csv", "txt", "bin"]),
+        )
+        .into_element(),
+        FilePath => tool_row(label)
+            .min_h(px(45.))
+            .child(
+                nsh_base::input()
+                    .caret_color(|| color(theme().primary))
+                    .label(label)
+                    .value(move || store.field("file"))
+                    .on_change(move |v: &str| store.change(|s| s.set("file", v.into())))
+                    .flex_1()
+                    .min_w_0()
+                    .text_size(body_size),
+            )
+            .child(tool_action(
+                "选择文件…",
+                feedback,
+                || false,
+                move || pick_file(store),
+            ))
+            .into_element(),
+        CapturePath => view()
+            .min_h(px(45.))
+            .flex_row()
+            .gap_2()
+            .items_center()
+            .border_b_1()
+            .border_color(tool_separator)
+            .child(text(label).text_size(body_size))
+            .child(
+                nsh_base::input()
+                    .caret_color(|| color(theme().primary))
+                    .auto_correct(false)
+                    .auto_capitalize(AutoCapitalize::None)
+                    .label(label)
+                    .value(move || store.field("capture_path"))
+                    .on_change(move |v: &str| store.change(|s| s.set("capture_path", v.into())))
+                    .flex_1()
+                    .text_size(body_size),
+            )
+            .child(tool_action(
+                "选择文件夹",
+                feedback,
+                || false,
+                move || capture_directory(store),
+            ))
+            .into_element(),
+        ChecksumInput => view()
+            .min_h(px(53.))
+            .flex_row()
+            .items_start()
+            .pt(px(10.))
+            .gap_3()
+            .border_b_1()
+            .border_color(tool_separator)
+            .child(text(label).text_size(body_size))
+            .child(
+                nsh_base::input()
+                    .caret_color(|| color(theme().primary))
+                    .multiline(true)
+                    .auto_correct(false)
+                    .auto_capitalize(AutoCapitalize::None)
+                    .label(label)
+                    .auto_focus(true)
+                    .text_right()
+                    .value(move || store.field("checksum_input"))
+                    .on_change(move |v: &str| store.change(|s| s.set("checksum_input", v.into())))
+                    .h(px(40.))
+                    .flex_1()
+                    .text_size(body_size),
+            )
+            .into_element(),
     }
 }
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PropEnum)]
+pub enum ToolCommand {
+    #[default]
+    Checksum,
+    Framing,
+    Modbus,
+    ModbusSend,
+    Capture,
+    File,
+    Macro,
+    MacroExport,
+    Replies,
+    RepliesExample,
+    PacketsExample,
+    PacketsImport,
+    PacketsSave,
+    PacketsExport,
+    Batch,
+}
+
+#[derive(Debug, Clone, PartialEq, Props)]
+pub struct ToolCommandButtonProps {
+    /// The operation to perform on the tool session.
+    pub command: Prop<ToolCommand>,
+    /// Action label.
+    pub label: Prop<SharedString>,
+}
+
+/// A native action using the same availability guards as the workbench.
+#[component]
+pub fn ToolCommandButton(props: ToolCommandButtonProps) -> impl IntoElement {
+    use ToolCommand::*;
+    let ToolSession {
+        store,
+        packets,
+        framing_mode,
+        framing_value,
+        feedback,
+    } = ToolSession::current();
+    let label = props.label;
+    match props.command.get() {
+        Checksum => run(store,"checksum",label,feedback).into_element(),
+        Modbus => run(store,"modbus",label,feedback).into_element(),
+        ModbusSend => run(store,"modbusSend",label,feedback).into_element(),
+        File => run(store,"file",label,feedback).into_element(),
+        Macro => run(store,"macro",label,feedback).into_element(),
+        Replies => run(store,"replies",label,feedback).into_element(),
+        Framing => tool_action(label,feedback,move ||store.read(Workbench::serial_busy),move ||feedback.dispatch_framing(store,framing_mode.get_untracked(),framing_value.get_untracked())).into_element(),
+        Capture => tool_action(move ||if capturing(store){SharedString::from("停止采集")}else{label.get()},feedback,move ||store.read(Workbench::serial_busy)||(!capturing(store)&&store.field("capture_path").is_empty()),move || {
+            let raw=store.flag("raw_capture");let running=capturing(store);feedback.dispatch(store,match(raw,running){(true,true)=>"stopRaw",(true,false)=>"raw",(false,true)=>"stopCapture",_=>"capture"});
+        }).into_element(),
+        MacroExport => tool_action(label,feedback,||false,move ||save_macro(store,feedback)).into_element(),
+        RepliesExample => tool_action(label,feedback,||false,move ||store.change(|s|s.set("replies",r#"[{"name":"pong","enabled":true,"trigger":{"kind":"text","pattern":"PING"},"reply":{"text":"OK","format":"utf-8"},"delayMs":20}]"#.into()))).into_element(),
+        PacketsExample => tool_action(label,feedback,||false,move ||packets.set(r#"[{"name":"读状态","group":"调试","note":"","order":0,"enabled":true,"text":"AA 01","format":"hex"}]"#.into())).into_element(),
+        PacketsImport => tool_action(label,feedback,||false,move ||import_packets(store,packets,feedback)).into_element(),
+        PacketsSave => tool_action(label,feedback,||false,move ||save_packets(store,packets,false,feedback)).into_element(),
+        PacketsExport => tool_action(label,feedback,||false,move ||export_packets(store,feedback)).into_element(),
+        Batch => tool_action(label,feedback,move ||store.read(|s|s.serial_busy()||!s.serial_connected()),move ||save_packets(store,packets,true,feedback)).into_element(),
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Props)]
+pub struct ToolOutcomeProps {
+    /// Show the diagnostic GroupBox rather than a workflow label.
+    #[prop(default)]
+    pub diagnostic: Prop<bool>,
+    /// Present the current error.
+    #[prop(default)]
+    pub failed: Prop<bool>,
+}
+/// The result or error bound to the captured operation revision.
+#[component]
+pub fn ToolOutcome(props: ToolOutcomeProps) -> impl IntoElement {
+    let feedback = ToolSession::current().feedback;
+    if props.diagnostic.get() {
+        feedback::result_box(feedback)
+    } else {
+        feedback::message(feedback, props.failed.get())
+    }
+}
+/// The selected serial session's native job progress and cancellation control.
+#[component]
+pub fn SerialJobStatus() -> impl IntoElement {
+    let state = ToolSession::current();
+    feedback::job(state.store, state.feedback)
+}
+/// Closes the active dialog using its native button and keyboard semantics.
+#[component]
+pub fn ToolDone() -> impl IntoElement {
+    let store = ToolSession::current().store;
+    action("完成", Variant::Default, || false, move || close(store))
+}
+
 fn capturing(store: Store) -> bool {
     store.read(|s| {
         s.active_session()
@@ -571,27 +760,25 @@ fn save_macro(store: Store, feedback: Feedback) {
         }
     });
 }
-fn profile(store: Store) -> View {
-    let initial = store.read(|s| {
-        let chip = s.preferences.get("chip");
-        if chip.is_empty() {
-            "烧录配置".to_owned()
-        } else {
-            chip.to_owned()
-        }
-    });
-    let selected = initial.encode_utf16().count() as u32;
-    let name = signal(initial);
-    let selection = signal((0, 0));
-    let first_focus = signal(true);
-    let save = move || {
-        if name.with_untracked(|name| name.trim().is_empty()) {
+#[derive(Clone, Copy)]
+struct ProfileDraft {
+    store: Store,
+    name: Signal<String>,
+}
+
+impl ProfileDraft {
+    fn current() -> Self {
+        use_context().expect("profile controls require ProfileSession")
+    }
+
+    fn save(self) {
+        if self.name.with_untracked(|name| name.trim().is_empty()) {
             return;
         }
-        let result = store.change(|s| {
+        let result = self.store.change(|s| {
             let old_name = s.preferences.get("profile").to_owned();
             let profiles = s.preferences.profiles.clone();
-            let requested_name = name.get_untracked();
+            let requested_name = self.name.get_untracked();
             let stored_name = s.preferences.unique_profile_name(requested_name.trim());
             s.set("profile", requested_name);
             match s.store_profile() {
@@ -605,113 +792,115 @@ fn profile(store: Store) -> View {
         });
         match result {
             Ok(stored_name) => {
-                store.change(|s| s.report(format!("已保存配置“{stored_name}”")));
-                close(store);
+                self.store
+                    .change(|s| s.report(format!("已保存配置“{stored_name}”")));
+                close(self.store);
             }
-            Err(error) => store.queue_storage_error(error),
+            Err(error) => self.store.queue_storage_error(error),
         }
-    };
-    view()
-        .w(px(400.))
-        .p_6()
-        .gap(px(18.))
-        .text_size(body_size)
-        .line_height(nsh_core::LineHeight::Multiple(1.2))
-        .child(
-            view()
-                .gap(px(3.))
-                .child(text("保存烧录配置").font_weight(FontWeight::BOLD))
-                .child(caption("保存探针、目标芯片、连接参数与烧录选项。")),
-        )
-        .child(
-            draft_input(
-                "配置名称",
-                move || name.get(),
-                move |value| name.set(value.into()),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Props)]
+pub struct ProfileSessionProps {
+    /// The profile editor's fields and actions.
+    pub children: Prop<Children>,
+}
+#[derive(Debug, Clone, PartialEq, Event)]
+pub enum ProfileSessionEvent {
+    /// The target and connection parameters included when saving this profile.
+    #[args(target, wire, speed, erase)]
+    SummaryChange(String, String, String, String),
+}
+/// Owns the editable name and exposes the current profile summary to TSX.
+#[component]
+pub fn ProfileSession(
+    props: ProfileSessionProps,
+    cx: Scope<ProfileSessionEvent>,
+) -> impl IntoElement {
+    let (store, _) = workbench_context();
+    provide_context(components::ModalControls);
+    let target = store.field("chip");
+    let name = signal(if target.is_empty() {
+        "烧录配置".to_owned()
+    } else {
+        target
+    });
+    provide_context(ProfileDraft { store, name });
+    let summary = computed(move || {
+        store.read(|s| {
+            let p = &s.preferences;
+            (
+                p.get("chip").to_owned(),
+                p.get("wire").to_uppercase(),
+                p.get("speed").to_owned(),
+                p.get("erase").to_owned(),
             )
-            .placeholder("配置名称")
-            .auto_correct(false)
-            .auto_capitalize(AutoCapitalize::None)
-            .auto_focus(true)
-            .selected_range(selection)
-            .on_focus(move || {
-                if first_focus.get_untracked() {
-                    first_focus.set(false);
-                    selection.set((0, selected));
-                }
-            })
-            .on_submit(move |_: &str| save())
-            .focus(|s| {
-                s.outline(px(3.5))
-                    .outline_color(move || theme().primary.opacity(0.5))
-            }),
+        })
+    });
+    effect(move || {
+        let (target, wire, speed, erase) = summary.get();
+        cx.emit(ProfileSessionEvent::SummaryChange(
+            target, wire, speed, erase,
+        ));
+    });
+    view().child(props.children)
+}
+/// Profile name with native initial selection and Return-to-save behavior.
+#[component]
+pub fn ProfileName() -> impl IntoElement {
+    let draft = ProfileDraft::current();
+    let selected = draft.name.get_untracked().encode_utf16().count() as u32;
+    let selection = signal((0, 0));
+    let first_focus = signal(true);
+    draft_input(
+        "配置名称",
+        move || draft.name.get(),
+        move |v| draft.name.set(v.into()),
+    )
+    .placeholder("配置名称")
+    .auto_correct(false)
+    .auto_capitalize(AutoCapitalize::None)
+    .auto_focus(true)
+    .selected_range(selection)
+    .on_focus(move || {
+        if first_focus.get_untracked() {
+            first_focus.set(false);
+            selection.set((0, selected));
+        }
+    })
+    .on_submit(move |_: &str| draft.save())
+    .focus(|s| {
+        s.outline(px(3.5))
+            .outline_color(move || theme().primary.opacity(0.5))
+    })
+}
+#[derive(Debug, Clone, PartialEq, Props)]
+pub struct ProfileActionProps {
+    /// Save as the default action, or cancel and discard the draft.
+    #[prop(default)]
+    pub save: Prop<bool>,
+}
+/// Commits or dismisses the profile using the workbench's native buttons.
+#[component]
+pub fn ProfileAction(props: ProfileActionProps) -> impl IntoElement {
+    let draft = ProfileDraft::current();
+    if props.save.get() {
+        action(
+            "保存",
+            Variant::DefaultAction,
+            move || draft.name.with(|s| s.trim().is_empty()),
+            move || draft.save(),
         )
-        .child(
-            view()
-                .p_3()
-                .rounded(px(8.))
-                .bg(move || theme().foreground.opacity(0.05))
-                .gap(px(6.))
-                .children([("目标", 0), ("接口", 1), ("擦除", 2)].into_iter().map(
-                    move |(label, index)| {
-                        view()
-                            .flex_row()
-                            .gap(px(14.))
-                            .child(
-                                text(label)
-                                    .w(px(24.5))
-                                    .text_size(caption_size)
-                                    .text_color(move || theme().muted_foreground),
-                            )
-                            .child(
-                                text(move || {
-                                    store.read(|s| match index {
-                                        0 => {
-                                            let target = s.preferences.get("chip");
-                                            if target.is_empty() {
-                                                "自动识别".into()
-                                            } else {
-                                                target.into()
-                                            }
-                                        }
-                                        1 => format!(
-                                            "{} · {} kHz",
-                                            s.preferences.get("wire").to_uppercase(),
-                                            s.preferences.get("speed")
-                                        ),
-                                        _ => match s.preferences.get("erase") {
-                                            "full" => "整片擦除",
-                                            "skip" => "跳过擦除",
-                                            _ => "按需擦除",
-                                        }
-                                        .into(),
-                                    })
-                                })
-                                .flex_1()
-                                .min_w_0()
-                                .text_size(caption_size),
-                            )
-                    },
-                )),
+        .into_element()
+    } else {
+        action(
+            "取消",
+            Variant::Default,
+            || false,
+            move || close(draft.store),
         )
-        .child(
-            view()
-                .flex_row()
-                .justify_end()
-                .gap_2()
-                .child(action(
-                    "取消",
-                    Variant::Default,
-                    || false,
-                    move || close(store),
-                ))
-                .child(action(
-                    "保存",
-                    Variant::DefaultAction,
-                    move || name.with(|name| name.trim().is_empty()),
-                    save,
-                )),
-        )
+        .into_element()
+    }
 }
 
 pub(super) async fn read_json(
@@ -761,7 +950,7 @@ fn tool_value_label(key: &str, value: &str) -> String {
     }
 }
 
-fn tool_toggle(store: Store, key: &'static str, label: &'static str) -> View {
+fn tool_toggle(store: Store, key: &'static str, label: Prop<SharedString>) -> View {
     tool_row(label)
         .min_h(px(37.5))
         .child(view().flex_1())
@@ -769,7 +958,7 @@ fn tool_toggle(store: Store, key: &'static str, label: &'static str) -> View {
             nsh_base::switch()
                 .checked(move || store.flag(key))
                 .on_change(move |v: &bool| store.change(|s| s.flag(key, *v)))
-                .accessibility_label(label)
+                .accessibility_label(move || Some(label.get()))
                 .track_style(|s| {
                     s.w(px(36.))
                         .h(px(16.))
@@ -986,14 +1175,6 @@ fn numeric_tool_key(key: &str) -> bool {
             | "suffix"
             | "roll_mib"
     )
-}
-
-fn tool_note(label: &'static str) -> Text {
-    text(label)
-        .text_size(small_size)
-        .h(px(12.))
-        .line_height(px(12.))
-        .text_color(move || theme().muted_foreground)
 }
 
 // NSGroupedForm separator contrast measured against the native dark and light captures.

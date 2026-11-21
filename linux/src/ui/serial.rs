@@ -3,7 +3,7 @@ use chipdock_core::serial::{Direction, types::ControlLine};
 use nsh_base::{
     DataTable, DataTableApi, DataTableCell, DataTableClasses, DataTableColumn,
     DataTableContextMenu, DataTableEvent, DataTablePress, DataTableRange, DataTableRows,
-    DataTableSelection, SelectItem, h_resizable, resizable_panel, v_resizable,
+    DataTableSelection, SelectItem,
 };
 use nsh_core::element::desktop::MenuItem as NativeMenuItem;
 use std::collections::BTreeMap;
@@ -99,72 +99,7 @@ fn select_rows(
     }
 }
 
-pub(super) fn page(store: Store) -> View {
-    view()
-        .flex_1()
-        .min_h(px(633.))
-        .mt(|| {
-            px(if nsh_core::element::window().width.0 < 997. {
-                -16.5
-            } else {
-                0.
-            })
-        })
-        .child(session_bar(store))
-        .child(
-            h_resizable()
-                .flex_1()
-                .min_h_0()
-                .handle_class("bg-border")
-                .handle_accessibility_label("调整连接区宽度")
-                .child(
-                    resizable_panel()
-                        .size(px(340.))
-                        .min_size(px(220.))
-                        .max_size(px(340.))
-                        .visible(store.sidebar)
-                        .child(connection(store)),
-                )
-                .child(
-                    resizable_panel().size(px(820.)).min_size(px(440.)).child(
-                        view()
-                            .pl(move || px(if store.sidebar.get() { 1. } else { 0. }))
-                            .flex_1()
-                            .min_h_0()
-                            .child(error_banner(store))
-                            .child(
-                                v_resizable()
-                                    .flex_1()
-                                    .min_h_0()
-                                    .handle_class("bg-border")
-                                    .handle_accessibility_label("调整终端与发送区高度")
-                                    .handle_style(|style| style.translate_y(px(-1.)))
-                                    .child(
-                                        resizable_panel().size(px(348.)).min_size(px(180.)).child(
-                                            view()
-                                                .pb(move || {
-                                                    px(if store.composer.get() { 1. } else { 0. })
-                                                })
-                                                .flex_1()
-                                                .min_h_0()
-                                                .child(terminal(store)),
-                                        ),
-                                    )
-                                    .child(
-                                        resizable_panel()
-                                            .size(px(320.))
-                                            .min_size(px(164.))
-                                            .max_size(px(320.))
-                                            .visible(store.composer)
-                                            .child(composer(store)),
-                                    ),
-                            ),
-                    ),
-                ),
-        )
-        .child(status_bar(store))
-}
-fn session_bar(store: Store) -> View {
+pub(super) fn session_bar(store: Store) -> View {
     let sessions = computed(move || store.read(|s| s.sessions.keys().copied().collect::<Vec<_>>()));
     view()
         .h(px(33.))
@@ -322,23 +257,229 @@ fn session_bar(store: Store) -> View {
                 .child(icons::icon("plus").size(px(14.))),
         )
 }
-fn connection(store: Store) -> View {
+
+/// The active serial session's form state, projected without sending terminal records to JS.
+#[derive(Debug, Clone, Default, PartialEq, JsObject)]
+pub struct SerialFormState {
+    pub command_mode: bool,
+    pub send_characters: u32,
+    pub send_job: bool,
+    pub active_window: bool,
+    pub baud_valid: bool,
+    pub ports_busy: bool,
+    pub options_locked: bool,
+    pub auto_connect_locked: bool,
+    pub auto_connect: bool,
+    pub reconnect: bool,
+    pub control_lines: bool,
+    pub rts: bool,
+    pub dtr: bool,
+    pub rts_locked: bool,
+    pub dtr_locked: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Event)]
+pub enum SerialPageEvent {
+    /// The active session's serial form values or available controls changed.
+    #[args(state)]
+    FormChange(SerialFormState),
+}
+
+#[derive(Debug, Clone, PartialEq, Props)]
+pub struct SerialPageProps {
+    /// The connection, terminal and composer regions arranged by the page.
+    pub children: Prop<Children>,
+}
+
+/// Commands from the connection form and composer tabs.
+pub struct SerialPageApi {
+    store: Store,
+}
+
+#[methods]
+impl SerialPageApi {
+    /// Requests a fresh enumeration of serial ports.
+    pub fn refresh_ports(&self) {
+        if !self.store.read(|s| s.lane_busy(Lane::Serial)) {
+            self.store.command(|_| Command::Ports);
+        }
+    }
+    /// Switches the active session between its text and command editors.
+    pub fn set_command_mode(&self, command_mode: bool) {
+        self.store.change(|s| s.flag("command_mode", command_mode));
+    }
+    /// Applies the default session's start-up connection preference.
+    pub fn set_auto_connect(&self, enabled: bool) {
+        if !self.store.locked("port") && self.store.read(|s| s.active == Some(1)) {
+            self.store.change(|s| s.flag("auto_connect", enabled));
+        }
+    }
+    /// Applies the active session's reconnection preference.
+    pub fn set_reconnect(&self, enabled: bool) {
+        if !self.store.locked("port") {
+            self.store.change(|s| s.flag("reconnect", enabled));
+        }
+    }
+    /// Changes an output line on the connected physical port.
+    pub fn set_line(&self, line: SerialOutputLine, level: bool) {
+        let Some(id) = self.store.read(|s| {
+            let status = s.active_session()?.status.as_ref()?;
+            (status.connected
+                && !status.path.as_deref().unwrap_or("").starts_with("VIRTUAL-")
+                && !s.serial_busy()
+                && !(line == SerialOutputLine::Rts && s.preferences.get("flow") == "hardware"))
+                .then_some(s.active?)
+        }) else {
+            return;
+        };
+        self.store.command(|_| {
+            Command::Line(
+                id,
+                match line {
+                    SerialOutputLine::Rts => ControlLine::Rts,
+                    SerialOutputLine::Dtr => ControlLine::Dtr,
+                },
+                level,
+            )
+        });
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PropEnum)]
+pub enum SerialOutputLine {
+    #[default]
+    Rts,
+    Dtr,
+}
+
+/// Binds the serial page to the workbench's active session.
+#[component(methods = SerialPageApi)]
+pub fn SerialPageHost(props: SerialPageProps, cx: Scope<SerialPageEvent>) -> impl IntoElement {
+    let (store, _) = workbench_context();
+    cx.methods(SerialPageApi { store });
     let active = control_active();
-    let section = |label: &'static str| {
-        view().gap(px(10.)).child(
-            text(label)
-                .text_size(body_size)
-                .font_weight(FontWeight::SEMIBOLD)
-                .px(px(30.)),
+    let state = computed(move || {
+        let active_window = active.get();
+        let options_locked = store.locked("port");
+        store.read(|s| {
+            let status = s
+                .active_session()
+                .and_then(|session| session.status.as_ref());
+            SerialFormState {
+                command_mode: s.preferences.flag("command_mode"),
+                send_characters: s.preferences.get("send").chars().count() as u32,
+                send_job: status
+                    .and_then(|v| v.job_kind.as_deref())
+                    .is_some_and(|k| k != "repeat"),
+                active_window,
+                baud_valid: s
+                    .preferences
+                    .get("baud")
+                    .trim()
+                    .parse::<u32>()
+                    .is_ok_and(|v| v > 0),
+                ports_busy: s.lane_busy(Lane::Serial),
+                options_locked,
+                auto_connect_locked: options_locked || s.active != Some(1),
+                auto_connect: s.preferences.flag("auto_connect"),
+                reconnect: s.preferences.flag("reconnect"),
+                control_lines: status.is_some_and(|v| {
+                    v.connected && !v.path.as_deref().unwrap_or("").starts_with("VIRTUAL-")
+                }),
+                rts: status.and_then(|v| v.rts).unwrap_or(false),
+                dtr: status.and_then(|v| v.dtr).unwrap_or(false),
+                rts_locked: s.serial_busy() || s.preferences.get("flow") == "hardware",
+                dtr_locked: s.serial_busy(),
+            }
+        })
+    });
+    effect(move || cx.emit(SerialPageEvent::FormChange(state.get())));
+    view().child(props.children)
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PropEnum)]
+pub enum SerialChoiceField {
+    #[default]
+    Bits,
+    Stop,
+    Parity,
+    Flow,
+    Format,
+    Ending,
+}
+
+#[derive(Debug, Clone, PartialEq, Props)]
+pub struct SerialChoiceProps {
+    /// Session preference edited by the native menu.
+    pub field: Prop<SerialChoiceField>,
+}
+
+/// The shared native picker for a serial parameter or send format.
+#[component]
+pub fn SerialChoice(props: SerialChoiceProps) -> impl IntoElement {
+    let (store, _) = workbench_context();
+    let (key, choices): (&str, &'static [&'static str]) = match props.field.get() {
+        SerialChoiceField::Bits => ("bits", &["5", "6", "7", "8"]),
+        SerialChoiceField::Stop => ("stop", &["1", "2"]),
+        SerialChoiceField::Parity => ("parity", &["none", "even", "odd"]),
+        SerialChoiceField::Flow => ("flow", &["none", "software", "hardware"]),
+        SerialChoiceField::Format => ("format", &["hex", "ascii", "gbk", "utf-8", "latin-1"]),
+        SerialChoiceField::Ending => ("ending", &["none", "lf", "cr", "crlf"]),
+    };
+    popup_control(store, key, choices, true)
+}
+
+/// Baud rate editor with its native preset menu.
+#[component]
+pub fn SerialBaud() -> impl IntoElement {
+    let (store, _) = workbench_context();
+    view()
+        .flex_1()
+        .flex_row()
+        .items_center()
+        .justify_end()
+        .gap(px(2.))
+        .child(
+            nsh_base::input()
+                .value(move || store.field("baud"))
+                .on_change(move |v: &str| store.change(|s| s.set("baud", v.into())))
+                .label("波特率")
+                .readonly(move || store.locked("baud"))
+                .w(px(135.))
+                .h(px(20.))
+                .text_right()
+                .text_size(small_control_size),
         )
-    };
-    let valid_baud = move || {
-        store
-            .field("baud")
-            .trim()
-            .parse::<u32>()
-            .is_ok_and(|v| v > 0)
-    };
+        .child(native_borderless_menu_small_disabled(
+            view()
+                .w(px(17.))
+                .h(px(16.))
+                .items_center()
+                .justify_center()
+                .label("常用波特率")
+                .child(icons::icon("select").size(px(12.))),
+            move || store.locked("baud"),
+            move || {
+                [
+                    1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600,
+                ]
+                .into_iter()
+                .map(move |rate| {
+                    NativeMenuItem::new(rate.to_string()).on_select(move || {
+                        if !store.locked("baud") {
+                            store.change(|s| s.set("baud", rate.to_string()));
+                        }
+                    })
+                })
+                .collect()
+            },
+        ))
+}
+
+/// Connect, disconnect or cancel reconnect according to the current serial state.
+#[component]
+pub fn SerialConnectButton() -> impl IntoElement {
+    let (store, _) = workbench_context();
     let connect_disabled = computed(move || {
         store.read(|s| {
             s.serial_busy()
@@ -356,138 +497,355 @@ fn connection(store: Store) -> View {
                             .is_ok_and(|v| v > 0)))
         })
     });
-    view().flex_1().min_h_0()
-        .child(scroll().flex_1().child(view().py_5().gap(px(30.))
-            .child(section("设备").child(form_group().mx_5().child(
-                view().min_h(px(40.)).flex_row().items_center().gap_1()
-                    .child(view().flex_1().min_w_0().child(device_picker(store)))
-                    .child(nsh_base::button()
-                        .accessibility_label("刷新串口（⌘R）")
-                        .disabled(move || store.read(|s| s.lane_busy(Lane::Serial)))
-                        .on_press(move || store.command(|_| Command::Ports))
-                        .w(px(11.5)).h(px(22.)).p_0()
-                        .hit_slop(nsh_core::geometry::Edges::all(px(5.)))
-                        .items_center().justify_center()
-                        .text_color(move || theme().foreground.opacity(0.7))
-                        .focus_visible(|s| s.outline(px(2.)).outline_color(move || theme().ring))
-                        .child(icons::icon("refresh").size(px(14.)))),
-            )))
-            .child(section("参数").child(form_group().mx_5()
-                .child(parameter_row("波特率").min_h(px(36.)).child(
-                    view().flex_1().flex_row().items_center().justify_end().gap(px(2.))
-                        .child(nsh_base::input().value(move || store.field("baud"))
-                            .on_change(move |v:&str| store.change(|s| s.set("baud", v.into())))
-                            .label("波特率").readonly(move || store.locked("baud"))
-                            .w(px(135.)).h(px(20.)).text_right().text_size(small_control_size))
-                        .child(native_borderless_menu_small_disabled(
-                            view().w(px(17.)).h(px(16.)).items_center().justify_center().label("常用波特率")
-                                .child(icons::icon("select").size(px(12.))),
-                            move || store.locked("baud"),
-                            move || [1200,2400,4800,9600,19200,38400,57600,115200,230400,460800,921600]
-                                .into_iter().map(move |rate| NativeMenuItem::new(rate.to_string()).on_select(move || {
-                                    if !store.locked("baud") { store.change(|s| s.set("baud", rate.to_string())); }
-                                })).collect()))))
-                .child(parameter_pick(store,"bits","数据位", &["5","6","7","8"]))
-                .child(parameter_pick(store,"stop","停止位", &["1","2"]))
-                .child(parameter_pick(store,"parity","校验位", &["none","even","odd"]))
-                .child(parameter_pick(store,"flow","流控制", &["none","software","hardware"]).border_b(px(0.))))
-                .child(when(move || !valid_baud(), || {
-                    text("波特率须为正整数").px(px(30.)).text_size(small_size).text_color(move ||theme().destructive)
-                })))
-            .child(section("选项").child(form_group().mx_5()
-                .child(form_switch(store,"auto_connect","启动时连接"))
-                .child(form_switch(store,"reconnect","掉线后重连").border_b(px(0.)))))
-            .child(when(move || store.read(|s| s.active_session().and_then(|s|s.status.as_ref())
-                .is_some_and(|v|v.connected && !v.path.as_deref().unwrap_or("").starts_with("VIRTUAL-"))), move || {
-                    section("控制线").child(form_group().mx_5().children(
-                        [("RTS",ControlLine::Rts),("DTR",ControlLine::Dtr)].into_iter().map(move |(label,line)| {
-                            form_row(label).child(view().flex_1()).child(
-                                view().flex_row().p(px(2.)).rounded(px(7.)).bg(move ||theme().secondary)
-                                    .children([(false,"清除"),(true,"置位")].into_iter().map(move |(level,caption)| {
-                                        nsh_base::button().selected(move || store.read(|s| s.active_session()
-                                            .and_then(|s|s.status.as_ref()).and_then(|v|if label=="RTS" {v.rts}else{v.dtr}).unwrap_or(false)==level))
-                                            .disabled(move || store.read(|s|s.serial_busy() || (label=="RTS" && s.preferences.get("flow")=="hardware")))
-                                            .on_press(move ||store.command(|s|Command::Line(s.active.unwrap_or(1),line,level)))
-                                            .h(px(20.)).px(px(10.)).rounded(px(5.))
-                                            .selected_style(|s|s.bg(move ||theme().foreground.opacity(0.15)))
-                                            .child(text(caption).text_size(caption_size))
-                                    })),
-                            )
-                        }),
-                    ))
-            }))))
-        .child(view().p_3().border_t_1().border_color(hairline)
-            .child(nsh_base::button()
-.disabled(connect_disabled)
-                .on_press(move || { if !store.modal.get_untracked() {store.change(Workbench::connect_serial);} })
-                .h(px(28.)).px(px(14.)).rounded(px(14.)).flex_row().items_center().justify_center().gap_2()
-                .bg(move ||emphasized_fill(true, connect_disabled.get(), active.get(), false)).text_color(move ||emphasized_ink(true, connect_disabled.get(), active.get(), false))
-                .hover(|s|s.bg(move ||theme().primary.opacity(0.9))).active(|s|s.bg(move ||theme().primary.opacity(0.8)))
-                .focus_visible(|s|s.outline(px(2.)).outline_color(move ||theme().ring)).disabled_style(|s|s.opacity(1.))
-                .child(when(move ||store.read(Workbench::serial_connected), ||icons::icon("stop")).otherwise(||icons::icon("link")))
-                .child(text(move ||store.read(|s|if s.serial_busy(){"正在处理…"}
-                    else if s.active_session().and_then(|v|v.status.as_ref()).is_some_and(|v|v.reconnecting){"取消重连"}
-                    else if s.serial_connected(){"断开连接"}else{"连接串口"})).text_size(body_size))))
-}
 
-fn parameter_row(label: &'static str) -> View {
-    view()
-        .min_h(px(40.))
+    let active = control_active();
+    nsh_base::button()
+        .disabled(connect_disabled)
+        .on_press(move || {
+            if !store.modal.get_untracked() {
+                store.change(Workbench::connect_serial);
+            }
+        })
+        .h(px(28.))
+        .px(px(14.))
+        .rounded(px(14.))
         .flex_row()
         .items_center()
-        .gap(px(20.))
-        .border_b_1()
-        .border_color(hairline)
-        .child(text(label).w(px(39.)).flex_shrink_0().text_size(body_size))
-}
-
-fn parameter_pick(
-    store: Store,
-    key: &'static str,
-    label: &'static str,
-    values: &'static [&'static str],
-) -> View {
-    let width = signal(280_f32);
-    // Native remains inline at a 300pt rail (181pt picker), and stacks at 299pt.
-    // Preserve that measured 240pt inner-width boundary and its 65pt stacked rows.
-    let stacked = computed(move || width.get() < 240.);
-    view()
-        .min_h(move || px(if stacked.get() { 65. } else { 40. }))
-        .border_b_1()
-        .border_color(hairline)
-        .on_layout(move |bounds: &Bounds<Points>| {
-            if (width.get_untracked() - bounds.size.width.0).abs() > 0.25 {
-                width.set(bounds.size.width.0);
-            }
-        })
-        .style_with(move |style| {
-            if stacked.get() {
-                style.flex_col().items_start().pt(px(11.)).gap(px(8.))
-            } else {
-                style.flex_row().items_center().gap(px(20.))
-            }
-        })
+        .justify_center()
+        .gap_2()
+        .bg(move || emphasized_fill(true, connect_disabled.get(), active.get(), false))
+        .text_color(move || emphasized_ink(true, connect_disabled.get(), active.get(), false))
+        .hover(|s| s.bg(move || theme().primary.opacity(0.9)))
+        .active(|s| s.bg(move || theme().primary.opacity(0.8)))
+        .focus_visible(|s| s.outline(px(2.)).outline_color(move || theme().ring))
+        .disabled_style(|s| s.opacity(1.))
         .child(
-            text(label)
-                .w(px(39.))
-                .h(px(16.))
-                .flex_shrink_0()
-                .text_size(body_size),
+            when(
+                move || store.read(Workbench::serial_connected),
+                || icons::icon("stop"),
+            )
+            .otherwise(|| icons::icon("link")),
         )
         .child(
-            view()
-                .min_w_0()
-                .style_with(move |style| {
-                    if stacked.get() {
-                        style.w_full().h(px(20.))
+            text(move || {
+                store.read(|s| {
+                    if s.serial_busy() {
+                        "正在处理…"
+                    } else if s
+                        .active_session()
+                        .and_then(|v| v.status.as_ref())
+                        .is_some_and(|v| v.reconnecting)
+                    {
+                        "取消重连"
+                    } else if s.serial_connected() {
+                        "断开连接"
                     } else {
-                        style.flex_1()
+                        "连接串口"
                     }
                 })
-                .child(popup_control(store, key, values, true)),
+            })
+            .text_size(body_size),
         )
 }
 
+/// Native serial tool menu with current-session actions.
+#[component]
+pub fn SerialToolsMenu() -> impl IntoElement {
+    let (store, _) = workbench_context();
+    let repeating = move || repeating(store);
+    native_borderless_menu_small(
+        view()
+            .w(px(58.))
+            .h(px(14.))
+            .px(px(3.))
+            .flex_row()
+            .items_center()
+            .gap(px(4.))
+            .hit_slop(nsh_core::geometry::Edges::all(px(3.)))
+            .text_color(move || {
+                theme()
+                    .color("terminal-menu-glyph")
+                    .unwrap_or(theme().foreground)
+            })
+            .label("串口工具")
+            .child(icons::icon("more").size(px(14.)))
+            .child(text("工具").text_size(small_control_size))
+            .child(icons::icon("down").size(px(8.))),
+        move || {
+            vec![
+                NativeMenuItem::new("命令与接收规则…")
+                    .disabled(repeating())
+                    .on_select(move || tools::open(store, "protocol")),
+                NativeMenuItem::separator(),
+                NativeMenuItem::new("校验、分帧、Modbus 与采集…")
+                    .on_select(move || tools::open(store, "checksum")),
+                NativeMenuItem::new("包库、文件、宏与应答…")
+                    .on_select(move || tools::open(store, "packets")),
+                NativeMenuItem::separator(),
+                NativeMenuItem::new("打开实时曲线").on_select(move || {
+                    if let Some(id) = store.read(|s| s.active) {
+                        auxiliary::open(store, auxiliary::Panel::Plot(id));
+                    }
+                }),
+            ]
+        },
+    )
+}
+
+/// Native menu for restoring a previously sent draft.
+#[component]
+pub fn SerialSendHistory() -> impl IntoElement {
+    let (store, _) = workbench_context();
+    let repeating = move || repeating(store);
+    native_borderless_menu_small_disabled(
+        view().size(px(20.)).label("发送历史").child(
+            icons::icon("history").size(px(15.)).text_color(move || {
+                button_ink(
+                    false,
+                    repeating() || store.read(|s| s.preferences.history.is_empty()),
+                )
+            }),
+        ),
+        move || repeating() || store.read(|s| s.preferences.history.is_empty()),
+        move || {
+            store
+                .read(|s| s.preferences.history.clone())
+                .into_iter()
+                .map(|value| {
+                    NativeMenuItem::new(value.chars().take(80).collect::<String>()).on_select(
+                        move || {
+                            if !repeating() {
+                                store.change(|s| s.set("send", value.clone()));
+                            }
+                        },
+                    )
+                })
+                .collect()
+        },
+    )
+}
+
+/// Multiline editor bound directly to the active session draft.
+#[component]
+pub fn SerialTextDraft() -> impl IntoElement {
+    let (store, _) = workbench_context();
+    let repeating = move || repeating(store);
+    nsh_base::input()
+        .value(move || store.field("send"))
+        .on_change(move |v: &str| store.change(|s| s.set("send", v.into())))
+        .label("要发送的数据")
+        .multiline(true)
+        .readonly(move || repeating() || store.read(|s| s.installing))
+        .placeholder(move || {
+            if store.field("format") == "hex" {
+                "输入十六进制字节，例如 AA 01 FF"
+            } else {
+                "输入文本或设备指令…"
+            }
+        })
+        .placeholder_color(|| color(theme().foreground.opacity(0.26)))
+        .font_family(mono)
+        .text_size(body_size)
+        .px(px(14.))
+        .py(px(6.))
+        .flex_1()
+        .min_h_0()
+}
+
+/// Repeat-send control with interval validation and cancellation.
+#[component]
+pub fn SerialRepeat() -> impl IntoElement {
+    let (store, _) = workbench_context();
+    let repeating = move || repeating(store);
+    nsh_base::checkbox()
+        .checked(repeating)
+        .indicator_style(|style| style.hidden())
+        .disabled(move || {
+            !repeating()
+                && store.read(|s| {
+                    !super::commands::can_send(s)
+                        || !s
+                            .preferences
+                            .number("interval")
+                            .is_ok_and(|v| (10..=3_600_000).contains(&v))
+                })
+        })
+        .on_change(move |_: &bool| {
+            let stop = repeating();
+            store.change(|s| s.serial_action(if stop { "cancelJob" } else { "repeat" }));
+        })
+        .h(px(20.))
+        .px_2()
+        .rounded(px(5.))
+        .flex_row()
+        .items_center()
+        .gap(px(5.))
+        .bg(move || theme().color("button").unwrap_or(theme().secondary))
+        .border_1()
+        .border_color(hairline)
+        .checked_style(|s| {
+            s.bg(move || theme().primary)
+                .text_color(move || theme().primary_foreground)
+        })
+        .hover(|s| s.bg(move || theme().accent))
+        .active(|s| s.bg(move || theme().muted))
+        .disabled_style(|s| s.opacity(0.45))
+        .child(icons::icon("repeat").size(px(13.)))
+        .child(text("自动发送").text_size(caption_size))
+}
+
+/// Live progress and cancellation for a non-repeating send job.
+#[component]
+pub fn SerialSendProgress() -> impl IntoElement {
+    let (store, _) = workbench_context();
+    let busy = move || store.read(Workbench::serial_busy);
+    view()
+        .flex_row()
+        .items_center()
+        .gap_2()
+        .child(
+            nsh_base::progress()
+                .value(move || {
+                    store.read(|s| {
+                        s.active_session()
+                            .and_then(|s| s.status.as_ref())
+                            .map_or(0., |s| {
+                                if s.job_total > 0 {
+                                    s.job_done as f32 / s.job_total as f32 * 100.
+                                } else {
+                                    0.
+                                }
+                            })
+                    })
+                })
+                .w(px(80.))
+                .track_class("h-1 bg-muted rounded-full")
+                .indicator_class("h-1 bg-primary rounded-full")
+                .accessibility_label("发送任务进度"),
+        )
+        .child(caption(move || {
+            store.read(|s| {
+                s.active_session()
+                    .and_then(|s| s.status.as_ref())
+                    .map_or(String::new(), |s| {
+                        format!("{} / {}", s.job_done, s.job_total)
+                    })
+            })
+        }))
+        .child(action("取消任务", Variant::Default, busy, move || {
+            store.change(|s| s.serial_action("cancelJob"))
+        }))
+}
+
+/// Submit the active session draft after checking its send guards.
+#[component]
+pub fn SerialSendButton() -> impl IntoElement {
+    let (store, _) = workbench_context();
+    let repeating = move || repeating(store);
+    let busy = move || store.read(Workbench::serial_busy);
+    prominent_button(
+        "send",
+        move || {
+            if busy() && store.read(Workbench::serial_connected) {
+                "发送中…"
+            } else {
+                "发送"
+            }
+        },
+        move || !store.read(super::commands::can_send) || repeating(),
+        move || {
+            if !store.modal.get_untracked() {
+                store.change(Workbench::send);
+            }
+        },
+    )
+}
+
+/// Native checksum policy menu for send operations.
+#[component]
+pub fn SerialChecksum() -> impl IntoElement {
+    let (store, _) = workbench_context();
+    checksum_menu(store)
+}
+
+/// The active session’s validated repeat interval editor.
+#[component]
+pub fn SerialInterval() -> impl IntoElement {
+    let (store, _) = workbench_context();
+    compact_input(store, "interval", "自动发送间隔，毫秒", 64.)
+}
+
+/// Command editor with completion, preview and keyboard history.
+#[component]
+pub fn SerialCommandEditor() -> impl IntoElement {
+    let (store, _) = workbench_context();
+    command_composer(store)
+}
+
+/// Searchable serial port selector with disconnected device reconciliation.
+#[component]
+pub fn SerialPortPicker() -> impl IntoElement {
+    let (store, _) = workbench_context();
+    device_picker(store)
+}
+
+/// Serial sessions with stable identities and native context menus.
+#[component]
+pub fn SerialSessions() -> impl IntoElement {
+    let (store, _) = workbench_context();
+    session_bar(store)
+}
+
+/// Virtualized receive records and native selection.
+#[component]
+pub fn SerialTerminal() -> impl IntoElement {
+    let (store, _) = workbench_context();
+    terminal(store)
+}
+
+/// Error reported by the active serial session.
+#[component]
+pub fn SerialError() -> impl IntoElement {
+    let (store, _) = workbench_context();
+    error_banner(store)
+}
+
+/// Live native serial telemetry and command controls.
+#[component]
+pub fn SerialStatus() -> impl IntoElement {
+    let (store, _) = workbench_context();
+    status_bar(store)
+}
+
+pub(super) fn register(registry: &mut Registry) {
+    registry
+        .register::<SerialPageHost>()
+        .register::<SerialChoice>()
+        .register::<SerialBaud>()
+        .register::<SerialConnectButton>()
+        .register::<SerialToolsMenu>()
+        .register::<SerialSendHistory>()
+        .register::<SerialTextDraft>()
+        .register::<SerialRepeat>()
+        .register::<SerialSendProgress>()
+        .register::<SerialSendButton>()
+        .register::<SerialChecksum>()
+        .register::<SerialInterval>()
+        .register::<SerialCommandEditor>()
+        .register::<SerialPortPicker>()
+        .register::<SerialSessions>()
+        .register::<SerialTerminal>()
+        .register::<SerialError>()
+        .register::<SerialStatus>();
+}
+
+fn repeating(store: Store) -> bool {
+    store.read(|s| {
+        s.active_session()
+            .and_then(|s| s.status.as_ref())
+            .is_some_and(|s| s.job_kind.as_deref() == Some("repeat"))
+    })
+}
 fn device_picker(store: Store) -> impl IntoElement {
     nsh_base::select()
         .items(move || {
@@ -581,49 +939,7 @@ fn device_picker(store: Store) -> impl IntoElement {
                 .child(icons::icon("select").size(px(12.))),
         )
 }
-fn form_switch(store: Store, key: &'static str, label: &'static str) -> View {
-    let active = control_active();
-    form_row(label).child(view().flex_1()).child(
-        nsh_base::switch()
-            .checked(move || store.flag(key))
-            .disabled(move || {
-                store.locked("port")
-                    || (key == "auto_connect" && store.read(|s| s.active != Some(1)))
-            })
-            .on_change(move |v: &bool| store.change(|s| s.flag(key, *v)))
-            .accessibility_label(label)
-            .track_style(move |s| {
-                s.w(px(42.))
-                    .h(px(22.))
-                    .p(px(3.))
-                    .rounded_full()
-                    .bg(move || theme().foreground.opacity(0.18))
-                    .checked(|s| {
-                        s.bg(move || {
-                            if active.get() {
-                                theme().primary
-                            } else {
-                                theme()
-                                    .color("selection-inactive")
-                                    .unwrap_or(theme().secondary)
-                            }
-                        })
-                    })
-                    .transition_colors()
-                    .duration(INSTANT)
-            })
-            .thumb_style(|s| {
-                s.w(px(26.))
-                    .h(px(16.))
-                    .rounded_full()
-                    .bg(move || theme().primary_foreground)
-                    .checked(|s| s.translate_x(px(10.)))
-                    .transition_transform()
-                    .duration(FAST)
-            }),
-    )
-}
-fn terminal(store: Store) -> View {
+pub(super) fn terminal(store: Store) -> View {
     let records = computed(move || {
         store.read(|s| {
             let Some(session) = s.active_session() else {
@@ -1348,344 +1664,6 @@ fn export_records(store: Store, format: &'static str) {
 fn divider() -> View {
     view().w(px(1.)).h(px(14.)).mx_1().bg(hairline)
 }
-fn composer(store: Store) -> View {
-    let active = control_active();
-    let repeating = move || {
-        store.read(|s| {
-            s.active_session()
-                .and_then(|s| s.status.as_ref())
-                .is_some_and(|s| s.job_kind.as_deref() == Some("repeat"))
-        })
-    };
-    let busy = move || store.read(Workbench::serial_busy);
-    view()
-        .flex_1()
-        .min_h_0()
-        .child(
-            view()
-                .h(px(37.))
-                .px_3()
-                .flex_row()
-                .items_center()
-                .gap(px(10.))
-                .border_b_1()
-                .border_color(hairline)
-                .child(
-                    nsh_base::radio_group()
-                        .flex_row()
-                        .px(px(0.))
-                        .rounded(px(6.))
-                        .bg(move || theme().color("serial-control").unwrap_or(theme().secondary))
-                        .children([(false, "文本"), (true, "命令")].into_iter().map(
-                            move |(mode, label)| {
-                                nsh_base::radio()
-                                    .checked(move || store.flag("command_mode") == mode)
-                                    .on_change(move |checked: &bool| {
-                                        if *checked {
-                                            store.change(|s| s.flag("command_mode", mode));
-                                        }
-                                    })
-                                    .h(px(20.))
-                                    .w(px(42.))
-                                    .p_0()
-                                    .items_center()
-                                    .justify_center()
-                                    .rounded(px(5.))
-                                    .checked_style(|s| {
-                                        s.bg(move || {
-                                            if active.get() {
-                                                theme().primary
-                                            } else {
-                                                theme()
-                                                    .color("composer-selection-inactive")
-                                                    .unwrap_or(theme().secondary)
-                                            }
-                                        })
-                                        .text_color(
-                                            move || {
-                                                if active.get() {
-                                                    theme().primary_foreground
-                                                } else {
-                                                    theme().foreground
-                                                }
-                                            },
-                                        )
-                                    })
-                                    .hover(|s| s.bg(move || theme().accent))
-                                    .active(|s| s.bg(move || theme().muted))
-                                    .focus_visible(|s| {
-                                        s.outline(px(2.)).outline_color(move || theme().ring)
-                                    })
-                                    .child(text(label).text_size(caption_size))
-                            },
-                        )),
-                )
-                .child(when(
-                    move || !store.flag("command_mode"),
-                    move || {
-                        view()
-                            .flex_row()
-                            .items_center()
-                            .gap(px(8.))
-                            .child(view().w(px(81.5)).child(popup_control(
-                                store,
-                                "format",
-                                &["hex", "ascii", "gbk", "utf-8", "latin-1"],
-                                true,
-                            )))
-                            .child(view().w(px(72.5)).child(popup_control(
-                                store,
-                                "ending",
-                                &["none", "lf", "cr", "crlf"],
-                                true,
-                            )))
-                            .child(checksum_menu(store))
-                    },
-                ))
-                .child(view().flex_1().min_w(px(8.)))
-                .child(native_borderless_menu_small(
-                    view()
-                        .w(px(58.))
-                        .h(px(14.))
-                        .px(px(3.))
-                        .flex_row()
-                        .items_center()
-                        .gap(px(4.))
-                        .hit_slop(nsh_core::geometry::Edges::all(px(3.)))
-                        .text_color(move || {
-                            theme()
-                                .color("terminal-menu-glyph")
-                                .unwrap_or(theme().foreground)
-                        })
-                        .label("串口工具")
-                        .child(icons::icon("more").size(px(14.)))
-                        .child(text("工具").text_size(small_control_size))
-                        .child(icons::icon("down").size(px(8.))),
-                    move || {
-                        vec![
-                            NativeMenuItem::new("命令与接收规则…")
-                                .disabled(repeating())
-                                .on_select(move || tools::open(store, "protocol")),
-                            NativeMenuItem::separator(),
-                            NativeMenuItem::new("校验、分帧、Modbus 与采集…")
-                                .on_select(move || tools::open(store, "checksum")),
-                            NativeMenuItem::new("包库、文件、宏与应答…")
-                                .on_select(move || tools::open(store, "packets")),
-                            NativeMenuItem::separator(),
-                            NativeMenuItem::new("打开实时曲线").on_select(move || {
-                                if let Some(id) = store.read(|s| s.active) {
-                                    auxiliary::open(store, auxiliary::Panel::Plot(id));
-                                }
-                            }),
-                        ]
-                    },
-                )),
-        )
-        .child(
-            when(
-                move || store.flag("command_mode"),
-                move || command_composer(store),
-            )
-            .otherwise(move || {
-                nsh_base::input()
-                    .value(move || store.field("send"))
-                    .on_change(move |v: &str| store.change(|s| s.set("send", v.into())))
-                    .label("要发送的数据")
-                    .multiline(true)
-                    .readonly(move || repeating() || store.read(|s| s.installing))
-                    .placeholder(move || {
-                        if store.field("format") == "hex" {
-                            "输入十六进制字节，例如 AA 01 FF"
-                        } else {
-                            "输入文本或设备指令…"
-                        }
-                    })
-                    .placeholder_color(|| color(theme().foreground.opacity(0.26)))
-                    .font_family(mono)
-                    .text_size(body_size)
-                    .px(px(14.))
-                    .py(px(6.))
-                    .flex_1()
-                    .min_h_0()
-            }),
-        )
-        .child(
-            view()
-                .min_h(px(40.))
-                .px_3()
-                .py_2()
-                .flex_row()
-                .items_center()
-                .gap(px(10.))
-                .border_t_1()
-                .border_color(hairline)
-                .child(when(
-                    move || !store.flag("command_mode"),
-                    move || {
-                        view()
-                            .flex_row()
-                            .items_center()
-                            .gap(px(10.))
-                            .child(native_borderless_menu_small_disabled(
-                                view().size(px(20.)).label("发送历史").child(
-                                    icons::icon("history").size(px(15.)).text_color(move || {
-                                        button_ink(
-                                            false,
-                                            repeating()
-                                                || store.read(|s| s.preferences.history.is_empty()),
-                                        )
-                                    }),
-                                ),
-                                move || {
-                                    repeating() || store.read(|s| s.preferences.history.is_empty())
-                                },
-                                move || {
-                                    store
-                                        .read(|s| s.preferences.history.clone())
-                                        .into_iter()
-                                        .map(|value| {
-                                            NativeMenuItem::new(
-                                                value.chars().take(80).collect::<String>(),
-                                            )
-                                            .on_select(
-                                                move || {
-                                                    if !repeating() {
-                                                        store.change(|s| {
-                                                            s.set("send", value.clone())
-                                                        });
-                                                    }
-                                                },
-                                            )
-                                        })
-                                        .collect()
-                                },
-                            ))
-                            .child(divider())
-                            .child(caption("每"))
-                            .child(compact_input(store, "interval", "自动发送间隔，毫秒", 64.))
-                            .child(caption("ms"))
-                            .child(
-                                nsh_base::checkbox()
-                                    .checked(repeating)
-                                    .indicator_style(|style| style.hidden())
-                                    .disabled(move || {
-                                        !repeating()
-                                            && store.read(|s| {
-                                                !super::commands::can_send(s)
-                                                    || !s.preferences.number("interval").is_ok_and(
-                                                        |v| (10..=3_600_000).contains(&v),
-                                                    )
-                                            })
-                                    })
-                                    .on_change(move |_: &bool| {
-                                        let stop = repeating();
-                                        store.change(|s| {
-                                            s.serial_action(if stop {
-                                                "cancelJob"
-                                            } else {
-                                                "repeat"
-                                            })
-                                        });
-                                    })
-                                    .h(px(20.))
-                                    .px_2()
-                                    .rounded(px(5.))
-                                    .flex_row()
-                                    .items_center()
-                                    .gap(px(5.))
-                                    .bg(move || {
-                                        theme().color("button").unwrap_or(theme().secondary)
-                                    })
-                                    .border_1()
-                                    .border_color(hairline)
-                                    .checked_style(|s| {
-                                        s.bg(move || theme().primary)
-                                            .text_color(move || theme().primary_foreground)
-                                    })
-                                    .hover(|s| s.bg(move || theme().accent))
-                                    .active(|s| s.bg(move || theme().muted))
-                                    .disabled_style(|s| s.opacity(0.45))
-                                    .child(icons::icon("repeat").size(px(13.)))
-                                    .child(text("自动发送").text_size(caption_size)),
-                            )
-                    },
-                ))
-                .child(when(
-                    move || {
-                        store.read(|s| {
-                            s.active_session()
-                                .and_then(|s| s.status.as_ref())
-                                .is_some_and(|s| {
-                                    s.job_kind.as_deref().is_some_and(|k| k != "repeat")
-                                })
-                        })
-                    },
-                    move || {
-                        view()
-                            .flex_row()
-                            .items_center()
-                            .gap_2()
-                            .child(
-                                nsh_base::progress()
-                                    .value(move || {
-                                        store.read(|s| {
-                                            s.active_session()
-                                                .and_then(|s| s.status.as_ref())
-                                                .map_or(0., |s| {
-                                                    if s.job_total > 0 {
-                                                        s.job_done as f32 / s.job_total as f32
-                                                            * 100.
-                                                    } else {
-                                                        0.
-                                                    }
-                                                })
-                                        })
-                                    })
-                                    .w(px(80.))
-                                    .track_class("h-1 bg-muted rounded-full")
-                                    .indicator_class("h-1 bg-primary rounded-full")
-                                    .accessibility_label("发送任务进度"),
-                            )
-                            .child(caption(move || {
-                                store.read(|s| {
-                                    s.active_session()
-                                        .and_then(|s| s.status.as_ref())
-                                        .map_or(String::new(), |s| {
-                                            format!("{} / {}", s.job_done, s.job_total)
-                                        })
-                                })
-                            }))
-                            .child(action("取消任务", Variant::Default, busy, move || {
-                                store.change(|s| s.serial_action("cancelJob"))
-                            }))
-                    },
-                ))
-                .child(view().flex_1().min_w_1())
-                .child(when(
-                    move || !store.flag("command_mode") && !store.field("send").is_empty(),
-                    move || {
-                        caption(move || format!("{} 字符", store.field("send").chars().count()))
-                    },
-                ))
-                .child(prominent_button(
-                    "send",
-                    move || {
-                        if busy() && store.read(Workbench::serial_connected) {
-                            "发送中…"
-                        } else {
-                            "发送"
-                        }
-                    },
-                    move || !store.read(super::commands::can_send) || repeating(),
-                    move || {
-                        if !store.modal.get_untracked() {
-                            store.change(Workbench::send);
-                        }
-                    },
-                )),
-        )
-}
-
 fn checksum_menu(store: Store) -> impl IntoElement {
     let disabled = move || {
         store.read(|s| {
@@ -1961,7 +1939,7 @@ fn config_summary(config: &chipdock_core::serial::types::SerialConfig) -> String
     )
 }
 
-fn status_bar(store: Store) -> View {
+pub(super) fn status_bar(store: Store) -> View {
     let separator = || view().w(px(1.)).h(px(12.)).bg(hairline);
     let status_label = move || {
         store.read(|state| {
@@ -2164,7 +2142,7 @@ fn status_bar(store: Store) -> View {
             },
         ))
 }
-fn error_banner(store: Store) -> impl IntoElement {
+pub(super) fn error_banner(store: Store) -> impl IntoElement {
     let dismissed = signal(String::new());
     let error = computed(move || {
         store.read(|s| {

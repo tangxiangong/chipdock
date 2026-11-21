@@ -1,159 +1,107 @@
 use super::*;
 
-pub(super) fn toolbar(store: Store, mode: Signal<&'static str>) -> View {
+/// Mode selection linked to menu commands and dropped firmware.
+#[component]
+pub fn WorkbenchModes() -> impl IntoElement {
+    let (_, mode) = workbench_context();
     let active = control_active();
-    let window = nsh_core::element::desktop::current_window();
-    let sidebar_active = computed(move || window.state().is_none_or(|state| state.focused));
-    view()
-        .relative()
-        .z_index(1)
-        .h(px(52.))
-        .flex_shrink_0()
-        // Keep the tuned Mac geometry; other desktop backends reserve their native caption-control area.
-        .pl(move || {
-            if cfg!(target_os = "macos") {
-                px(95.)
-            } else {
-                px(80_f32.max(nsh_core::element::desktop::title_bar().left.0))
-            }
-        })
-        .pr(move || {
-            if cfg!(target_os = "macos") {
-                px(9.)
-            } else {
-                px(9. + nsh_core::element::desktop::title_bar().right.0)
-            }
-        })
-        .flex_row()
-        .items_center()
-        .gap_3()
-        .window_drag(true)
-        .border_b_1()
-        .border_color(hairline)
-        .child(
-            glass().w(px(221.)).mr(px(-4.)).justify_center().child(
-                nsh_base::radio_group()
-                    .flex_row()
-                    .items_center()
-                    .gap_1()
-                    .children(
-                        [("flash", "固件烧录"), ("serial", "串口连接")]
-                            .into_iter()
-                            .map(move |(key, label)| {
-                                nsh_base::radio()
-                                    .checked(move || mode.get() == key)
-                                    .on_change(move |checked: &bool| {
-                                        if *checked {
-                                            mode.set(key);
-                                        }
-                                    })
-                                    .w(px(73.))
-                                    .h(px(28.))
-                                    .items_center()
-                                    .justify_center()
-                                    .rounded_full()
-                                    .checked_style(|style| {
-                                        style.bg(move || theme().foreground.opacity(0.09))
-                                    })
-                                    .hover(|s| s.bg(move || theme().accent))
-                                    .focus_visible(|s| {
-                                        s.outline(px(2.)).outline_color(move || theme().ring)
-                                    })
-                                    .child(text(label).text_size(body_size).text_color(move || {
-                                        if active.get() {
-                                            theme().foreground
-                                        } else {
-                                            theme()
-                                                .color(if mode.get() == key {
-                                                    "toolbar-selection-inactive-foreground"
-                                                } else {
-                                                    "toolbar-inactive-foreground"
-                                                })
-                                                .unwrap_or(theme().muted_foreground)
-                                        }
-                                    }))
-                            }),
-                    ),
-            ),
-        )
-        .child(when(
-            move || mode.get() == "serial",
-            move || {
-                glass()
-                    .w(px(36.))
-                    .justify_center()
-                    .bg(move || {
-                        if store.sidebar.get() && sidebar_active.get() {
-                            theme().primary
-                        } else if store.sidebar.get() {
-                            theme()
-                                .color("toolbar-selection-inactive")
-                                .unwrap_or(theme().secondary)
-                        } else {
-                            theme().background.opacity(0.)
-                        }
-                    })
-                    .child(
-                        nsh_base::checkbox()
-                            .checked(move || store.sidebar.get())
-                            .indicator_style(|style| style.hidden())
-                            .on_change(move |checked: &bool| store.sidebar.set(*checked))
-                            .accessibility_label("连接区")
-                            .size(px(34.))
-                            .p_0()
+    glass().w(px(221.)).mr(px(-4.)).justify_center().child(
+        nsh_base::radio_group()
+            .flex_row()
+            .items_center()
+            .gap_1()
+            .children(
+                [("flash", "固件烧录"), ("serial", "串口连接")]
+                    .into_iter()
+                    .map(move |(key, label)| {
+                        nsh_base::radio()
+                            .checked(move || mode.get() == key)
+                            .on_change(move |checked: &bool| {
+                                if *checked {
+                                    mode.set(key);
+                                }
+                            })
+                            .w(px(73.))
+                            .h(px(28.))
                             .items_center()
                             .justify_center()
                             .rounded_full()
-                            .text_color(move || {
-                                if store.sidebar.get() && sidebar_active.get() {
-                                    theme().primary_foreground
-                                } else if store.sidebar.get() {
-                                    theme()
-                                        .color("toolbar-sidebar-inactive")
-                                        .unwrap_or(theme().muted_foreground)
-                                } else {
-                                    if active.get() {
-                                        theme().foreground.opacity(0.85)
-                                    } else {
-                                        theme()
-                                            .color("toolbar-sidebar-inactive")
-                                            .unwrap_or(theme().muted_foreground)
-                                    }
-                                }
+                            .checked_style(|style| {
+                                style.bg(move || theme().foreground.opacity(0.09))
                             })
+                            .hover(|s| s.bg(move || theme().accent))
                             .focus_visible(|s| {
                                 s.outline(px(2.)).outline_color(move || theme().ring)
                             })
-                            .child(icons::icon("sidebar").size(px(18.))),
-                    )
-            },
-        ))
+                            .child(text(label).text_size(body_size).text_color(move || {
+                                if active.get() {
+                                    theme().foreground
+                                } else {
+                                    theme()
+                                        .color(if mode.get() == key {
+                                            "toolbar-selection-inactive-foreground"
+                                        } else {
+                                            "toolbar-inactive-foreground"
+                                        })
+                                        .unwrap_or(theme().muted_foreground)
+                                }
+                            }))
+                    }),
+            ),
+    )
+}
+
+/// Native sidebar toggle and window activation appearance.
+#[component]
+pub fn SidebarToggle() -> impl IntoElement {
+    let (store, _) = workbench_context();
+    let active = control_active();
+    let window = nsh_core::element::desktop::current_window();
+    let sidebar_active = computed(move || window.state().is_none_or(|state| state.focused));
+    glass()
+        .w(px(36.))
+        .justify_center()
+        .bg(move || {
+            if store.sidebar.get() && sidebar_active.get() {
+                theme().primary
+            } else if store.sidebar.get() {
+                theme()
+                    .color("toolbar-selection-inactive")
+                    .unwrap_or(theme().secondary)
+            } else {
+                theme().background.opacity(0.)
+            }
+        })
         .child(
-            text(move || {
-                if mode.get() == "flash" {
-                    "固件烧录"
-                } else {
-                    "串口连接"
-                }
-            })
-            .pl(px(1.))
-            .text_size(px(15.))
-            .font_weight(FontWeight::BOLD)
-            .text_color(move || {
-                if active.get() {
-                    theme().foreground
-                } else {
-                    theme()
-                        .color("toolbar-title-inactive")
-                        .unwrap_or(theme().muted_foreground)
-                }
-            }),
-        )
-        .child(view().flex_1())
-        .child(when(move || mode.get() == "flash", move || activity(store)))
-        .child(
-            when(move || mode.get() == "flash", move || flash_toolbar(store))
-                .otherwise(move || serial_toolbar(store)),
+            nsh_base::checkbox()
+                .checked(move || store.sidebar.get())
+                .indicator_style(|style| style.hidden())
+                .on_change(move |checked: &bool| store.sidebar.set(*checked))
+                .accessibility_label("连接区")
+                .size(px(34.))
+                .p_0()
+                .items_center()
+                .justify_center()
+                .rounded_full()
+                .text_color(move || {
+                    if store.sidebar.get() && sidebar_active.get() {
+                        theme().primary_foreground
+                    } else if store.sidebar.get() {
+                        theme()
+                            .color("toolbar-sidebar-inactive")
+                            .unwrap_or(theme().muted_foreground)
+                    } else {
+                        if active.get() {
+                            theme().foreground.opacity(0.85)
+                        } else {
+                            theme()
+                                .color("toolbar-sidebar-inactive")
+                                .unwrap_or(theme().muted_foreground)
+                        }
+                    }
+                })
+                .focus_visible(|s| s.outline(px(2.)).outline_color(move || theme().ring))
+                .child(icons::icon("sidebar").size(px(18.))),
         )
 }
 fn activity(store: Store) -> View {
@@ -534,4 +482,34 @@ fn search_navigation(store: Store, next: bool) -> impl IntoElement {
         .active(|view| view.bg(move || theme().muted))
         .focus_visible(|view| view.outline(px(2.)).outline_color(move || theme().ring))
         .child(icons::icon(if next { "down" } else { "up" }).size(px(16.)))
+}
+
+/// The ActivityIndicator control group bound to native workbench commands.
+#[component]
+pub fn ActivityIndicator() -> impl IntoElement {
+    let (store, _) = workbench_context();
+    activity(store)
+}
+
+/// The FirmwareActions control group bound to native workbench commands.
+#[component]
+pub fn FirmwareActions() -> impl IntoElement {
+    let (store, _) = workbench_context();
+    flash_toolbar(store)
+}
+
+/// The SerialActions control group bound to native workbench commands.
+#[component]
+pub fn SerialActions() -> impl IntoElement {
+    let (store, _) = workbench_context();
+    serial_toolbar(store)
+}
+
+pub(super) fn register(registry: &mut Registry) {
+    registry
+        .register::<WorkbenchModes>()
+        .register::<SidebarToggle>()
+        .register::<ActivityIndicator>()
+        .register::<FirmwareActions>()
+        .register::<SerialActions>();
 }

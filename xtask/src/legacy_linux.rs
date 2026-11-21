@@ -1,28 +1,15 @@
-mod download;
-mod install;
-#[cfg(test)]
-mod tests;
-pub use download::{check, download};
-pub use install::{can_self_update, finish_update, install};
-// Signed portable-client updates never select SwiftUI/WinUI packages.
-use anyhow::{Context, Result, bail, ensure};
+//! Verification of previously published single-binary Linux releases.
+use anyhow::{Result, ensure};
 use base64::{Engine, engine::general_purpose::STANDARD};
 use ed25519_dalek::{Signature, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::{
-    collections::BTreeMap,
-    io::Read,
-    path::{Path, PathBuf},
-    sync::atomic::{AtomicBool, Ordering},
-    time::Duration,
-};
+use std::collections::BTreeMap;
 
+#[cfg(test)]
 pub const PUBLIC_KEY: &str = "NgorrvaZPObmbOUEmKbbCvPbPqcD+kcw7E2NRTfxlKI=";
 pub const LINUX_FEED: &str = "linux-stable.signed.json";
 pub const LEGACY_FEED: &str = "gpui-stable.signed.json";
-const MIRROR: &str = "https://app-release-1302963684.cos.ap-guangzhou.myqcloud.com/chipdock";
-const REPOSITORY: &str = "https://github.com/tangxiangong/chipdock";
 #[derive(Clone, Serialize, Deserialize)]
 pub struct SignedFeed {
     pub payload: String,
@@ -47,16 +34,6 @@ pub struct Asset {
     pub name: String,
     pub size: u64,
     pub sha256: String,
-}
-#[derive(Clone)]
-pub struct Available {
-    pub version: String,
-    pub notes: String,
-    pub asset: Asset,
-}
-
-pub fn target() -> String {
-    format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH)
 }
 pub fn verify(bytes: &[u8], key: &str) -> Result<Feed> {
     let signed: SignedFeed = serde_json::from_slice(bytes)?;
@@ -132,22 +109,6 @@ pub fn verify(bytes: &[u8], key: &str) -> Result<Feed> {
         );
     }
     Ok(feed)
-}
-
-pub fn select(feed: Feed, current: &str, target: &str) -> Result<Option<Available>> {
-    if semver::Version::parse(&feed.version)? <= semver::Version::parse(current)? {
-        return Ok(None);
-    }
-    let asset = feed
-        .assets
-        .get(target)
-        .context("此版本尚未发布当前平台的更新包")?
-        .clone();
-    Ok(Some(Available {
-        version: feed.version,
-        notes: feed.notes,
-        asset,
-    }))
 }
 
 pub fn digest(bytes: &[u8]) -> String {

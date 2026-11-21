@@ -1,118 +1,11 @@
 use super::*;
 use chipdock_core::models::{FirmwareFormat, MemoryRegionKind};
-use nsh_base::{alert_dialog, resizable_panel, v_resizable};
+use nsh_base::alert_dialog;
 
-pub(super) fn page(store: Store) -> View {
-    let setup = store.target_setup;
-    view()
-        .flex_1()
-        .min_h_0()
-        .child(
-            v_resizable()
-                .flex_1()
-                .handle_class("bg-border")
-                .handle_accessibility_label("调整固件文档和烧录选项高度")
-                .child(resizable_panel().min_size(px(260.)).child(document(store)))
-                .child(
-                    resizable_panel()
-                        .size(px(300.))
-                        .min_size(px(260.))
-                        .max_size(px(420.))
-                        .child(settings(store, setup)),
-                ),
-        )
-        .child(when(setup, move || super::target::dialog(store, setup)))
-}
-fn margin() -> Points {
-    px((nsh_core::element::window().width.0 * 0.05).max(32.))
-}
-fn document(store: Store) -> View {
-    let empty = move || store.field("firmware").is_empty();
-    view()
-        .flex_1()
-        .min_h_0()
-        .px(margin)
-        .py_6()
-        .gap(px(20.))
-        .child(
-            when(empty, move || empty_document(store)).otherwise(move || firmware_document(store)),
-        )
-}
-fn empty_document(store: Store) -> View {
-    let border_size = signal(Size {
-        width: px(0.),
-        height: px(0.),
-    });
-    view()
-        .flex_1()
-        .gap(px(22.))
-        .child(
-            view()
-                .relative()
-                .on_layout(move |bounds: &Bounds<Points>| border_size.set(bounds.size))
-                .flex_1()
-                .min_h(px(170.))
-                .py_6()
-                .gap_2()
-                .items_center()
-                .justify_center()
-                .rounded(px(10.))
-                .child(
-                    canvas(move || {
-                        let size = border_size.get();
-                        let inset = 0.75;
-                        Painter::new()
-                            .stroke_color(color(theme().foreground.opacity(0.175)))
-                            .line_width(px(1.5))
-                            .line_dash(&[px(6.), px(4.)])
-                            .begin_path()
-                            .round_rect(
-                                Bounds {
-                                    origin: Point {
-                                        x: px(inset),
-                                        y: px(inset),
-                                    },
-                                    size: Size {
-                                        width: px((size.width.0 - 2. * inset).max(0.)),
-                                        height: px((size.height.0 - 2. * inset).max(0.)),
-                                    },
-                                },
-                                px(9.25),
-                            )
-                            .stroke()
-                    })
-                    .absolute()
-                    .inset_0()
-                    .pointer_events(nsh_core::PointerEvents::None),
-                )
-                .child(
-                    view()
-                        .size(px(36.))
-                        .mb_1()
-                        .text_color(move || theme().muted_foreground)
-                        .child(icons::icon("drop-doc").size(px(36.))),
-                )
-                .child(
-                    text("将固件拖到这里")
-                        .text_size(px(15.))
-                        .font_weight(FontWeight::MEDIUM),
-                )
-                .child(
-                    text("支持 ELF、AXF、HEX 与 BIN 文件")
-                        .text_size(caption_size)
-                        .text_color(move || theme().muted_foreground),
-                )
-                .child(view().mt_2().child(labeled_button(
-                    "folder",
-                    "选择文件…",
-                    false,
-                    move || store.locked("firmware"),
-                    move || store.pick("firmware"),
-                ))),
-        )
-        .child(super::firmware_history::page(store))
-}
-fn firmware_document(store: Store) -> View {
+/// Virtualized byte rows, kept with the firmware buffer in Rust.
+#[component]
+pub fn FirmwareBytes() -> impl IntoElement {
+    let (store, _) = workbench_context();
     let preview = computed(move || {
         store.read(|s| {
             s.preview
@@ -151,278 +44,66 @@ fn firmware_document(store: Store) -> View {
     view()
         .flex_1()
         .min_h_0()
-        .gap(px(20.))
+        .border_1()
+        .border_color(hairline)
+        .rounded(move || theme().radius)
         .child(
             view()
+                .h(px(25.))
+                .px(px(11.))
                 .flex_row()
                 .items_center()
-                .gap(px(14.))
-                .child(
-                    view()
-                        .size(px(44.))
-                        .rounded(px(10.))
-                        .items_center()
-                        .justify_center()
-                        .bg(move || document_tint(store).opacity(0.14))
-                        .text_color(move || document_tint(store))
-                        .child(icons::icon("file").size(px(22.))),
-                )
-                .child(
-                    view()
-                        .flex_1()
-                        .min_w_0()
-                        .gap(px(3.))
-                        .child(
-                            text(move || {
-                                std::path::Path::new(&store.field("firmware"))
-                                    .file_name()
-                                    .unwrap_or_default()
-                                    .to_string_lossy()
-                                    .into_owned()
-                            })
-                            .text_size(px(17.))
-                            .font_weight(FontWeight::SEMIBOLD),
-                        )
-                        .child(caption(move || {
-                            abbreviate(
-                                std::path::Path::new(&store.field("firmware"))
-                                    .parent()
-                                    .unwrap_or_else(|| std::path::Path::new("")),
-                            )
-                        })),
-                )
-                .child(firmware_menu(store)),
+                .gap_3()
+                .text_color(move || theme().muted_foreground)
+                .bg(move || theme().color("well").unwrap_or(theme().muted))
+                .border_b_1()
+                .border_color(hairline)
+                .child(text("地址").w(px(80.)).text_size(small_size))
+                .child(text("十六进制").w(px(376.)).text_size(small_size))
+                .child(text("ASCII").text_size(small_size)),
         )
         .child(
-            when(
-                move || preview.with(Option::is_some),
-                move || {
+            virtual_list(
+                move || rows.with(Vec::len),
+                move |at| {
                     view()
-                        .flex_1()
-                        .min_h_0()
-                        .gap(px(20.))
-                        .child(layout_bar(store))
+                        .h(px(17.))
+                        .px(px(11.))
+                        .flex_row()
+                        .items_center()
+                        .gap_3()
+                        .font_family(mono)
+                        .text_size(caption_size)
                         .child(
-                            view()
-                                .flex_1()
-                                .min_h(px(64.))
-                                .gap_2()
-                                .child(
-                                    view()
-                                        .flex_row()
-                                        .items_center()
-                                        .child(text("固件内容").text_size(caption_size))
-                                        .child(view().flex_1())
-                                        .child(
-                                            text(move || {
-                                                preview.with(|p| {
-                                                    p.as_ref()
-                                                        .map(|(start, b)| {
-                                                            format!(
-                                                                "0x{start:08X} – 0x{:08X}",
-                                                                start
-                                                                    + b.len().saturating_sub(1)
-                                                                        as u64
-                                                            )
-                                                        })
-                                                        .unwrap_or_default()
-                                                })
-                                            })
-                                            .text_size(small_size)
-                                            .font_family(mono)
-                                            .text_color(move || theme().muted_foreground),
-                                        ),
-                                )
-                                .child(
-                                    view()
-                                        .flex_1()
-                                        .min_h_0()
-                                        .border_1()
-                                        .border_color(hairline)
-                                        .rounded(move || theme().radius)
-                                        .child(
-                                            view()
-                                                .h(px(25.))
-                                                .px(px(11.))
-                                                .flex_row()
-                                                .items_center()
-                                                .gap_3()
-                                                .text_color(move || theme().muted_foreground)
-                                                .bg(move || {
-                                                    theme().color("well").unwrap_or(theme().muted)
-                                                })
-                                                .border_b_1()
-                                                .border_color(hairline)
-                                                .child(
-                                                    text("地址").w(px(80.)).text_size(small_size),
-                                                )
-                                                .child(
-                                                    text("十六进制")
-                                                        .w(px(376.))
-                                                        .text_size(small_size),
-                                                )
-                                                .child(text("ASCII").text_size(small_size)),
-                                        )
-                                        .child(
-                                            virtual_list(
-                                                move || rows.with(Vec::len),
-                                                move |at| {
-                                                    view()
-                                                        .h(px(17.))
-                                                        .px(px(11.))
-                                                        .flex_row()
-                                                        .items_center()
-                                                        .gap_3()
-                                                        .font_family(mono)
-                                                        .text_size(caption_size)
-                                                        .child(
-                                                            text(move || {
-                                                                rows.with(|r| {
-                                                                    r.get(at.index())
-                                                                        .map(|r| r.0.clone())
-                                                                        .unwrap_or_default()
-                                                                })
-                                                            })
-                                                            .w(px(80.))
-                                                            .text_color(move || {
-                                                                theme().muted_foreground
-                                                            }),
-                                                        )
-                                                        .child(
-                                                            text(move || {
-                                                                rows.with(|r| {
-                                                                    r.get(at.index())
-                                                                        .map(|r| r.1.clone())
-                                                                        .unwrap_or_default()
-                                                                })
-                                                            })
-                                                            .w(px(376.)),
-                                                        )
-                                                        .child(
-                                                            text(move || {
-                                                                rows.with(|r| {
-                                                                    r.get(at.index())
-                                                                        .map(|r| r.2.clone())
-                                                                        .unwrap_or_default()
-                                                                })
-                                                            })
-                                                            .text_color(move || {
-                                                                theme().muted_foreground
-                                                            }),
-                                                        )
-                                                },
-                                            )
-                                            .estimated_item_size(px(17.))
-                                            .content_padding_top(px(3.))
-                                            .flex_1(),
-                                        ),
-                                ),
+                            text(move || {
+                                rows.with(|r| {
+                                    r.get(at.index()).map(|r| r.0.clone()).unwrap_or_default()
+                                })
+                            })
+                            .w(px(80.))
+                            .text_color(move || theme().muted_foreground),
                         )
                         .child(
-                            view()
-                                .flex_row()
-                                .items_start()
-                                .gap(px(36.))
-                                .flex_wrap()
-                                .children(
-                                    [("格式", 0), ("写入大小", 1), ("区段", 2), ("地址范围", 3)]
-                                        .into_iter()
-                                        .map(move |(label, index)| {
-                                            view()
-                                            .gap(px(3.))
-                                            .child(
-                                                text(label)
-                                                    .text_size(small_size)
-                                                    .text_color(move || theme().muted_foreground),
-                                            )
-                                            .child(
-                                                text(move || {
-                                                    store.read(|s| {
-                                                        s.preview
-                                                            .as_ref()
-                                                            .map(|p| {
-                                                                let u = &p.usage;
-                                                                match index {
-                                                                    0 => match u.format {
-                                                                        FirmwareFormat::Elf => {
-                                                                            "ELF"
-                                                                        }
-                                                                        FirmwareFormat::Hex => {
-                                                                            "HEX"
-                                                                        }
-                                                                        FirmwareFormat::Bin => {
-                                                                            "BIN"
-                                                                        }
-                                                                    }
-                                                                    .into(),
-                                                                    1 => byte_count(u.used_bytes),
-                                                                    2 => {
-                                                                        u.segments.len().to_string()
-                                                                    }
-                                                                    _ => format!(
-                                                                        "0x{:08X} – 0x{:08X}",
-                                                                        u.start_address
-                                                                            .unwrap_or(0),
-                                                                        u.end_address
-                                                                            .unwrap_or(1)
-                                                                            .saturating_sub(1)
-                                                                    ),
-                                                                }
-                                                            })
-                                                            .unwrap_or_default()
-                                                    })
-                                                })
-                                                .text_size(body_size)
-                                                .when(index == 3, |text| text.font_family(mono)),
-                                            )
-                                        }),
-                                ),
+                            text(move || {
+                                rows.with(|r| {
+                                    r.get(at.index()).map(|r| r.1.clone()).unwrap_or_default()
+                                })
+                            })
+                            .w(px(376.)),
+                        )
+                        .child(
+                            text(move || {
+                                rows.with(|r| {
+                                    r.get(at.index()).map(|r| r.2.clone()).unwrap_or_default()
+                                })
+                            })
+                            .text_color(move || theme().muted_foreground),
                         )
                 },
             )
-            .otherwise(move || {
-                view().child(
-                    when(
-                        move || store.read(|state| state.firmware_error.is_some()),
-                        move || {
-                            view()
-                                .p(px(10.))
-                                .rounded(px(6.))
-                                .flex_row()
-                                .items_start()
-                                .gap_2()
-                                .selectable(true)
-                                .bg(move || {
-                                    theme()
-                                        .color("firmware-tint")
-                                        .unwrap_or(theme().primary)
-                                        .opacity(0.08)
-                                })
-                                .child(icons::icon("warning-fill").size(px(14.)).text_color(
-                                    move || {
-                                        theme().color("firmware-tint").unwrap_or(theme().primary)
-                                    },
-                                ))
-                                .child(
-                                    text(move || {
-                                        store.read(|state| {
-                                            state.firmware_error.clone().unwrap_or_default()
-                                        })
-                                    })
-                                    .text_size(caption_size)
-                                    .flex_1()
-                                    .min_w_0(),
-                                )
-                        },
-                    )
-                    .otherwise(move || {
-                        view().child(when(
-                            move || store.read(Workbench::firmware_analyzing),
-                            || caption("正在分析固件…"),
-                        ))
-                    }),
-                )
-            }),
+            .estimated_item_size(px(17.))
+            .content_padding_top(px(3.))
+            .flex_1(),
         )
 }
 fn firmware_menu(store: Store) -> impl IntoElement {
@@ -565,191 +246,6 @@ fn layout_bar(store: Store) -> View {
                 })),
         )
 }
-fn settings(store: Store, setup: Signal<bool>) -> impl IntoElement {
-    let label = |s: &'static str| {
-        text(s)
-            .w(px(52.))
-            .text_right()
-            .text_size(body_size)
-            .text_color(move || theme().muted_foreground)
-    };
-    scroll().flex_1().child(
-        view()
-            .px(margin)
-            .py_6()
-            .gap_6()
-            .child(
-                view()
-                    .gap_4()
-                    .child(
-                        view()
-                            .flex_row()
-                            .items_start()
-                            .gap(px(14.))
-                            .child(label("目标").mt_1())
-                            .child(
-                                view()
-                                    .flex_1()
-                                    .mt_1()
-                                    .gap(px(3.))
-                                    .child(
-                                        view()
-                                            .flex_row()
-                                            .items_center()
-                                            .gap(px(6.))
-                                            .child(view().size(px(7.)).rounded_full().bg(
-                                                move || {
-                                                    store.read(|s| {
-                                                        if s.target_connected() {
-                                                            theme()
-                                                                .color("success")
-                                                                .unwrap_or(theme().primary)
-                                                        } else {
-                                                            theme().muted_foreground.opacity(0.4)
-                                                        }
-                                                    })
-                                                },
-                                            ))
-                                            .child(
-                                                text(move || store.read(Workbench::target_name))
-                                                    .text_size(body_size)
-                                                    .font_weight(FontWeight::MEDIUM),
-                                            )
-                                            .child(when(
-                                                move || !store.read(Workbench::target_connected),
-                                                || caption("未连接"),
-                                            )),
-                                    )
-                                    .child(caption(move || {
-                                        format!(
-                                            "{} · {} kHz · {}",
-                                            store.field("wire").to_uppercase(),
-                                            store.field("speed"),
-                                            if store.field("probe").is_empty() {
-                                                "自动选择探针".into()
-                                            } else {
-                                                store.field("probe")
-                                            }
-                                        )
-                                    })),
-                            )
-                            .child(when(
-                                move || store.read(Workbench::target_connected),
-                                move || {
-                                    labeled_button(
-                                        "close",
-                                        "断开连接",
-                                        false,
-                                        move || store.read(|s| s.lane_busy(Lane::Probe)),
-                                        move || store.change(Workbench::disconnect_target),
-                                    )
-                                },
-                            ))
-                            .child(labeled_button(
-                                "settings",
-                                "更改…",
-                                false,
-                                move || store.read(|s| s.lane_busy(Lane::Probe)),
-                                move || setup.set(true),
-                            )),
-                    )
-                    .child(
-                        view()
-                            .flex_row()
-                            .items_start()
-                            .gap(px(14.))
-                            .child(label("擦除").mt_1())
-                            .child(
-                                view()
-                                    .gap_1()
-                                    .child(view().w(px(100.)).child(popup_control(
-                                        store,
-                                        "erase",
-                                        &["automatic", "full", "skip"],
-                                        false,
-                                    )))
-                                    .child(caption(move || match store.field("erase").as_str() {
-                                        "full" => "写入前擦除整个 Flash，其他数据会丢失",
-                                        "skip" => "不擦除，目标区域须已擦除",
-                                        _ => "仅擦除固件覆盖的扇区",
-                                    })),
-                            ),
-                    )
-                    .child(
-                        view()
-                            .flex_row()
-                            .items_start()
-                            .gap(px(14.))
-                            .child(label("完成后"))
-                            .child(
-                                view()
-                                    .gap(px(7.))
-                                    .child(toggle(store, "verify", "校验写入的数据"))
-                                    .child(toggle(store, "reset", "复位并运行程序"))
-                                    .child(toggle(store, "dry_run", "仅预检查，不写入芯片")),
-                            ),
-                    ),
-            )
-            .child(
-                view()
-                    .flex_row()
-                    .items_center()
-                    .gap_4()
-                    .child(caption(move || {
-                        store.read(|s| -> String {
-                            if s.lane_busy(Lane::Probe) {
-                                "".into()
-                            } else if !s.target_connected() {
-                                "连接后即可烧录（⌘K）".into()
-                            } else if s.preferences.get("firmware").is_empty() {
-                                "选择固件后即可烧录".into()
-                            } else {
-                                "按 ⌘↩ 开始".into()
-                            }
-                        })
-                    }))
-                    .child(view().flex_1())
-                    .child(labeled_button(
-                        "erase",
-                        "擦除芯片…",
-                        false,
-                        move || store.read(|s| !s.target_connected() || s.lane_busy(Lane::Probe)),
-                        move || confirm_erase(store),
-                    ))
-                    .child(labeled_button(
-                        "link",
-                        move || {
-                            store.read(|s| {
-                                if s.lane_busy(Lane::Probe) {
-                                    "正在处理…".into()
-                                } else if !s.target_connected() {
-                                    "连接目标".into()
-                                } else if s.preferences.flag("dry_run") {
-                                    "开始预检查".into()
-                                } else {
-                                    format!("烧录到 {}", s.preferences.get("chip"))
-                                }
-                            })
-                        },
-                        true,
-                        move || {
-                            store.read(|s| {
-                                s.lane_busy(Lane::Probe)
-                                    || (s.target_connected()
-                                        && s.preferences.get("firmware").is_empty())
-                            })
-                        },
-                        move || {
-                            if store.read(Workbench::target_connected) {
-                                execute(store, false)
-                            } else {
-                                store.command(|s| Command::Connect(s.preferences.clone()))
-                            }
-                        },
-                    )),
-            ),
-    )
-}
 fn abbreviate(path: &std::path::Path) -> String {
     let path = path.to_string_lossy();
     if let Ok(home) = std::env::var("HOME")
@@ -822,19 +318,240 @@ pub(super) fn confirm_erase(store: Store) {
     });
 }
 
-fn document_tint(store: Store) -> AdaptiveColor {
-    store.read(|state| {
-        state
-            .preview
-            .as_ref()
-            .and_then(|preview| {
-                let role = match preview.usage.format {
-                    FirmwareFormat::Elf => "firmware-elf",
-                    FirmwareFormat::Hex => "firmware-tint",
-                    FirmwareFormat::Bin => "firmware-bin",
-                };
-                theme().color(role)
+#[derive(Clone, Debug, PartialEq, Props)]
+pub struct FirmwareContentProps {
+    /// The TSX document or options layout.
+    pub children: Prop<Children>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, JsObject)]
+pub struct FirmwareDetails {
+    pub name: String,
+    pub directory: String,
+    pub format: String,
+    pub size: String,
+    pub segments: String,
+    pub range: String,
+    pub preview_range: String,
+    pub error: Option<String>,
+    pub analyzing: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Event)]
+pub enum FirmwareDocumentEvent {
+    /// The selected file's display metadata. Byte buffers remain in the virtual table.
+    #[args(details)]
+    Change(FirmwareDetails),
+}
+
+/// Reports metadata from the current firmware analysis.
+#[component]
+pub fn FirmwareDocumentHost(
+    props: FirmwareContentProps,
+    cx: Scope<FirmwareDocumentEvent>,
+) -> impl IntoElement {
+    let (store, _) = workbench_context();
+    let details = computed(move || {
+        store.read(|state| {
+            let path = std::path::Path::new(state.preferences.get("firmware"));
+            let mut details = FirmwareDetails {
+                name: path
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .into_owned(),
+                directory: abbreviate(path.parent().unwrap_or_else(|| std::path::Path::new(""))),
+                error: state.firmware_error.clone(),
+                analyzing: state.firmware_analyzing(),
+                ..Default::default()
+            };
+            if let Some(preview) = &state.preview {
+                let usage = &preview.usage;
+                details.format = match usage.format {
+                    FirmwareFormat::Elf => "ELF",
+                    FirmwareFormat::Hex => "HEX",
+                    FirmwareFormat::Bin => "BIN",
+                }
+                .into();
+                details.size = byte_count(usage.used_bytes);
+                details.segments = usage.segments.len().to_string();
+                details.range = format!(
+                    "0x{:08X} – 0x{:08X}",
+                    usage.start_address.unwrap_or(0),
+                    usage.end_address.unwrap_or(1).saturating_sub(1)
+                );
+                details.preview_range = format!(
+                    "0x{:08X} – 0x{:08X}",
+                    preview.start_address,
+                    preview.start_address + preview.bytes.len().saturating_sub(1) as u64
+                );
+            }
+            details
+        })
+    });
+    effect(move || cx.emit(FirmwareDocumentEvent::Change(details.get())));
+    view().child(props.children)
+}
+
+/// Native menu of file commands with the workbench's file dialog owner.
+#[component]
+pub fn FirmwareFileMenu() -> impl IntoElement {
+    let (store, _) = workbench_context();
+    firmware_menu(store)
+}
+
+/// Draws the firmware segments against the target memory regions.
+#[component]
+pub fn FirmwareMemoryMap() -> impl IntoElement {
+    let (store, _) = workbench_context();
+    layout_bar(store)
+}
+
+#[derive(Debug, Clone, Default, PartialEq, JsObject)]
+pub struct FlashState {
+    pub connected: bool,
+    pub busy: bool,
+    pub empty: bool,
+    pub dry_run: bool,
+    pub target: String,
+    pub chip: String,
+    pub wire: String,
+    pub speed: String,
+    pub probe: String,
+    pub erase: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Event)]
+pub enum FlashOptionsEvent {
+    /// The connection and flash options shown in this panel.
+    #[args(state)]
+    Change(FlashState),
+}
+
+/// Provides flash option values to the scrollable TSX form.
+#[component]
+pub fn FlashOptionsHost(
+    props: FirmwareContentProps,
+    cx: Scope<FlashOptionsEvent>,
+) -> impl IntoElement {
+    let (store, _) = workbench_context();
+    let state = computed(move || {
+        store.read(|state| {
+            let prefs = &state.preferences;
+            FlashState {
+                connected: state.target_connected(),
+                busy: state.lane_busy(Lane::Probe),
+                empty: prefs.get("firmware").is_empty(),
+                dry_run: prefs.flag("dry_run"),
+                target: state.target_name(),
+                chip: prefs.get("chip").into(),
+                wire: prefs.get("wire").to_uppercase(),
+                speed: prefs.get("speed").into(),
+                probe: prefs.get("probe").into(),
+                erase: prefs.get("erase").into(),
+            }
+        })
+    });
+    effect(move || cx.emit(FlashOptionsEvent::Change(state.get())));
+    scroll().flex_1().child(props.children)
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PropEnum)]
+pub enum FlashCommand {
+    Disconnect,
+    Setup,
+    Erase,
+    #[default]
+    Program,
+}
+
+#[derive(Debug, Clone, PartialEq, Props)]
+pub struct FlashButtonProps {
+    /// The guarded workbench operation.
+    pub command: Prop<FlashCommand>,
+    /// The current localized action label.
+    pub label: Prop<SharedString>,
+}
+
+/// Runs a flash action using the existing target/session checks.
+#[component]
+pub fn FlashButton(props: FlashButtonProps) -> impl IntoElement {
+    let (store, _) = workbench_context();
+    let command = props.command.get();
+    let icon = match command {
+        FlashCommand::Disconnect => "close",
+        FlashCommand::Setup => "settings",
+        FlashCommand::Erase => "erase",
+        FlashCommand::Program => "link",
+    };
+    labeled_button(
+        icon,
+        props.label,
+        command == FlashCommand::Program,
+        move || {
+            store.read(|s| {
+                s.lane_busy(Lane::Probe)
+                    || match command {
+                        FlashCommand::Erase => !s.target_connected(),
+                        FlashCommand::Program => {
+                            s.target_connected() && s.preferences.get("firmware").is_empty()
+                        }
+                        _ => false,
+                    }
             })
-            .unwrap_or(theme().muted_foreground)
-    })
+        },
+        move || match command {
+            FlashCommand::Disconnect => store.change(Workbench::disconnect_target),
+            FlashCommand::Setup => store.target_setup.set(true),
+            FlashCommand::Erase => confirm_erase(store),
+            FlashCommand::Program if store.read(Workbench::target_connected) => {
+                execute(store, false)
+            }
+            FlashCommand::Program => store.command(|s| Command::Connect(s.preferences.clone())),
+        },
+    )
+}
+
+/// Native erase mode menu using the persisted workbench preference.
+#[component]
+pub fn EraseModePicker() -> impl IntoElement {
+    let (store, _) = workbench_context();
+    popup_control(store, "erase", &["automatic", "full", "skip"], false)
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PropEnum)]
+pub enum FlashFlag {
+    #[default]
+    Verify,
+    Reset,
+    DryRun,
+}
+#[derive(Debug, Clone, PartialEq, Props)]
+pub struct FlashToggleProps {
+    /// Flash option changed by this control.
+    pub option: Prop<FlashFlag>,
+}
+
+/// Updates the existing flash preference with the shared checkbox behavior.
+#[component]
+pub fn FlashToggle(props: FlashToggleProps) -> impl IntoElement {
+    let (store, _) = workbench_context();
+    let (key, label) = match props.option.get() {
+        FlashFlag::Verify => ("verify", "校验写入的数据"),
+        FlashFlag::Reset => ("reset", "复位并运行程序"),
+        FlashFlag::DryRun => ("dry_run", "仅预检查，不写入芯片"),
+    };
+    toggle(store, key, label)
+}
+
+pub(super) fn register(registry: &mut Registry) {
+    registry
+        .register::<FirmwareDocumentHost>()
+        .register::<FirmwareBytes>()
+        .register::<FirmwareFileMenu>()
+        .register::<FirmwareMemoryMap>()
+        .register::<FlashOptionsHost>()
+        .register::<FlashButton>()
+        .register::<EraseModePicker>()
+        .register::<FlashToggle>();
 }

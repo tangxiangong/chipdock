@@ -12,6 +12,7 @@ docs/superpowers/
 
 # Rust and Xcode build products
 /target/
+/linux/target/
 /.build/
 /dist/
 **/xcuserdata/

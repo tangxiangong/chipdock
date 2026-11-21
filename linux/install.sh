@@ -1,36 +1,50 @@
 #!/usr/bin/env bash
 set -euo pipefail
 source_dir="$(cd "$(dirname "$0")" && pwd)"
-app_id=com.xiaoyu.chipdock
-binary="$HOME/.local/bin/ChipDock"
-data_dir="${XDG_DATA_HOME:-$HOME/.local/share}"
-[[ "$data_dir" == /* ]] || { echo 'XDG_DATA_HOME must be an absolute path' >&2; exit 1; }
-[[ "$binary$data_dir" != *$'\n'* ]] || { echo 'Installation paths must not contain newlines' >&2; exit 1; }
-mkdir -p "$(dirname "$binary")" "$data_dir/applications" "$data_dir/icons" "$data_dir/doc"
-pending="$(mktemp "$(dirname "$binary")/.chipdock-install.XXXXXX")"
-trap 'rm -f "$pending"' EXIT
-install -m 755 "$source_dir/bin/ChipDock" "$pending"
-mv -f "$pending" "$binary"
-cp -R "$source_dir/share/icons/." "$data_dir/icons/"
-cp -R "$source_dir/share/doc/." "$data_dir/doc/"
-# Desktop Entry string escaping follows Exec argument quoting; %% is a literal percent.
-exec_path="$(printf '%s' "$binary" | sed 's/\\/\\\\/g; s/["$`]/\\&/g; s/%/%%/g; s/\\/\\\\/g')"
-while IFS= read -r line; do
-  case "$line" in
-    Exec=*) printf 'Exec="%s" %%f\n' "$exec_path" ;;
-    *) printf '%s\n' "$line" ;;
-  esac
-done < "$source_dir/share/applications/$app_id.desktop" > "$data_dir/applications/$app_id.desktop"
-legacy_id=com.xiaoyu.chipdock.gpui
-legacy_entry="$data_dir/applications/$legacy_id.desktop"
-if [[ -f "$legacy_entry" ]] && grep -Fqx "Exec=\"${exec_path%/ChipDock}/chipdock-gpui\" %f" "$legacy_entry"; then
-  rm -f "$legacy_entry" "${binary%/ChipDock}/chipdock-gpui" \
-    "$data_dir/icons/hicolor/256x256/apps/$legacy_id.png" "$data_dir/icons/hicolor/scalable/apps/$legacy_id.svg"
+data="${XDG_DATA_HOME:-$HOME/.local/share}"
+[[ "$data" == /* ]] || { echo "XDG_DATA_HOME must be absolute" >&2; exit 1; }
+[[ "$HOME$data" != *$'\n'* ]] || { echo "Installation paths must not contain newlines" >&2; exit 1; }
+test -x "$source_dir/ChipDock"
+test -s "$source_dir/nsh/bundle.nshc"
+parent="$HOME/.local/lib"
+app="$parent/chipdock"
+id=com.xiaoyu.chipdock
+test -f "$source_dir/$id.desktop"
+test -s "$source_dir/$id.png"
+test -s "$source_dir/$id.svg"
+if [[ -e "$app" || -L "$app" ]]; then
+  [[ -d "$app" && ! -L "$app" && ! -e "$app/package-managed" ]] || {
+    echo "Cannot replace this installation: $app" >&2; exit 1
+  }
+  python3 -c 'import json,sys; sys.exit(json.load(open(sys.argv[1]))["id"] != sys.argv[2])' "$app/nsh/app.json" "$id"
 fi
-if command -v gtk-update-icon-cache >/dev/null; then
-  gtk-update-icon-cache -f -t "$data_dir/icons/hicolor" >/dev/null 2>&1 || true
+mkdir -p "$parent" "$HOME/.local/bin" "$data/applications" \
+  "$data/icons/hicolor/256x256/apps" "$data/icons/hicolor/scalable/apps"
+stage="$(mktemp -d "$parent/.chipdock.XXXXXX")"
+trap 'rm -rf "$stage"' EXIT
+cp -R "$source_dir" "$stage/new"
+if [[ -e "$app" ]]; then mv "$app" "$stage/previous"; fi
+if ! mv "$stage/new" "$app"; then
+  if [[ -e "$stage/previous" ]]; then mv "$stage/previous" "$app"; fi
+  exit 1
 fi
-if command -v update-desktop-database >/dev/null; then
-  update-desktop-database "$data_dir/applications" >/dev/null 2>&1 || true
-fi
-printf 'Installed ChipDock: %s\nOpen ChipDock from your applications menu.\n' "$binary"
+python3 - "$app/ChipDock" "$HOME/.local/bin/ChipDock" <<'PYLINK'
+import os, sys, tempfile
+from pathlib import Path
+executable, link = map(Path, sys.argv[1:])
+with tempfile.TemporaryDirectory(dir=link.parent) as temporary:
+    pending = Path(temporary) / "ChipDock"
+    pending.symlink_to(executable)
+    os.replace(pending, link)
+PYLINK
+install -m 644 "$app/$id.png" "$data/icons/hicolor/256x256/apps/$id.png"
+install -m 644 "$app/$id.svg" "$data/icons/hicolor/scalable/apps/$id.svg"
+python3 - "$app/ChipDock" "$app/$id.desktop" "$data/applications/$id.desktop" <<'PY'
+from pathlib import Path
+import sys
+exe, template, dest = sys.argv[1:]
+if '\n' in exe: raise SystemExit("Invalid binary path")
+exe = ''.join(('\\' if c in '\\"$`' else '') + c for c in exe).replace('\\','\\\\').replace('%','%%')
+lines = Path(template).read_text().splitlines()
+Path(dest).write_text('\n'.join(f'Exec="{exe}" %f' if line.startswith('Exec=') else line for line in lines) + '\n')
+PY

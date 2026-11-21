@@ -63,21 +63,66 @@ impl Record {
     }
 }
 
-pub(super) fn page(store: Store) -> View {
+#[derive(Clone, Copy)]
+struct RecordSheet {
+    store: Store,
+    session: Option<u64>,
+    rows: Memo<Vec<Record>>,
+    selection: Signal<Option<u64>>,
+    sort: Signal<Option<DataTableSort>>,
+}
+
+impl RecordSheet {
+    fn selected(&self) -> Option<Record> {
+        self.selection.get().and_then(|id| {
+            self.rows
+                .with(|rows| rows.iter().find(|row| row.sequence == id).cloned())
+        })
+    }
+}
+
+/// Traffic included by the record filter.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PropEnum)]
+pub enum RecordDirection {
+    #[default]
+    All,
+    Receive,
+    Send,
+}
+
+#[derive(Debug, Clone, PartialEq, Props)]
+pub struct RecordSheetProps {
+    /// Case-insensitive text, byte or source filter.
+    pub query: Prop<String>,
+    /// Selected traffic direction.
+    pub direction: Prop<RecordDirection>,
+    /// Record sheet controls and native table.
+    pub children: Prop<Children>,
+}
+
+#[derive(Debug, Clone, PartialEq, Event)]
+pub enum RecordSheetEvent {
+    /// Number of records matching the current filter.
+    #[args(count)]
+    CountChange(u32),
+}
+
+/// Filters and sorts the captured serial session in Rust, keeping frame identities stable.
+#[component]
+pub fn SerialRecordSheet(props: RecordSheetProps, cx: Scope<RecordSheetEvent>) -> impl IntoElement {
+    let (store, _) = workbench_context();
+    provide_context(components::ModalControls);
     let session = store
         .tool_session
         .get_untracked()
         .or(store.read(|s| s.active));
-    let query = signal(String::new());
-    let search_focused = signal(false);
-    let direction = signal("all");
     let selection = signal(None::<u64>);
     let mut first_sort = DataTableSort::default();
     first_sort.key = "sequence".into();
     let sort = signal(Some(first_sort));
     let rows = computed(move || {
-        let query = query.get().to_lowercase();
-        let direction = direction.get();
+        let query = props.query.get().to_lowercase();
+        let direction = props.direction.get();
         let mut rows = store.read(|s| {
             session
                 .and_then(|id| s.sessions.get(&id))
@@ -88,7 +133,8 @@ pub(super) fn page(store: Store) -> View {
                         .filter(|frame| frame.sequence > session.cleared)
                         .map(Record::from_frame)
                         .filter(|frame| {
-                            (direction == "all" || frame.receive == (direction == "receive"))
+                            (direction == RecordDirection::All
+                                || frame.receive == (direction == RecordDirection::Receive))
                                 && (query.is_empty()
                                     || format!("{} {} {}", frame.hex, frame.source, frame.text)
                                         .to_lowercase()
@@ -103,6 +149,30 @@ pub(super) fn page(store: Store) -> View {
         }
         rows
     });
+    let count = computed(move || rows.with(Vec::len) as u32);
+    effect(move || cx.emit(RecordSheetEvent::CountChange(count.get())));
+    provide_context(RecordSheet {
+        store,
+        session,
+        rows,
+        selection,
+        sort,
+    });
+    view().child(props.children)
+}
+
+/// Virtualized table with native selection, sorting, header controls and context menu.
+#[component]
+pub fn SerialRecordTable() -> impl IntoElement {
+    let sheet = use_context::<RecordSheet>().expect("SerialRecordTable requires SerialRecordSheet");
+    let RecordSheet {
+        store,
+        session,
+        rows,
+        selection,
+        sort,
+    } = sheet;
+    let selected = move || sheet.selected();
     let data = computed(move || {
         rows.with(|rows| {
             DataTableRows::new(rows.len())
@@ -122,220 +192,171 @@ pub(super) fn page(store: Store) -> View {
                 .texts("checksum", rows.iter().map(|row| row.checksum))
         })
     });
-    let selected = move || {
-        selection
-            .get()
-            .and_then(|id| rows.with(|rows| rows.iter().find(|row| row.sequence == id).cloned()))
-    };
     view()
-        .w(px(920.))
-        .h(px(480.))
-        .p_5()
-        .gap_3()
+        .relative()
+        .flex_1()
+        .min_h_0()
+        .overflow_hidden()
         .child(
-            view()
-                .flex_row()
-                .items_center()
-                .gap_2()
-                .child(
-                    view()
-                        .flex_row()
-                        .items_center()
-                        .gap(px(3.))
-                        .px(px(5.))
-                        .h(px(24.))
-                        .flex_1()
-                        .rounded_full()
-                        .border_1()
-                        .border_color(move || theme().input)
-                        .bg(move || {
-                            theme()
-                                .color("record-search-well")
-                                .unwrap_or(theme().background)
+            data_table()
+                .columns(columns())
+                .data(data)
+                .sort(sort)
+                .on_sort_change(move |value: &Option<DataTableSort>| sort.set(value.clone()))
+                .render_header_cell(move |header: &DataTableHeaderCell| {
+                    header_cell(header.clone(), sort)
+                })
+                .font_size(body_size)
+                .row_height(px(24.))
+                .header_height(px(28.))
+                .column_selectable(false)
+                .resizable_columns(true)
+                .movable_columns(false)
+                .stripe(true)
+                .accessibility_label("串口记录表")
+                .classes(table_classes())
+                .selection(move || {
+                    selection.get().and_then(|id| {
+                        rows.with(|rows| rows.iter().position(|row| row.sequence == id))
+                            .map(|index| {
+                                let mut selection = DataTableSelection::default();
+                                selection.row = Some(index as u32);
+                                selection
+                            })
+                    })
+                })
+                .on_selection_change(move |next: &Option<DataTableSelection>| {
+                    selection.set(next.as_ref().and_then(|next| {
+                        next.row.and_then(|row| {
+                            rows.with_untracked(|rows| rows.get(row as usize).map(|r| r.sequence))
                         })
-                        .style_when(search_focused, |s| {
-                            s.border(px(0.5))
-                                .px(px(5.5))
-                                .border_color(move || {
-                                    theme()
-                                        .color("record-search-focus-border")
-                                        .unwrap_or(theme().ring)
-                                })
-                                .outline(px(3.))
-                                .outline_color(move || {
-                                    theme().color("record-search-ring").unwrap_or(theme().ring)
-                                })
-                        })
-                        .child(
-                            icons::icon("search")
-                                .size(px(15.))
-                                .text_color(move || theme().muted_foreground),
-                        )
-                        .child(
-                            nsh_base::input()
-                                .label("筛选文本、HEX 或来源")
-                                .placeholder("筛选文本、HEX 或来源")
-                                .placeholder_color(|| color(theme().muted_foreground))
-                                .caret_color(|| color(theme().primary))
-                                .auto_focus(true)
-                                .on_focus(move || search_focused.set(true))
-                                .on_blur(move || search_focused.set(false))
-                                .value(query)
-                                .on_change(move |text: &str| query.set(text.into()))
-                                .text_size(body_size)
-                                .flex_1()
-                                .min_w_0(),
-                        ),
-                )
-                .child(direction_picker(direction))
-                .child(
-                    text(move || format!("{} 条", rows.with(Vec::len)))
-                        .text_size(body_size)
-                        .tabular_nums()
-                        .text_color(move || theme().muted_foreground),
-                ),
-        )
-        .child(
-            view()
-                .relative()
+                    }));
+                })
+                .on_row_press(move |press: &DataTablePress| {
+                    selection.set(rows.with_untracked(|rows| {
+                        rows.get(press.row as usize).map(|row| row.sequence)
+                    }));
+                })
+                .on_context_menu(move |press: &DataTableContextMenu| {
+                    if let Some(row) = press.row {
+                        selection.set(
+                            rows.with_untracked(|rows| {
+                                rows.get(row as usize).map(|row| row.sequence)
+                            }),
+                        );
+                    }
+                    let has_selection = selected().is_some();
+                    let mut items = vec![
+                        MenuItem::new("复制")
+                            .disabled(!has_selection)
+                            .on_select(move || {
+                                if let Some(frame) = selected() {
+                                    set_clipboard(frame.copy_text());
+                                }
+                            }),
+                        MenuItem::new("复制记录详情")
+                            .disabled(!has_selection)
+                            .on_select(move || {
+                                if let Some(frame) = selected() {
+                                    set_clipboard(frame.detail);
+                                }
+                            }),
+                        MenuItem::separator(),
+                    ];
+                    for format in ["json", "txt", "csv", "bin"] {
+                        items.push(
+                            MenuItem::new(format!("导出 {}…", format.to_uppercase())).on_select(
+                                move || export(store, session, &rows.get_untracked(), format),
+                            ),
+                        );
+                    }
+                    drop(popup_menu(items));
+                })
                 .flex_1()
                 .min_h_0()
-                .overflow_hidden()
-                .child(
-                    data_table()
-                        .columns(columns())
-                        .data(data)
-                        .sort(sort)
-                        .on_sort_change(move |value: &Option<DataTableSort>| {
-                            sort.set(value.clone())
-                        })
-                        .render_header_cell(move |header: &DataTableHeaderCell| {
-                            header_cell(header.clone(), sort)
-                        })
-                        .font_size(body_size)
-                        .row_height(px(24.))
-                        .header_height(px(28.))
-                        .column_selectable(false)
-                        .resizable_columns(true)
-                        .movable_columns(false)
-                        .stripe(true)
-                        .accessibility_label("串口记录表")
-                        .classes(table_classes())
-                        .selection(move || {
-                            selection.get().and_then(|id| {
-                                rows.with(|rows| rows.iter().position(|row| row.sequence == id))
-                                    .map(|index| {
-                                        let mut selection = DataTableSelection::default();
-                                        selection.row = Some(index as u32);
-                                        selection
-                                    })
-                            })
-                        })
-                        .on_selection_change(move |next: &Option<DataTableSelection>| {
-                            selection.set(next.as_ref().and_then(|next| {
-                                next.row.and_then(|row| {
-                                    rows.with_untracked(|rows| {
-                                        rows.get(row as usize).map(|r| r.sequence)
-                                    })
-                                })
-                            }));
-                        })
-                        .on_row_press(move |press: &DataTablePress| {
-                            selection.set(rows.with_untracked(|rows| {
-                                rows.get(press.row as usize).map(|row| row.sequence)
-                            }));
-                        })
-                        .on_context_menu(move |press: &DataTableContextMenu| {
-                            if let Some(row) = press.row {
-                                selection.set(rows.with_untracked(|rows| {
-                                    rows.get(row as usize).map(|row| row.sequence)
-                                }));
-                            }
-                            let has_selection = selected().is_some();
-                            let mut items = vec![
-                                MenuItem::new("复制").disabled(!has_selection).on_select(
-                                    move || {
-                                        if let Some(frame) = selected() {
-                                            set_clipboard(frame.copy_text());
-                                        }
-                                    },
-                                ),
-                                MenuItem::new("复制记录详情")
-                                    .disabled(!has_selection)
-                                    .on_select(move || {
-                                        if let Some(frame) = selected() {
-                                            set_clipboard(frame.detail);
-                                        }
-                                    }),
-                                MenuItem::separator(),
-                            ];
-                            for format in ["json", "txt", "csv", "bin"] {
-                                items.push(
-                                    MenuItem::new(format!("导出 {}…", format.to_uppercase()))
-                                        .on_select(move || {
-                                            export(store, session, &rows.get_untracked(), format)
-                                        }),
-                                );
-                            }
-                            drop(popup_menu(items));
-                        })
-                        .flex_1()
-                        .min_h_0()
-                        .ml(px(10.)),
-                )
-                .child(when(move || rows.with(Vec::is_empty), empty_stripes))
-                .child(
-                    view()
-                        .absolute()
-                        .top(px(27.))
-                        .left_0()
-                        .right_0()
-                        .h(px(1.))
-                        .bg(hairline)
-                        .pointer_events(nsh_core::PointerEvents::None)
-                        .accessibility_elements_hidden(true),
-                ),
+                .ml(px(10.)),
         )
+        .child(when(move || rows.with(Vec::is_empty), empty_stripes))
         .child(
             view()
-                .flex_row()
-                .items_center()
-                .gap_2()
-                .child(action(
-                    "复制",
-                    Variant::Default,
-                    move || selected().is_none(),
-                    move || {
-                        if let Some(frame) = selected() {
-                            set_clipboard(frame.copy_text());
-                        }
-                    },
-                ))
-                .child(action(
-                    "在终端定位",
-                    Variant::Default,
-                    move || selected().is_none(),
-                    move || {
-                        if let (Some(id), Some(frame)) = (session, selected()) {
-                            store.change(|s| {
-                                s.switch_session(id);
-                                s.set("filter", String::new());
-                                s.set("direction", "all".into());
-                                s.flag("auto_scroll", false);
-                            });
-                            store.jump.set(Some(frame.sequence));
-                            tools::close(store);
-                        }
-                    },
-                ))
-                .child(view().flex_1())
-                .child(action(
-                    "完成",
-                    Variant::Default,
-                    || false,
-                    move || tools::close(store),
-                )),
+                .absolute()
+                .top(px(27.))
+                .left_0()
+                .right_0()
+                .h(px(1.))
+                .bg(hairline)
+                .pointer_events(nsh_core::PointerEvents::None)
+                .accessibility_elements_hidden(true),
         )
+}
+
+/// Command offered for the record sheet's captured session.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PropEnum)]
+pub enum RecordCommand {
+    #[default]
+    Copy,
+    Locate,
+    Close,
+}
+
+#[derive(Debug, Clone, PartialEq, Props)]
+pub struct RecordActionProps {
+    /// Command to run for the sheet's captured serial session.
+    pub command: Prop<RecordCommand>,
+}
+
+/// ChipDock's standard action button bound to the native record selection.
+#[component]
+pub fn SerialRecordAction(props: RecordActionProps) -> impl IntoElement {
+    let sheet =
+        use_context::<RecordSheet>().expect("SerialRecordAction requires SerialRecordSheet");
+    let RecordSheet { store, session, .. } = sheet;
+    let selected = move || sheet.selected();
+    match props.command.get() {
+        RecordCommand::Copy => action(
+            "复制",
+            Variant::Default,
+            move || selected().is_none(),
+            move || {
+                if let Some(frame) = selected() {
+                    set_clipboard(frame.copy_text());
+                }
+            },
+        )
+        .into_element(),
+        RecordCommand::Locate => action(
+            "在终端定位",
+            Variant::Default,
+            move || selected().is_none(),
+            move || {
+                if let (Some(id), Some(frame)) = (session, selected()) {
+                    store.change(|s| {
+                        s.switch_session(id);
+                        s.set("filter", String::new());
+                        s.set("direction", "all".into());
+                        s.flag("auto_scroll", false);
+                    });
+                    store.jump.set(Some(frame.sequence));
+                    tools::close(store);
+                }
+            },
+        )
+        .into_element(),
+        RecordCommand::Close => action(
+            "完成",
+            Variant::Default,
+            || false,
+            move || tools::close(store),
+        )
+        .into_element(),
+    }
+}
+
+pub(super) fn register(registry: &mut Registry) {
+    registry
+        .register::<SerialRecordSheet>()
+        .register::<SerialRecordTable>()
+        .register::<SerialRecordAction>();
 }
 
 fn compare(a: &Record, b: &Record, sort: &DataTableSort) -> Ordering {
@@ -409,59 +430,6 @@ fn table_classes() -> DataTableClasses {
     classes.row_odd = Some("bg-foreground/4".into());
     classes.row_selected = Some("bg-primary/15".into());
     classes
-}
-fn direction_picker(direction: Signal<&'static str>) -> impl IntoElement {
-    nsh_base::tabs()
-        .w(px(150.))
-        .h(px(24.))
-        .flex_row()
-        .items_center()
-        .p_0()
-        .gap_0()
-        .rounded(move || theme().radius)
-        .bg(move || theme().color("tools-tab").unwrap_or(theme().secondary))
-        .children(
-            [("all", "全部"), ("receive", "接收"), ("send", "发送")]
-                .into_iter()
-                .enumerate()
-                .map(move |(index, (key, title))| {
-                    nsh_base::tab()
-                        .selected(move || direction.get() == key)
-                        .on_press(move || direction.set(key))
-                        .relative()
-                        .w(px(50.))
-                        .h(px(24.))
-                        .p_0()
-                        .items_center()
-                        .justify_center()
-                        .rounded(move || theme().radius)
-                        .selected_style(|s| {
-                            s.bg(move || theme().primary)
-                                .text_color(move || theme().primary_foreground)
-                        })
-                        .hover(|s| s.bg(move || theme().accent))
-                        .focus_visible(|s| s.outline(px(2.)).outline_color(move || theme().ring))
-                        .child(when(
-                            move || {
-                                index > 0
-                                    && direction.get() != key
-                                    && direction.get() != ["all", "receive"][index - 1]
-                            },
-                            || {
-                                view()
-                                    .absolute()
-                                    .left_0()
-                                    .top(px(5.))
-                                    .bottom(px(5.))
-                                    .w(px(1.))
-                                    .bg(move || {
-                                        theme().color("tools-tab-divider").unwrap_or(theme().border)
-                                    })
-                            },
-                        ))
-                        .child(text(title).text_size(body_size))
-                }),
-        )
 }
 fn header_cell(
     header: DataTableHeaderCell,

@@ -49,11 +49,42 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
+      - &setup-nsh
+        name: Set up NSH 0.6.1
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$RUNNER_OS-$RUNNER_ARCH" in
+            Linux-X64)   asset=nsh-linux-x86_64.tar.gz; digest=9a7ac692f1c229df476be8ff83a3c5912d271453b644e313f02cb19d18696070 ;;
+            Linux-ARM64) asset=nsh-linux-arm64.tar.gz; digest=d7d54b8a62aa8bd4a9fb73fcc0abce8cc565185926f226aa90f48622f3e410a3 ;;
+            macOS-ARM64) asset=nsh-macos-arm64.tar.gz; digest=ee1aed2a4d111fe90e6cceca4b9d5f834c9e11cfda525f8be984261a329c06de ;;
+            macOS-X64)   asset=nsh-macos-x86_64.tar.gz; digest=23ccbfa71f50eb312e57862b7b843a15b23c1b9a9464cfc30735b1c07a18e324 ;;
+            Windows-X64) asset=nsh-windows-x86_64.zip; digest=7952c84b165e13515bd2ad2787ef22622e49ce88cb8d877825e40b40f3aff4be ;;
+            *) echo "Unsupported NSH host: $RUNNER_OS-$RUNNER_ARCH" >&2; exit 1 ;;
+          esac
+          tools_dir="$(mktemp -d)"
+          cd "$tools_dir"
+          curl --fail --silent --show-error --location --retry 3 \
+            "https://github.com/longbridge/nsh/releases/download/v0.6.1/$asset" -o "$asset"
+          test "$(openssl dgst -sha256 "$asset" | awk '{print $NF}')" = "$digest"
+          if [[ "$RUNNER_OS" == Windows ]]; then
+            unzip -q "$asset"
+            cygpath -w "$tools_dir/nsh/bin" >> "$GITHUB_PATH"
+            printf '%s\n' 'LIBCLANG_PATH=C:\Program Files\LLVM\bin' >> "$GITHUB_ENV"
+            echo 'RUST_MIN_STACK=268435456' >> "$GITHUB_ENV"
+          else
+            tar -xzf "$asset"
+            echo "$tools_dir/nsh/bin" >> "$GITHUB_PATH"
+          fi
+          "$tools_dir/nsh/bin/nsh" --version
       - uses: swatinem/rust-cache@v2
         with:
           key: nsh-native
-      - name: Check shared NSH source on its native platform
-        run: cargo check --locked -p chipdock-nsh --all-targets
+      - name: Check shared source and package the native mixed runner
+        shell: bash
+        run: |
+          nsh check linux
+          OUTPUT_DIR=.build/NSHPackage bash linux/build.sh
 
   build:
     name: Linux packages (${{ matrix.arch }})
@@ -72,22 +103,24 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+      - *setup-nsh
       - uses: swatinem/rust-cache@v2
         with:
           key: nsh-${{ matrix.arch }}
       - name: Install Linux build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3 pkg-config clang cmake libudev-dev libgtk-4-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libssl-dev dpkg-dev rpm cpio desktop-file-utils shellcheck
+          sudo apt-get install -y python3 pkg-config clang libclang-dev cmake libudev-dev libgtk-4-dev libwebkitgtk-6.0-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libssl-dev dpkg-dev rpm cpio desktop-file-utils shellcheck
       - name: Check and test without hardware or a graphical session
         run: |
           for script in linux/*.sh linux/tests/*.sh; do bash -n "$script"; done
           shellcheck linux/*.sh linux/tests/*.sh
           bash linux/tests/packaging.sh
+          nsh check linux
           cargo fmt --all -- --check
-          cargo clippy --locked -p chipdock-nsh -p chipdock-gpui-update --all-targets -- -D warnings
+          cargo clippy --locked -p chipdock-nsh --all-targets -- -D warnings
           cargo test --locked -p chipdock-nsh --all-targets
-          cargo test --locked -p chipdock-gpui-update -p xtask
+          cargo test --locked -p xtask
       - name: Build Linux DEB, RPM and portable packages
         run: bash linux/build.sh
       - name: Verify package metadata and extracted desktop resources
@@ -112,6 +145,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
+      - *setup-nsh
       - uses: swatinem/rust-cache@v2
       - name: Require release credentials
         env:
@@ -140,8 +174,39 @@ jobs:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
           SPARKLE_PRIVATE_ED_KEY: ${{ secrets.SPARKLE_PRIVATE_ED_KEY }}
         run: |
-          cargo run --locked -p chipdock-gpui-update --bin sign-gpui-update -- "$RELEASE_TAG" dist/gpui dist/gpui/notes-linux.md
-          cargo run --locked -p chipdock-gpui-update --bin publish-gpui-update -- "$RELEASE_TAG" dist/gpui
+          set -euo pipefail
+          test "$RELEASE_TAG" = "v$(jq -r .version linux/nsh.json)"
+          test "$RELEASE_TAG" = "v$(cargo pkgid --locked -p chipdock-nsh | sed 's/.*@//')"
+          key="$(mktemp)"
+          trap 'rm -f "$key"' EXIT
+          python3 - "$key" <<'PYKEY'
+          import base64, os, sys
+          from pathlib import Path
+          raw = base64.b64decode(os.environ["SPARKLE_PRIVATE_ED_KEY"].strip(), validate=True)
+          if len(raw) not in (32, 64): raise ValueError("Invalid release seed")
+          Path(sys.argv[1]).write_bytes(base64.b64encode(raw[:32]))
+          PYKEY
+          dir=dist/gpui
+          nsh update-manifest --entry linux --key "$key" --notes "$dir/notes-linux.md" -o "$dir" "$dir"/*.tar.gz
+          existing="$(gh release view "$RELEASE_TAG" --json assets)"
+          version="${RELEASE_TAG#v}"
+          files=()
+          for arch in x86_64 aarch64; do
+            for ext in tar.gz deb rpm; do files+=("$dir/ChipDock-$version-linux-$arch.$ext"); done
+          done
+          files+=("$dir/latest.json.sig" "$dir/latest.json")
+          missing=()
+          for file in "${files[@]}"; do
+            test -s "$file"
+            name="${file##*/}"
+            digest="$(jq -r --arg n "$name" '.assets[] | select(.name == $n) | .digest' <<< "$existing")"
+            if [[ -n "$digest" ]]; then
+              test "$digest" = "sha256:$(sha256sum "$file" | cut -d' ' -f1)"
+            else
+              missing+=("$file")
+            fi
+          done
+          for file in "${missing[@]}"; do gh release upload "$RELEASE_TAG" "$file"; done
       - name: Verify GitHub assets and mirror to COS
         env:
           GH_TOKEN: ${{ github.token }}

@@ -342,3 +342,23 @@ fn older_gpui_retry_cannot_downgrade_the_reserved_feed() {
     publish_to(&previous, old.path(), &keys, &store).unwrap();
     assert_eq!(store.objects.borrow()[&feed_path], feed);
 }
+
+#[test]
+fn interrupted_nsh_signature_promotion_can_resume_without_downgrading_the_feed() {
+    let (older, keys) = crate::tests::nsh_fixture("v0.3.0");
+    let old = prepare(older.path(), "v0.3.0", Platform::Gpui, &keys).unwrap();
+    let (newer, _) = crate::tests::nsh_fixture("v0.3.1");
+    let new = prepare(newer.path(), "v0.3.1", Platform::Gpui, &keys).unwrap();
+    let store = MemoryStore::default();
+    publish_to(&old, older.path(), &keys, &store).unwrap();
+    *store.fail.borrow_mut() = Some("updates/latest.json".into());
+    assert!(publish_to(&new, newer.path(), &keys, &store).is_err());
+    *store.fail.borrow_mut() = None;
+    publish_to(&old, older.path(), &keys, &store).unwrap();
+    let signature = fs::read(&new.feeds["latest.json.sig"]).unwrap();
+    assert_eq!(store.objects.borrow()["updates/latest.json.sig"], signature);
+    publish_to(&new, newer.path(), &keys, &store).unwrap();
+    let bytes = &store.objects.borrow()["updates/latest.json"];
+    nsh_updater::verify(&keys.sparkle, bytes, &signature).unwrap();
+    assert_eq!(crate::nsh_identity(bytes).unwrap().version, "0.3.1");
+}

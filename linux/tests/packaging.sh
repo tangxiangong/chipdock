@@ -8,59 +8,23 @@ printf '\177ELF\002\001\001\000\000\000\000\000\000\000\000\000\002\000\076\000'
 validate_binary "$test_dir/binary" linux x86_64
 if validate_binary "$test_dir/binary" linux aarch64; then exit 1; fi
 if validate_binary "$test_dir/binary" macos x86_64; then exit 1; fi
-stage_linux "$test_dir/portable" "$test_dir/binary"
-install -m 755 "$desktop_repo/linux/install.sh" "$test_dir/portable/install.sh"
-install_home="$test_dir/user space \"quote\" \$dollar \`tick\` 100% \\slash"
-HOME="$install_home" XDG_DATA_HOME="$test_dir/xdg data" bash "$test_dir/portable/install.sh"
-cmp "$test_dir/binary" "$install_home/.local/bin/ChipDock"
-cmp "$desktop_repo/windows/ChipDock/Assets/ChipDock.png" "$test_dir/xdg data/icons/hicolor/256x256/apps/$linux_app_id.png"
-cmp "$desktop_repo/assets/app-icons/ChipDock.icon/Assets/AppIcon.svg" "$test_dir/xdg data/icons/hicolor/scalable/apps/$linux_app_id.svg"
-desktop="$test_dir/xdg data/applications/$linux_app_id.desktop"
-grep -Fx "Icon=$linux_app_id" "$desktop"
-grep -Fx "StartupWMClass=$linux_app_id" "$desktop"
-grep -E '^Exec=".*/ChipDock" %f$' "$desktop"
-grep -F '100%%' "$desktop"
-grep -F '\\"quote\\"' "$desktop"
-# shellcheck disable=SC2016
-grep -F '\\$dollar' "$desktop"
-if command -v desktop-file-validate >/dev/null; then desktop-file-validate "$desktop"; fi
-legacy_desktop="$test_dir/xdg data/applications/com.xiaoyu.chipdock.gpui.desktop"
-legacy_binary="$install_home/.local/bin/chipdock-gpui"
-sed 's|/ChipDock" %f$|/chipdock-gpui" %f|' "$desktop" > "$legacy_desktop"
-cp "$install_home/.local/bin/ChipDock" "$legacy_binary"
-HOME="$install_home" XDG_DATA_HOME="$test_dir/xdg data" bash "$test_dir/portable/install.sh"
-test ! -e "$legacy_desktop"
-test ! -e "$legacy_binary"
-cmp "$test_dir/binary" "$install_home/.local/bin/ChipDock"
-if HOME="$install_home" XDG_DATA_HOME=relative bash "$test_dir/portable/install.sh"; then exit 1; fi
-# Exercise the build-to-packager handoff without compiling or launching anything.
-mkdir "$test_dir/tools"
-cat > "$test_dir/tools/cargo" <<'EOF'
-#!/bin/bash
-case "$1" in
-  build)
-    printf '%s\n' '{"reason":"compiler-artifact","target":{"name":"dependency"},"executable":null}'
-    printf '%s\n' '{"reason":"compiler-artifact","target":{"name":"ChipDock"},"executable":"/private/tmp/shared cargo output/ChipDock"}'
-    ;;
-  pkgid) printf '%s\n' 'path+file:///workspace/linux#chipdock-nsh@0.3.0' ;;
-  *) exit 1 ;;
-esac
-EOF
-cat > "$test_dir/tools/bash" <<'EOF'
-#!/bin/bash
-[[ "$1" == linux/package.sh ]] || exit 1
-printf '%s\n' "$@" > "$NSH_BUILD_CAPTURE"
-EOF
-chmod +x "$test_dir/tools/cargo" "$test_dir/tools/bash"
-PATH="$test_dir/tools:$PATH" SOURCE_DATE_EPOCH=0 CARGO_TARGET_DIR="$test_dir/ignored target" \
-  CARGO_BUILD_TARGET=aarch64-apple-darwin OUTPUT_DIR="$test_dir/output" \
-  NSH_BUILD_CAPTURE="$test_dir/handoff" /bin/bash "$desktop_repo/linux/build.sh"
-test "$(sed -n '2p' "$test_dir/handoff")" == '/private/tmp/shared cargo output/ChipDock'
-test "$(sed -n '3p' "$test_dir/handoff")" == 0.3.0
-test "$(sed -n '4p' "$test_dir/handoff")" == aarch64-apple-darwin
-test "$(sed -n '5p' "$test_dir/handoff")" == "$test_dir/output"
-echo 'Packaging, user installer and Cargo artifact handoff logic passed'
-
+app="$test_dir/ChipDock"
+mkdir -p "$app/nsh/assets"
+install -m 755 "$test_dir/binary" "$app/ChipDock"
+printf 'bundle' > "$app/nsh/bundle.nshc"
+printf '{"id":"com.xiaoyu.chipdock","version":"0.3.0"}' > "$app/nsh/app.json"
+cp "$desktop_repo/assets/app-icons/ChipDock.icon/Assets/AppIcon.svg" "$app/$linux_app_id.svg"
+cp "$desktop_repo/linux/ChipDock.desktop" "$app/$linux_app_id.desktop"
+cp "$desktop_repo/windows/ChipDock/Assets/ChipDock.png" "$app/$linux_app_id.png"
+stage_linux "$test_dir/system" "$app/ChipDock"
+cmp "$app/nsh/bundle.nshc" "$test_dir/system/lib/chipdock/nsh/bundle.nshc"
+cmp "$app/ChipDock" "$test_dir/system/bin/ChipDock"
+cp "$desktop_repo/linux/install.sh" "$app/install.sh"
+install_home="$test_dir/user space"
+HOME="$install_home" XDG_DATA_HOME="$test_dir/data" bash "$app/install.sh"
+cmp "$app/ChipDock" "$install_home/.local/bin/ChipDock"
+cmp "$app/nsh/bundle.nshc" "$install_home/.local/lib/chipdock/nsh/bundle.nshc"
+grep -F "Exec=\"$install_home/.local/lib/chipdock/ChipDock\" %f" "$test_dir/data/applications/$linux_app_id.desktop"
 if [[ "$#" == 0 ]]; then exit 0; fi
 [[ "$#" == 2 && "$(uname -s)" == Linux ]]
 output="$(cd "$1" && pwd)"
@@ -85,8 +49,13 @@ dpkg-deb -x "$output/$name.deb" "$test_dir/deb"
 mkdir "$test_dir/rpm" "$test_dir/archive"
 rpm2cpio "$output/$name.rpm" | (cd "$test_dir/rpm" && cpio -id --quiet)
 tar -xzf "$output/$name.tar.gz" -C "$test_dir/archive"
-for prefix in "$test_dir/deb/usr" "$test_dir/rpm/usr" "$test_dir/archive/$name"; do
-  cmp "$output/$name" "$prefix/bin/ChipDock"
+for prefix in "$test_dir/deb/usr" "$test_dir/rpm/usr"; do
+  validate_binary "$prefix/lib/chipdock/ChipDock" linux "$arch"
+  test -s "$prefix/lib/chipdock/package-managed"
+  test -s "$prefix/lib/chipdock/nsh/assets/nsh-updater.json"
+  test -s "$prefix/lib/chipdock/nsh/bundle.nshc"
+  cmp "$test_dir/archive/ChipDock/ChipDock" "$prefix/bin/ChipDock"
+  diff -r "$test_dir/archive/ChipDock/nsh" "$prefix/lib/chipdock/nsh"
   test -x "$prefix/bin/ChipDock"
   test ! -e "$prefix/bin/chipdock-gpui"
   desktop-file-validate "$prefix/share/applications/$linux_app_id.desktop"
@@ -98,5 +67,7 @@ for prefix in "$test_dir/deb/usr" "$test_dir/rpm/usr" "$test_dir/archive/$name";
 done
 test -f "$test_dir/deb/usr/share/chipdock/package-managed"
 test -f "$test_dir/rpm/usr/share/chipdock/package-managed"
-test ! -f "$test_dir/archive/$name/share/chipdock/package-managed"
+test -x "$test_dir/archive/ChipDock/install.sh"
+test ! -e "$test_dir/archive/ChipDock/package-managed"
+cmp "$desktop_repo/linux/ChipDock.desktop" "$test_dir/archive/ChipDock/$linux_app_id.desktop"
 echo "Verified Linux $arch DEB, RPM and portable payloads without installing or launching them"

@@ -4,7 +4,6 @@ use nsh_base::{SelectEntry, SelectItem, button, checkbox, input, select};
 
 pub(super) const INSTANT: f32 = 120.;
 pub(super) const FAST: f32 = 180.;
-pub(super) const BASE: f32 = 240.;
 #[derive(Clone, Copy)]
 pub(super) enum Variant {
     Default,
@@ -745,9 +744,6 @@ pub(super) fn caption(title: impl IntoReactive<SharedString>) -> impl IntoElemen
         .text_size(caption_size)
         .text_color(move || theme().muted_foreground)
 }
-pub(super) fn row() -> View {
-    view().flex_row().items_center().gap_2().flex_wrap()
-}
 pub(super) fn field_label(key: &str) -> &'static str {
     match key {
         "stop" => return "停止位",
@@ -1147,16 +1143,6 @@ pub(super) fn form_group() -> View {
         .px(px(10.))
         .bg(move || theme().color("group").unwrap_or(theme().card))
         .rounded(px(10.))
-}
-pub(super) fn form_row(label: &'static str) -> View {
-    view()
-        .min_h(px(40.))
-        .flex_row()
-        .items_center()
-        .gap_3()
-        .border_b_1()
-        .border_color(hairline)
-        .child(text(label).text_size(body_size))
 }
 pub(super) fn toolbar_icon(
     name: &'static str,

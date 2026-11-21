@@ -1,10 +1,11 @@
 //! ChipDock release verification and COS mirroring, following BibCiTeX's Rust xtask.
 pub mod cos;
+mod legacy_linux;
 mod xml;
 
 use base64::{Engine, engine::general_purpose::STANDARD};
-use chipdock_gpui_update::{LEGACY_FEED, LINUX_FEED};
 use ed25519_dalek::{Signature, VerifyingKey};
+use legacy_linux::{LEGACY_FEED, LINUX_FEED};
 use p256::{ecdsa::signature::Verifier, pkcs8::DecodePublicKey};
 use semver::Version;
 use serde::{Deserialize, Serialize};
@@ -334,7 +335,7 @@ pub fn prepare(directory: &Path, tag: &str, platform: Platform, keys: &UpdateKey
             plan.identities.insert(name, identity);
         }
     }
-    let linux_feed = [LINUX_FEED, LEGACY_FEED]
+    let linux_feed = ["latest.json", LINUX_FEED, LEGACY_FEED]
         .into_iter()
         .find(|name| directory.join(name).is_file());
     ensure(
@@ -344,8 +345,11 @@ pub fn prepare(directory: &Path, tag: &str, platform: Platform, keys: &UpdateKey
     if let Some(name) = linux_feed.filter(|_| matches!(platform, Platform::Gpui | Platform::All)) {
         let signed = safe_file(directory, name)?;
         let bytes = fs::read(&signed)?;
-        let feed =
-            chipdock_gpui_update::verify(&bytes, &keys.sparkle).map_err(|e| e.to_string())?;
+        if name == "latest.json" {
+            prepare_nsh(&mut plan, directory, tag, &bytes, keys)?;
+            return Ok(plan);
+        }
+        let feed = legacy_linux::verify(&bytes, &keys.sparkle).map_err(|e| e.to_string())?;
         ensure(feed.version == value, "Linux update version mismatch")?;
         for asset in feed.release_assets() {
             let path = safe_file(directory, &asset.name)?;
@@ -410,7 +414,7 @@ pub fn download_release(tag: &str, platform: Platform, directory: &Path) -> Resu
             ]);
         }
     }
-    let linux_feed = [LINUX_FEED, LEGACY_FEED]
+    let linux_feed = ["latest.json", LINUX_FEED, LEGACY_FEED]
         .into_iter()
         .find(|name| assets.iter().any(|asset| asset["name"] == *name));
     ensure(
@@ -419,14 +423,23 @@ pub fn download_release(tag: &str, platform: Platform, directory: &Path) -> Resu
     )?;
     if let Some(name) = linux_feed.filter(|_| matches!(platform, Platform::Gpui | Platform::All)) {
         names.push(name.into());
-        let prefix = format!("ChipDock-{value}-linux-");
-        names.extend(
-            assets
-                .iter()
-                .filter_map(|a| a["name"].as_str())
-                .filter(|n| n.starts_with(&prefix) || n.starts_with("chipdock-gpui-"))
-                .map(str::to_owned),
-        );
+        if name == "latest.json" {
+            names.push("latest.json.sig".into());
+            for arch in ["x86_64", "aarch64"] {
+                for ext in ["tar.gz", "deb", "rpm"] {
+                    names.push(format!("ChipDock-{value}-linux-{arch}.{ext}"));
+                }
+            }
+        } else {
+            let prefix = format!("ChipDock-{value}-linux-");
+            names.extend(
+                assets
+                    .iter()
+                    .filter_map(|a| a["name"].as_str())
+                    .filter(|n| n.starts_with(&prefix) || n.starts_with("chipdock-gpui-"))
+                    .map(str::to_owned),
+            );
+        }
     }
     for name in names {
         let info = assets
@@ -458,15 +471,83 @@ pub fn download_release(tag: &str, platform: Platform, directory: &Path) -> Resu
     Ok(())
 }
 
+fn nsh_identity(bytes: &[u8]) -> Result<Identity> {
+    let manifest: nsh_updater::Manifest = serde_json::from_slice(bytes)?;
+    ensure(
+        manifest.id == "com.xiaoyu.chipdock",
+        "Unexpected NSH application ID",
+    )?;
+    Ok(Identity {
+        version: manifest.version,
+        build: None,
+        signature: None,
+        file: None,
+        size: bytes.len() as u64,
+        sha256: Some(legacy_linux::digest(bytes)),
+    })
+}
+
+fn prepare_nsh(
+    plan: &mut Plan,
+    directory: &Path,
+    tag: &str,
+    bytes: &[u8],
+    keys: &UpdateKeys,
+) -> Result<()> {
+    let sig = safe_file(directory, "latest.json.sig")?;
+    nsh_updater::verify(&keys.sparkle, bytes, &fs::read(&sig)?)?;
+    let identity = nsh_identity(bytes)?;
+    ensure(
+        format!("v{}", identity.version) == tag,
+        "NSH release version mismatch",
+    )?;
+    let manifest: nsh_updater::Manifest = serde_json::from_slice(bytes)?;
+    ensure(
+        manifest.platforms.len() == 2
+            && manifest.package.is_none()
+            && manifest.localized_notes.is_empty(),
+        "Expected both Linux archives",
+    )?;
+    for arch in ["x86_64", "aarch64"] {
+        let platform = format!("linux-{arch}");
+        let asset = manifest
+            .platforms
+            .get(&platform)
+            .ok_or("Missing Linux archive")?;
+        for ext in ["tar.gz", "deb", "rpm"] {
+            let name = format!("ChipDock-{}-{platform}.{ext}", identity.version);
+            let path = safe_file(directory, &name)?;
+            if ext == "tar.gz" {
+                ensure(
+                    asset.url == name
+                        && asset.size == Some(fs::metadata(&path)?.len())
+                        && asset.sha256.as_deref() == Some(&hash(&path)?),
+                    "NSH signed archive mismatch",
+                )?;
+                plan.assets.insert(format!("updates/{name}"), path.clone());
+            }
+            plan.assets.insert(format!("releases/{tag}/{name}"), path);
+        }
+    }
+    for name in ["latest.json", "latest.json.sig"] {
+        let path = safe_file(directory, name)?;
+        plan.assets
+            .insert(format!("releases/{tag}/{name}"), path.clone());
+        plan.feeds.insert(name.into(), path);
+    }
+    plan.identities.insert("latest.json".into(), identity);
+    Ok(())
+}
+
 fn gpui_identity(bytes: &[u8], key: &str) -> Result<Identity> {
-    let feed = chipdock_gpui_update::verify(bytes, key).map_err(|e| e.to_string())?;
+    let feed = legacy_linux::verify(bytes, key).map_err(|e| e.to_string())?;
     Ok(Identity {
         version: feed.version,
         build: None,
         signature: None,
         file: None,
         size: bytes.len() as u64,
-        sha256: Some(chipdock_gpui_update::digest(bytes)),
+        sha256: Some(legacy_linux::digest(bytes)),
     })
 }
 

@@ -4,7 +4,7 @@
 
 Desktop: macOS, Windows and Linux. No mobile, web or TUI target. Keep the firmware document, target setup and flash actions together. Serial uses a connection sidebar, terminal and multiline composer; secondary workflows use dialogs, and memory, logs, settings and session plots have independent windows.
 
-Rust owns the whole application: preferences, session drafts, connection state, jobs, protocol validation, bounded records, plot samples, signed updates and NSH views. No TSX, QuickJS UI or downloaded interface packages. Keep domain logic independent of NSH and expose it to retained components through signals.
+App.tsx composes the workbench with the original dimensions, semantic colors and NSH controls. Rust owns preferences, sessions, hardware, validation and native components. The standard NSH runner loads the bundled UI and provides signed application updates.
 
 ## Foundations
 

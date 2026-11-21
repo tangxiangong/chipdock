@@ -8,26 +8,19 @@ license.workspace = true
 anyhow.workspace = true
 base64.workspace = true
 chipdock-core.workspace = true
-chipdock-gpui-update.workspace = true
 chipdock-service.workspace = true
 chrono.workspace = true
 nsh-core.workspace = true
+nsh-updater.workspace = true
 nsh-base.workspace = true
 regex.workspace = true
+reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
 url.workspace = true
 
-[[bin]]
-name = "ChipDock"
-path = "src/main.rs"
-
-[build-dependencies]
-embed-resource.workspace = true
-
 [target.'cfg(windows)'.dependencies]
-nsh-platform-windows.workspace = true
 uuid.workspace = true
 windows = { workspace = true, features = [
     "Win32_Foundation",
@@ -49,6 +42,3 @@ objc2.workspace = true
 objc2-app-kit.workspace = true
 objc2-foundation.workspace = true
 objc2-uniform-type-identifiers.workspace = true
-
-[target.'cfg(target_os = "linux")'.dependencies]
-nsh-platform-linux.workspace = true

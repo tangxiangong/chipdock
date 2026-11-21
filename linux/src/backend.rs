@@ -17,7 +17,7 @@ pub enum Command {
     Memory(Preferences),
     CheckUpdate,
     DownloadUpdate(crate::update::Available),
-    InstallUpdate(std::path::PathBuf, crate::update::Available),
+    InstallUpdate,
     Ports,
     NewSession(Preferences),
     InitializeSession(Preferences),
@@ -52,7 +52,7 @@ impl Lane {
 impl Command {
     pub fn lane(&self) -> Lane {
         match self {
-            Self::CheckUpdate | Self::DownloadUpdate(_) | Self::InstallUpdate(..) => Lane::Update,
+            Self::CheckUpdate | Self::DownloadUpdate(_) | Self::InstallUpdate => Lane::Update,
             Self::Plot(id, ..) => Lane::Plot(*id),
             Self::Layout(_) => Lane::Registry,
             Self::CloseSession(id)
@@ -71,7 +71,7 @@ impl Command {
 }
 pub enum Output {
     Update(Option<crate::update::Available>),
-    Downloaded(std::path::PathBuf),
+    Downloaded,
     Restart,
     Text(String),
     Sent(u64, String),
@@ -116,12 +116,16 @@ impl Worker {
                     let (tx, rx) = mpsc::channel();
                     let core = worker_core.clone();
                     let cancel = worker_cancel.clone();
+                    let mut updates = crate::update::UpdateLane::default();
                     let results = results.clone();
                     let progress = progress.clone();
                     std::thread::spawn(move || {
                         while let Ok(command) = rx.recv() {
                             if results
-                                .send((lane, execute(&core, command, &cancel, &progress)))
+                                .send((
+                                    lane,
+                                    execute(&core, command, &mut updates, &cancel, &progress),
+                                ))
                                 .is_err()
                             {
                                 break;
@@ -174,22 +178,24 @@ pub fn send_options(p: &Preferences) -> Result<SendOptions> {
 fn execute(
     core: &ChipDockCore,
     command: Command,
-    cancel: &AtomicBool,
+    updates: &mut crate::update::UpdateLane,
+    cancel: &Arc<AtomicBool>,
     progress: &mpsc::Sender<(u64, u64)>,
 ) -> Result<Output> {
     Ok(match command {
-        Command::CheckUpdate => Output::Update(crate::update::check()?),
+        Command::CheckUpdate => Output::Update(updates.check(cancel)?),
         Command::DownloadUpdate(update) => {
-            Output::Downloaded(crate::update::download(&update, cancel, |done, total| {
+            updates.download(&update, cancel, |done, total| {
                 let _ = progress.send((done, total));
-            })?)
+            })?;
+            Output::Downloaded
         }
-        Command::InstallUpdate(path, update) => {
+        Command::InstallUpdate => {
             anyhow::ensure!(
                 !service::serial_is_busy()?,
                 "请先断开全部串口并停止任务，再安装更新"
             );
-            crate::update::install(&path, &update)?;
+            updates.install(cancel)?;
             Output::Restart
         }
         Command::Import(key, path) => {
@@ -320,6 +326,13 @@ pub fn memory_text(memory: &MemoryReadResult) -> Result<String> {
     ))
 }
 
+impl Drop for Worker {
+    fn drop(&mut self) {
+        self.cancel_update
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
 impl Default for Worker {
     fn default() -> Self {
         Self::new()
@@ -342,7 +355,8 @@ mod tests {
         let result = execute(
             &ChipDockCore::default(),
             Command::InitializeSession(Preferences::default()),
-            &AtomicBool::new(false),
+            &mut crate::update::UpdateLane::default(),
+            &Arc::new(AtomicBool::new(false)),
             &tx,
         )
         .unwrap();

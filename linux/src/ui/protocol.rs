@@ -208,7 +208,8 @@ impl Editor {
         self.rules
             .with_untracked(|r| r.iter().map(Draft::rule).collect())
     }
-    fn field_view(self, key: &'static str, label: &'static str) -> View {
+    fn field_view(self, key: &'static str, label: impl Into<SharedString>) -> View {
+        let label = label.into();
         let placeholder = match key {
             "name" => "例如 motor-speed",
             "template" => "AA BB {speed:u16be} {checksum:sum8}",
@@ -218,12 +219,13 @@ impl Editor {
             "trailer" | "delimiter" => "例如 0D 0A",
             _ => "",
         };
-        view().gap(px(6.)).child(caption(label)).child(
+        view().gap(px(6.)).child(caption(label.clone())).child(
             draft_input(
-                label,
+                key,
                 move || self.field(key),
                 move |value: &str| self.set(key, value.into()),
             )
+            .label(label)
             .placeholder(placeholder)
             .readonly(move || self.saving.get())
             .when(["name", "template", "delimiter"].contains(&key), |input| {
@@ -377,7 +379,26 @@ impl Editor {
     }
 }
 
-pub(super) fn page(store: Store) -> View {
+#[derive(Debug, Clone, PartialEq, Props)]
+pub struct ProtocolEditorHostProps {
+    /// The TSX dialog content; it inherits this editor's draft.
+    pub children: Prop<Children>,
+}
+#[derive(Debug, Clone, PartialEq, Event)]
+pub enum ProtocolEditorHostEvent {
+    /// Metadata needed to select the form and display its current error.
+    #[args(count, selected, receive, failure)]
+    State(u32, bool, bool, String),
+}
+
+/// Owns the editable rules for one opening of the protocol dialog.
+#[component]
+pub fn ProtocolEditorHost(
+    props: ProtocolEditorHostProps,
+    cx: Scope<ProtocolEditorHostEvent>,
+) -> impl IntoElement {
+    let (store, _) = workbench_context();
+    provide_context(components::ModalControls);
     let initial = serde_json::from_str::<Vec<Rule>>(&store.field("protocol"));
     let (rules, error) = match initial {
         Ok(r) => (
@@ -400,124 +421,109 @@ pub(super) fn page(store: Store) -> View {
         session: store.tool_session.get_untracked(),
         template_ref: element_ref(),
     };
-    view()
-        .w(px(860.))
-        .h(px(650.))
-        .bg(move || {
-            theme()
-                .color("protocol-background")
-                .unwrap_or(theme().background)
-        })
-        .text_size(body_size)
-        .line_height(nsh_core::LineHeight::Multiple(1.2))
-        .child(
-            view()
-                .p_5()
-                .flex_row()
-                .items_center()
-                .gap_3()
-                .border_b_1()
-                .border_color(hairline)
-                .child(
-                    icons::icon("terminal")
-                        .size(px(24.))
-                        .scale_y(0.86)
-                        .translate_y(px(0.25))
-                        .text_color(move || theme().primary),
-                )
-                .child(
-                    view()
-                        .flex_1()
-                        .gap_1()
-                        .child(
-                            text("命令与接收规则")
-                                .text_size(px(15.))
-                                .font_weight(FontWeight::SEMIBOLD),
-                        )
-                        .child(caption("定义发送指令，解析设备反馈")),
-                )
-                .child(
-                    text(move || format!("{} 条规则", editor.rules.with(Vec::len)))
-                        .text_size(small_size)
-                        .text_color(move || theme().muted_foreground),
-                ),
+    provide_context(editor);
+    let display = computed(move || {
+        (
+            editor.rules.with(Vec::len) as u32,
+            editor.selected.get().is_some(),
+            editor.receive(),
+            editor.failure.get(),
         )
-        .child(
-            view()
-                .flex_1()
-                .min_h_0()
-                .flex_row()
-                .child(sidebar(editor, store))
-                .child(
-                    when(
-                        move || editor.selected.get().is_some(),
-                        move || form(editor, store),
-                    )
-                    .otherwise(move || empty(editor)),
-                ),
+    });
+    effect(move || {
+        let (count, selected, receive, failure) = display.get();
+        cx.emit(ProtocolEditorHostEvent::State(
+            count, selected, receive, failure,
+        ));
+    });
+    view().child(props.children)
+}
+
+fn current_editor() -> Editor {
+    use_context().expect("protocol controls require ProtocolEditorHost")
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, PropEnum)]
+pub enum ProtocolCommand {
+    #[default]
+    Import,
+    Export,
+    Cancel,
+    Save,
+    AddSend,
+    AddReceive,
+}
+#[derive(Debug, Clone, PartialEq, Props)]
+pub struct ProtocolActionProps {
+    /// The native protocol command to execute.
+    pub command: Prop<ProtocolCommand>,
+}
+
+/// A workbench button using the dialog draft's native command and enabled state.
+#[component]
+pub fn ProtocolAction(props: ProtocolActionProps) -> impl IntoElement {
+    let editor = current_editor();
+    let (store, _) = workbench_context();
+    match props.command.get() {
+        ProtocolCommand::Import => footer_button(
+            "import",
+            "导入",
+            move || editor.saving.get(),
+            move || editor.import(store),
         )
-        .child(when(
-            move || !editor.failure.get().is_empty(),
-            move || {
-                view().px_5().py_2().max_h(px(76.)).child(
-                    text(move || editor.failure.get())
-                        .text_size(caption_size)
-                        .text_color(move || theme().destructive),
-                )
+        .into_element(),
+        ProtocolCommand::Export => footer_button(
+            "export",
+            "导出",
+            move || editor.saving.get() || editor.rules.with(Vec::is_empty),
+            move || match editor
+                .snapshot()
+                .and_then(|r| Ok(serde_json::to_vec_pretty(&r)?))
+            {
+                Ok(bytes) => store.export_as(
+                    "ChipDock-Protocol.json",
+                    bytes,
+                    super::file_dialogs::ExportKind::DocumentData,
+                ),
+                Err(e) => editor.failure.set(format!("{e:#}")),
             },
-        ))
-        .child(
-            view()
-                .h(px(54.))
-                .flex_shrink_0()
-                .px_5()
-                .flex_row()
-                .items_center()
-                .gap_3()
-                .border_t_1()
-                .border_color(hairline)
-                .child(footer_button(
-                    "import",
-                    "导入",
-                    move || editor.saving.get(),
-                    move || editor.import(store),
-                ))
-                .child(footer_button(
-                    "export",
-                    "导出",
-                    move || editor.saving.get() || editor.rules.with(Vec::is_empty),
-                    move || match editor
-                        .snapshot()
-                        .and_then(|r| Ok(serde_json::to_vec_pretty(&r)?))
-                    {
-                        Ok(bytes) => store.export_as(
-                            "ChipDock-Protocol.json",
-                            bytes,
-                            super::file_dialogs::ExportKind::DocumentData,
-                        ),
-                        Err(e) => editor.failure.set(format!("{e:#}")),
-                    },
-                ))
-                .child(view().flex_1())
-                .child(action(
-                    "取消",
-                    Variant::Default,
-                    move || editor.saving.get(),
-                    move || tools::close(store),
-                ))
-                .child(action(
-                    move || {
-                        if editor.saving.get() {
-                            "保存中…"
-                        } else {
-                            "保存规则"
-                        }
-                    },
-                    Variant::Primary,
-                    move || editor.saving.get(),
-                    move || editor.save(store),
-                )),
         )
+        .into_element(),
+        ProtocolCommand::Cancel => action(
+            "取消",
+            Variant::Default,
+            move || editor.saving.get(),
+            move || tools::close(store),
+        )
+        .into_element(),
+        ProtocolCommand::Save => action(
+            move || {
+                if editor.saving.get() {
+                    "保存中…"
+                } else {
+                    "保存规则"
+                }
+            },
+            Variant::Primary,
+            move || editor.saving.get(),
+            move || editor.save(store),
+        )
+        .into_element(),
+        ProtocolCommand::AddSend => action(
+            "新增发送命令",
+            Variant::Primary,
+            || false,
+            move || editor.add(false),
+        )
+        .into_element(),
+        ProtocolCommand::AddReceive => action(
+            "新增接收规则",
+            Variant::Default,
+            || false,
+            move || editor.add(true),
+        )
+        .into_element(),
+    }
 }
 fn footer_button(
     icon: &'static str,
@@ -726,77 +732,24 @@ fn sidebar(editor: Editor, store: Store) -> View {
                 ),
         )
 }
-fn empty(editor: Editor) -> View {
-    view()
-        .flex_1()
-        .items_center()
-        .justify_center()
-        .gap_2()
-        .text_color(move || theme().muted_foreground)
-        .child(
-            icons::icon("add-rule")
-                .size(px(44.))
-                .mb(px(12.))
-                .text_color(move || {
-                    theme()
-                        .color("empty-symbol")
-                        .unwrap_or(theme().muted_foreground)
-                }),
-        )
-        .child(
-            text("添加第一条规则")
-                .text_size(px(15.))
-                .font_weight(FontWeight::BOLD),
-        )
-        .child(text("为常用指令设置名称，或定义接收帧的解析方式。").text_size(px(15.)))
-        .child(
-            view()
-                .mt_2()
-                .flex_row()
-                .gap_2()
-                .child(action(
-                    "新增发送命令",
-                    Variant::Primary,
-                    || false,
-                    move || editor.add(false),
-                ))
-                .child(action(
-                    "新增接收规则",
-                    Variant::Default,
-                    || false,
-                    move || editor.add(true),
-                )),
-        )
+/// Rule list with its native menu, keyboard selection and editing commands.
+#[component]
+pub fn ProtocolSidebar() -> impl IntoElement {
+    let (store, _) = workbench_context();
+    sidebar(current_editor(), store)
 }
-fn card(title: impl IntoReactive<SharedString>, symbol: &str, content: View) -> View {
-    view()
-        .gap(px(3.))
-        .child(
-            view()
-                .flex_row()
-                .items_center()
-                .gap_2()
-                .px_2()
-                .child(icons::icon(symbol))
-                .child(
-                    text(title)
-                        .text_size(body_size)
-                        .font_weight(FontWeight::SEMIBOLD),
-                ),
-        )
-        .child(
-            content
-                .p(px(13.))
-                .bg(move || theme().color("protocol-group").unwrap_or(theme().card))
-                .rounded(move || px(theme().number("radius-lg").unwrap_or(10.))),
-        )
-}
-fn form(editor: Editor, store: Store) -> impl IntoElement {
+
+/// Name and direction controls bound to the selected rule.
+#[component]
+pub fn ProtocolIdentity() -> impl IntoElement {
+    let editor = current_editor();
+    let (store, _) = workbench_context();
     let window_active = control_active();
     let menu_tracking = native_menu_tracking();
     let active =
         computed(move || window_active.get() && !store.file_dialog.get() && !menu_tracking.get());
-    let identity = view()
+
+    view()
         .gap_3()
         .child(
             nsh_base::tabs()
@@ -845,8 +798,15 @@ fn form(editor: Editor, store: Store) -> impl IntoElement {
                     },
                 )),
         )
-        .child(editor.field_view("name", "Alias / 名称"));
-    let frame=view().gap_3()
+        .child(editor.field_view("name", "Alias / 名称"))
+}
+
+/// Native template editor with drag targets and syntax disclosure.
+#[component]
+pub fn ProtocolFrame() -> impl IntoElement {
+    let editor = current_editor();
+
+    view().gap_3()
         .child(view().grid().grid_template_columns("repeat(auto-fit, minmax(110px, 1fr))").gap_2()
             .children(FRAGMENTS.iter().map(move |(label,token)|fragment_token(editor,label,token))))
         .child(text("拖入下方帧模板，或点击插入。帧头放在开头，参数放在校验前；选择校验会替换已有校验。")
@@ -868,58 +828,61 @@ fn form(editor: Editor, store: Store) -> impl IntoElement {
                 .child(text("AA BB {speed:u16be:0:3000} {checksum:sum8}").font_family(mono).text_size(px(10.)))
                 .child(text("整数：u8 / i8，u16 / i16 / u32 / i32 配合 be（大端）或 le（小端）。参数顺序与模板一致。"))
                 .child(text("校验：sum8、xor8、crc16modbus，放在帧尾。"))
-        ))));
-    let options = view()
-        .gap_3()
-        .child(
-            view()
-                .flex_row()
-                .items_start()
-                .gap_4()
-                .child(editor.field_view("checksum_start", "校验起点").flex_1())
-                .child(
-                    editor
-                        .field_view("checksum_end", "校验终点 · 不包含")
-                        .flex_1(),
-                ),
-        )
-        .child(
-            view()
-                .flex_row()
-                .gap_2()
-                .child(
-                    editor
-                        .field_view("length_field", "长度字段 · 可选")
-                        .flex_1(),
-                )
-                .child(editor.field_view("trailer", "固定帧尾 HEX · 可选").flex_1()),
-        )
-        .child(length_toggle(editor))
-        .child(
-            when(
-                move || editor.receive(),
-                move || {
-                    view()
-                        .gap_3()
-                        .child(editor.field_view("delimiter", "文本分隔符 HEX · 可选"))
-                        .child(
-                            text("文本解析时清空帧模板，显示模板使用 {text}。单帧最多 4096 字节。")
-                                .text_size(px(10.))
-                                .line_height(px(13.))
-                                .text_color(move || theme().muted_foreground),
-                        )
-                },
-            )
-            .otherwise(move || {
-                view()
-                    .flex_row()
-                    .items_start()
-                    .gap_4()
-                    .child(response_picker(editor).flex_1())
-                    .child(editor.field_view("timeout_ms", "等待超时 · ms").flex_1())
-            }),
-        );
-    let test = view()
+        ))))
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, PropEnum)]
+pub enum ProtocolOption {
+    #[default]
+    ChecksumStart,
+    ChecksumEnd,
+    LengthField,
+    Trailer,
+    Delimiter,
+    Timeout,
+}
+impl ProtocolOption {
+    fn key(self) -> &'static str {
+        match self {
+            Self::ChecksumStart => "checksum_start",
+            Self::ChecksumEnd => "checksum_end",
+            Self::LengthField => "length_field",
+            Self::Trailer => "trailer",
+            Self::Delimiter => "delimiter",
+            Self::Timeout => "timeout_ms",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Props)]
+pub struct ProtocolOptionFieldProps {
+    /// The selected rule's editable property.
+    pub field: Prop<ProtocolOption>,
+    /// Visible and accessible label for this field.
+    pub label: Prop<SharedString>,
+}
+/// Workbench field bound to the selected draft without normalizing invalid partial input.
+#[component]
+pub fn ProtocolOptionField(props: ProtocolOptionFieldProps) -> impl IntoElement {
+    current_editor().field_view(props.field.get().key(), props.label.get())
+}
+/// Checkbox for inclusion of the frame header in the length calculation.
+#[component]
+pub fn ProtocolLengthToggle() -> impl IntoElement {
+    length_toggle(current_editor())
+}
+/// Response selection bound to the captured protocol draft.
+#[component]
+pub fn ProtocolResponsePicker() -> impl IntoElement {
+    response_picker(current_editor())
+}
+
+/// Offline trial inputs and selectable protocol decoding results.
+#[component]
+pub fn ProtocolTrial() -> impl IntoElement {
+    let editor = current_editor();
+    let (store, _) = workbench_context();
+    view()
         .gap_3()
         .child(
             view()
@@ -1094,26 +1057,7 @@ fn form(editor: Editor, store: Store) -> impl IntoElement {
                             .text_size(caption_size),
                     )
             }),
-        );
-    scroll().flex_1().min_w_0().child(
-        view()
-            .p_5()
-            .gap_5()
-            .child(identity)
-            .child(card("帧配置", "code", frame))
-            .child(card(
-                move || {
-                    if editor.receive() {
-                        "解析选项"
-                    } else {
-                        "校验与反馈"
-                    }
-                },
-                "shield",
-                options,
-            ))
-            .child(card("离线试算", "play", test)),
-    )
+        )
 }
 fn length_toggle(editor: Editor) -> impl IntoElement {
     let checked = move || {
@@ -1335,6 +1279,19 @@ fn format_preview(value: &Value) -> String {
         lines.push(format!("等待剩余字节：{buffer}"));
     }
     lines.join("\n")
+}
+
+pub(super) fn register(registry: &mut Registry) {
+    registry
+        .register::<ProtocolEditorHost>()
+        .register::<ProtocolAction>()
+        .register::<ProtocolSidebar>()
+        .register::<ProtocolIdentity>()
+        .register::<ProtocolFrame>()
+        .register::<ProtocolOptionField>()
+        .register::<ProtocolLengthToggle>()
+        .register::<ProtocolResponsePicker>()
+        .register::<ProtocolTrial>();
 }
 
 #[cfg(test)]

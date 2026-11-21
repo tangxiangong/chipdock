@@ -5,9 +5,30 @@ use nsh_base::{
     DataTableSelection, SelectItem, data_table,
 };
 
-pub(super) fn dialog(store: Store, open: Signal<bool>) -> impl IntoElement {
+#[derive(Debug, Clone, PartialEq, Props)]
+pub struct TargetContentProps {
+    /// The TSX configuration form.
+    pub children: Prop<Children>,
+}
+
+#[derive(Clone, Copy)]
+struct TargetDraft {
+    store: Store,
+    draft: Signal<Preferences>,
+}
+
+fn editor() -> TargetDraft {
+    use_context().expect("target configuration owns its draft")
+}
+
+/// Owns the editable target, cancellation policy and native chip search table.
+#[component]
+pub fn TargetDialogHost(props: TargetContentProps) -> impl IntoElement {
+    let (store, _) = workbench_context();
+    let open = store.target_setup;
     provide_context(ModalControls);
     let draft = signal_with(store.read(|s| s.preferences.clone()), SignalEquals::Never);
+    provide_context(TargetDraft { store, draft });
     store.target_draft.replace(Some(draft));
     let chips = store.target_chips;
     let standalone_chip_picker = chips.get_untracked();
@@ -64,7 +85,7 @@ pub(super) fn dialog(store: Store, open: Signal<bool>) -> impl IntoElement {
                     when(chips, move || {
                         chip_picker(store, draft, selected, chips, open, standalone_chip_picker)
                     })
-                    .otherwise(move || configuration(store, draft, open, chips)),
+                    .otherwise(move || props.children),
                 ),
         )
 }
@@ -102,13 +123,70 @@ pub(super) fn connect_from_menu(store: Store) -> bool {
     true
 }
 
-fn configuration(
-    store: Store,
-    draft: Signal<Preferences>,
-    open: Signal<bool>,
-    chips: Signal<bool>,
-) -> View {
-    let busy = move || store.read(|state| state.lane_busy(Lane::Probe));
+#[derive(Debug, Clone, Default, PartialEq, JsObject)]
+pub struct TargetFormState {
+    pub busy: bool,
+    pub connected: bool,
+    pub name: String,
+    pub scanned: bool,
+    pub probe_count: u32,
+    pub chip: String,
+    pub wire: String,
+    pub valid_speed: bool,
+    pub under_reset: bool,
+    pub valid_base: bool,
+    pub inferred: Option<String>,
+    pub identified: bool,
+}
+#[derive(Debug, Clone, PartialEq, Event)]
+pub enum TargetFormEvent {
+    /// Changes to the draft and the current probe state.
+    #[args(state)]
+    Change(TargetFormState),
+}
+
+pub struct TargetFormApi(TargetDraft);
+#[methods]
+impl TargetFormApi {
+    /// Scans probes for the active configuration draft.
+    pub fn scan(&self) {
+        let store = self.0.store;
+        if !store.read(|s| s.lane_busy(Lane::Probe)) {
+            store.command(|_| Command::Scan);
+        }
+    }
+    /// Opens chip search while retaining this configuration.
+    pub fn select_chip(&self) {
+        if !self.0.store.read(|s| s.lane_busy(Lane::Probe)) {
+            self.0.store.target_chips.set(true);
+        }
+    }
+    /// Changes the wire protocol in the draft.
+    pub fn set_wire(&self, wire: String) {
+        if matches!(wire.as_str(), "swd" | "jtag")
+            && !self.0.store.read(|s| s.lane_busy(Lane::Probe))
+        {
+            self.0.draft.update(|p| {
+                p.fields.insert("wire".into(), wire);
+            });
+        }
+    }
+    /// Changes connect-under-reset for the selected target.
+    pub fn set_under_reset(&self, enabled: bool) {
+        if !self.0.store.read(|s| s.lane_busy(Lane::Probe)) {
+            self.0.draft.update(|p| {
+                p.flags.insert("under_reset".into(), enabled);
+            });
+        }
+    }
+}
+
+/// Exposes target configuration state without moving probe operations or keyboard commands into JS.
+#[component(methods = TargetFormApi)]
+pub fn TargetFormHost(props: TargetContentProps, cx: Scope<TargetFormEvent>) -> impl IntoElement {
+    let current = editor();
+    let TargetDraft { store, draft } = current;
+    cx.methods(TargetFormApi(current));
     on_key_with(
         "enter",
         KeyOptions {
@@ -119,96 +197,228 @@ fn configuration(
             connect_from_menu(store);
         },
     );
+
+    let state = computed(move || {
+        let inferred = inferred_bin_address(store, draft);
+        draft.with(|p| {
+            store.read(|s| TargetFormState {
+                busy: s.lane_busy(Lane::Probe),
+                connected: s.target_connected(),
+                name: s.target_name(),
+                scanned: s.probes_scanned,
+                probe_count: s.probes.len() as u32,
+                chip: p.get("chip").into(),
+                wire: p.get("wire").into(),
+                valid_speed: valid_speed(p),
+                under_reset: p.flag("under_reset"),
+                valid_base: valid_base(p),
+                inferred: inferred.then(|| {
+                    s.preview
+                        .as_ref()
+                        .and_then(|p| p.usage.start_address)
+                        .map(|a| format!("0x{a:08X}"))
+                        .unwrap_or_default()
+                }),
+                identified: s.target_information().is_some(),
+            })
+        })
+    });
+    effect(move || cx.emit(TargetFormEvent::Change(state.get())));
+    view().child(props.children)
+}
+
+/// Probe list with the existing native selector trigger and item styling.
+#[component]
+pub fn TargetProbePicker() -> impl IntoElement {
+    let TargetDraft { store, draft } = editor();
+    let busy = move || store.read(|s| s.lane_busy(Lane::Probe));
+    nsh_base::select()
+        .items(move || {
+            store.read(|state| {
+                std::iter::once(SelectItem::new("", "自动选择"))
+                    .chain(state.probes.iter().map(|probe| {
+                        SelectItem::new(
+                            probe.identifier.clone(),
+                            probe
+                                .product
+                                .clone()
+                                .unwrap_or_else(|| probe.identifier.clone()),
+                        )
+                    }))
+                    .collect::<Vec<_>>()
+            })
+        })
+        .value(move || {
+            Some(SharedString::from(
+                draft.with(|value| value.get("probe").to_owned()),
+            ))
+        })
+        .on_change(move |value: &Option<SharedString>| {
+            if let Some(value) = value {
+                draft.update(|draft| {
+                    draft.fields.insert("probe".into(), value.to_string());
+                });
+            }
+        })
+        .disabled(busy)
+        .popup_style(popup)
+        .accessibility_label("调试探针")
+        .render_item(|item: &nsh_base::SelectEntry| {
+            text(item.title.clone()).text_size(body_size).px_2().py_1()
+        })
+        .trigger(
+            view()
+                .flex_row()
+                .items_center()
+                .gap(px(12.))
+                .child(text(move || probe_name(store, draft)).text_size(body_size))
+                .child(
+                    view()
+                        .size(px(20.))
+                        .rounded_full()
+                        .bg(move || theme().foreground.opacity(0.06))
+                        .items_center()
+                        .justify_center()
+                        .child(icons::icon("target-select").size(px(10.))),
+                ),
+        )
+}
+
+/// Connection speed editor, including select-all on its first focus.
+#[component]
+pub fn TargetSpeedInput() -> impl IntoElement {
+    let TargetDraft { store, draft } = editor();
+    let busy = move || store.read(|s| s.lane_busy(Lane::Probe));
     let speed_length =
         draft.with_untracked(|value| value.get("speed").encode_utf16().count() as u32);
     let speed_selection = signal((0_u32, 0_u32));
     let selected_speed = stored(false);
-    view()
-        .w(px(480.))
-        .gap_0()
-        .child(view().px_5().pt_5().gap(px(2.))
-            .child(text("目标配置").text_size(body_size).font_weight(FontWeight::BOLD))
-            .child(text(move || store.read(|state| if state.target_connected() {
-                format!("已连接 {}", state.target_name())
-            } else { "未连接".into() })).text_size(small_size).text_color(move || if store.read(Workbench::target_connected) { theme().color("success").unwrap_or(theme().primary) } else { theme().muted_foreground })))
-        .child(scroll().max_h(move || px((nsh_core::element::window().height.0 - 160.).max(320.)))
-            .child(view().px_5().pt_6().gap(px(30.))
-                .child(view().gap_2()
-                    .child(target_section("探针"))
-                    .child(form_group().child(target_row("调试探针", 44., false)
-                        .child(view().flex_1())
-                        .child(nsh_base::select()
-                            .items(move || store.read(|state| std::iter::once(SelectItem::new("", "自动选择"))
-                                .chain(state.probes.iter().map(|probe| SelectItem::new(probe.identifier.clone(), probe.product.clone().unwrap_or_else(|| probe.identifier.clone())))).collect::<Vec<_>>()))
-                            .value(move || Some(SharedString::from(draft.with(|value| value.get("probe").to_owned()))))
-                            .on_change(move |value: &Option<SharedString>| if let Some(value) = value { draft.update(|draft| { draft.fields.insert("probe".into(), value.to_string()); }); })
-                            .disabled(busy).popup_style(popup).accessibility_label("调试探针")
-                            .render_item(|item: &nsh_base::SelectEntry| text(item.title.clone()).text_size(body_size).px_2().py_1())
-                            .trigger(view().flex_row().items_center().gap(px(12.))
-                                .child(text(move || probe_name(store, draft)).text_size(body_size))
-                                .child(view().size(px(20.)).rounded_full().bg(move || theme().foreground.opacity(0.06)).items_center().justify_center().child(icons::icon("target-select").size(px(10.))))))
-                        .child(nsh_base::button().disabled(busy).on_press(move || store.command(|_| Command::Scan)).accessibility_label("扫描调试探针（⌘R）").w(px(37.5)).h(px(24.)).rounded(px(7.)).items_center().justify_center().bg(move || theme().color("button").unwrap_or(theme().secondary)).child(icons::icon("refresh").size(px(14.))))))
-                    .child(when(move || store.read(|state| state.probes_scanned), move || text(move || store.read(|state| if state.probes.is_empty() {
-                        "未发现调试探针。请检查 USB 数据线；使用 Apple 芯片的 Mac 笔记本时，请先解锁并允许此配件连接。关闭其他调试工具后重新扫描。".into()
-                    } else { format!("已发现 {} 个调试探针。", state.probes.len()) })).text_size(small_size).text_color(move || if store.read(|state| state.probes.is_empty()) { theme().color("firmware-tint").unwrap_or(theme().primary) } else { theme().muted_foreground }))))
-                    .child(when(move || store.read(|state| state.probes_scanned && state.probes.is_empty()), move || nsh_base::link().disabled(busy).href("https://support.apple.com/zh-cn/102282").text_color(move || theme().primary).child(text("USB 配件授权说明").text_size(small_size))))
-                .child(view().gap_2()
-                    .child(target_section("目标芯片"))
-                    .child(form_group()
-                        .child(target_row("芯片", 38.5, true).child(view().flex_1())
-                            .child(nsh_base::button().disabled(busy).on_press(move || chips.set(true)).h(px(24.)).flex_row().items_center().gap_1()
-                                .accessibility_label("选择芯片")
-                                .child(text(move || draft.with(|value| if value.get("chip").is_empty() { "自动识别".into() } else { value.get("chip").to_owned() })).text_size(body_size).font_family(mono).text_color(move || theme().muted_foreground))
-                                .child(icons::icon("target-select").size(px(10.)).text_color(move || theme().muted_foreground))))
-                        .child(target_row("协议", 41., true).child(view().flex_1())
-                            .child(view().w(px(112.)).h(px(24.)).rounded(px(6.)).bg(move || theme().color("control").unwrap_or(theme().secondary)).flex_row()
-                                .children([("swd", "SWD"), ("jtag", "JTAG")].into_iter().map(move |(wire, label)| nsh_base::button()
-                                    .disabled(busy).selected(move || draft.with(|value| value.get("wire") == wire))
-                                    .on_press(move || draft.update(|value| { value.fields.insert("wire".into(), wire.into()); }))
-                                    .w(px(56.)).h(px(24.)).items_center().justify_center().rounded(px(6.))
-                                    .selected_style(|style| style.bg(move || theme().primary).text_color(move || theme().primary_foreground))
-                                    .child(text(label).text_size(body_size))))))
-                        .child(target_row("速度", 37., true).child(view().flex_1())
-                            .child(nsh_base::input().label("速度").value(move || draft.with(|value| value.get("speed").to_owned()))
-                                .on_change(move |value: &str| draft.update(|draft| { draft.fields.insert("speed".into(), value.into()); }))
-                                .on_submit(move |_: &str| { connect_from_menu(store); }).auto_focus(true).on_focus(move || { if !selected_speed.replace(true) { speed_selection.set((0, speed_length)); } }).selected_range(speed_selection).readonly(busy).w(px(80.)).h(px(16.)).text_size(body_size).text_right().tabular_nums()
-                                .caret_color(|| color(theme().primary)).selection_color(|| color(theme().primary.opacity(0.4))))
-                            .child(text("kHz").text_size(body_size).text_color(move || theme().muted_foreground))
-                            .child(native_menu_disabled(
-                                view().size(px(12.)).items_center().justify_center().label("常用连接速度").child(icons::icon("target-down").size(px(12.))),
-                                busy,
-                                move || [100, 1000, 4000, 10000, 24000].into_iter().map(move |speed| nsh_core::element::desktop::MenuItem::new(format!("{speed} kHz")).on_select(move || draft.update(|value| { value.fields.insert("speed".into(), speed.to_string()); }))).collect(),
-                            )))
-                        .child(when(move || draft.with(|value| !valid_speed(value)), || view().h(px(36.)).flex_row().items_center().gap(px(12.)).border_b_1().border_color(hairline).text_color(move || theme().destructive)
-                            .child(icons::icon("warning").size(px(13.)))
-                            .child(text("速度须为 1–4294967295 kHz 的整数").text_size(small_size))))
-                        .child(target_row("复位下连接", 37., false).child(view().flex_1())
-                            .child(nsh_base::switch().checked(move || draft.with(|value| value.flag("under_reset"))).disabled(busy)
-                                .on_change(move |value: &bool| draft.update(|draft| { draft.flags.insert("under_reset".into(), *value); })).accessibility_label("复位下连接")
-                                .track_style(|style| style.w(px(36.)).h(px(16.)).p(px(2.)).rounded_full().bg(move || theme().foreground.opacity(0.18)).checked(|style| style.bg(move || theme().primary)))
-                                .thumb_style(|style| style.w(px(20.)).h(px(12.)).rounded_full().bg(move || theme().primary_foreground).checked(|style| style.translate_x(px(12.))))))))
-                .child(view().gap_2().child(target_section("固件地址"))
-                    .child(form_group()
-                        .child(target_row("BIN 基地址", 36., false)
-                            .border_b_1().border_color(move || if draft.with(valid_base) && !inferred_bin_address(store, draft) { theme().background.opacity(0.) } else { hairline() })
-                            .child(nsh_base::input().label("BIN 基地址").placeholder("自动识别")
-                                .value(move || draft.with(|value| value.get("base").to_owned()))
-                                .on_change(move |value: &str| draft.update(|draft| { draft.fields.insert("base".into(), value.into()); }))
-                                .on_submit(move |_: &str| { connect_from_menu(store); })
-                                .readonly(busy).flex_1().h(px(16.)).text_right().text_size(body_size).font_family(mono)
-                                .placeholder_color(|| color(theme().muted_foreground)).caret_color(|| color(theme().primary))))
-                        .child(when(move || draft.with(|value| !valid_base(value)), || view().h(px(36.)).justify_center()
-                            .child(text("请输入有效的十六进制地址").text_size(body_size).text_color(move || theme().destructive)))
-                            .otherwise(move || view().child(when(move || inferred_bin_address(store, draft), move || target_row("已识别地址", 36., false)
-                                .child(view().flex_1())
-                                .child(text(move || store.read(|state| state.preview.as_ref().and_then(|preview| preview.usage.start_address).map(|address| format!("0x{address:08X}")).unwrap_or_default())).text_size(body_size).text_color(move || theme().muted_foreground)))))))
-                    .child(view().px(px(10.)).mt_1().child(text("留空自动识别 ESP BIN；其他 BIN 可手动输入。ELF / HEX 使用文件内地址。").text_size(small_size).text_color(move || theme().muted_foreground))))
-                .child(when(move || store.read(|state| state.target_information().is_some()), move || identified_information(store)))))
-        .child(view().px_6().pb_5().pt(px(28.)).flex_row().items_center().gap_2()
-            .child(when(move || store.read(Workbench::target_connected), move || action("断开", Variant::Ghost, busy, move || store.change(Workbench::disconnect_target))))
-            .child(view().flex_1())
-            .child(action("取消", Variant::Default, busy, move || open.set(false)))
-            .child(target_connect_button(store)))
+    nsh_base::input()
+        .label("速度")
+        .value(move || draft.with(|value| value.get("speed").to_owned()))
+        .on_change(move |value: &str| {
+            draft.update(|draft| {
+                draft.fields.insert("speed".into(), value.into());
+            })
+        })
+        .on_submit(move |_: &str| {
+            connect_from_menu(store);
+        })
+        .auto_focus(true)
+        .on_focus(move || {
+            if !selected_speed.replace(true) {
+                speed_selection.set((0, speed_length));
+            }
+        })
+        .selected_range(speed_selection)
+        .readonly(busy)
+        .w(px(80.))
+        .h(px(16.))
+        .text_size(body_size)
+        .text_right()
+        .tabular_nums()
+        .caret_color(|| color(theme().primary))
+        .selection_color(|| color(theme().primary.opacity(0.4)))
+}
+/// Platform menu for standard connection speeds.
+#[component]
+pub fn TargetSpeedMenu() -> impl IntoElement {
+    let TargetDraft { store, draft } = editor();
+    let busy = move || store.read(|s| s.lane_busy(Lane::Probe));
+    native_menu_disabled(
+        view()
+            .size(px(12.))
+            .items_center()
+            .justify_center()
+            .label("常用连接速度")
+            .child(icons::icon("target-down").size(px(12.))),
+        busy,
+        move || {
+            [100, 1000, 4000, 10000, 24000]
+                .into_iter()
+                .map(move |speed| {
+                    nsh_core::element::desktop::MenuItem::new(format!("{speed} kHz")).on_select(
+                        move || {
+                            draft.update(|value| {
+                                value.fields.insert("speed".into(), speed.to_string());
+                            })
+                        },
+                    )
+                })
+                .collect()
+        },
+    )
+}
+/// Hexadecimal address editor sharing draft validation with the connection command.
+#[component]
+pub fn TargetBaseInput() -> impl IntoElement {
+    let TargetDraft { store, draft } = editor();
+    let busy = move || store.read(|s| s.lane_busy(Lane::Probe));
+    nsh_base::input()
+        .label("BIN 基地址")
+        .placeholder("自动识别")
+        .value(move || draft.with(|value| value.get("base").to_owned()))
+        .on_change(move |value: &str| {
+            draft.update(|draft| {
+                draft.fields.insert("base".into(), value.into());
+            })
+        })
+        .on_submit(move |_: &str| {
+            connect_from_menu(store);
+        })
+        .readonly(busy)
+        .flex_1()
+        .h(px(16.))
+        .text_right()
+        .text_size(body_size)
+        .font_family(mono)
+        .placeholder_color(|| color(theme().muted_foreground))
+        .caret_color(|| color(theme().primary))
+}
+/// Identification information reported by the connected debug target.
+#[component]
+pub fn TargetIdentification() -> impl IntoElement {
+    identified_information(editor().store)
+}
+/// Connects using the live draft and retains the native default-button behavior.
+#[component]
+pub fn TargetConnect() -> impl IntoElement {
+    target_connect_button(editor().store)
+}
+/// Closes the target draft while idle.
+#[component]
+pub fn TargetCancel() -> impl IntoElement {
+    let store = editor().store;
+    action(
+        "取消",
+        Variant::Default,
+        move || store.read(|s| s.lane_busy(Lane::Probe)),
+        move || store.target_setup.set(false),
+    )
+}
+/// Disconnects the selected device from the native workbench.
+#[component]
+pub fn TargetDisconnect() -> impl IntoElement {
+    let store = editor().store;
+    action(
+        "断开",
+        Variant::Ghost,
+        move || store.read(|s| s.lane_busy(Lane::Probe)),
+        move || store.change(Workbench::disconnect_target),
+    )
+}
+pub(super) fn register(registry: &mut Registry) {
+    registry
+        .register::<TargetDialogHost>()
+        .register::<TargetFormHost>()
+        .register::<TargetProbePicker>()
+        .register::<TargetSpeedInput>()
+        .register::<TargetSpeedMenu>()
+        .register::<TargetBaseInput>()
+        .register::<TargetIdentification>()
+        .register::<TargetConnect>()
+        .register::<TargetCancel>()
+        .register::<TargetDisconnect>();
 }
 
 fn probe_name(store: Store, draft: Signal<Preferences>) -> String {
