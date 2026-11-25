@@ -1,6 +1,6 @@
 {
   "name": "ChipDock",
-  "id": "com.xiaoyu.chipdock",
+  "id": "com.tangxiangong.chipdock",
   "version": "0.3.0",
   "build": 1,
   "rust": ".",
