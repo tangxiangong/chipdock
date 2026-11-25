@@ -11,7 +11,8 @@ case "$(uname -s)" in
   Darwin)
     if [[ -e "$output/ChipDock.app" ]]; then
       existing_id="$(plutil -extract CFBundleIdentifier raw -o - "$output/ChipDock.app/Contents/Info.plist")"
-      [[ "$existing_id" == com.xiaoyu.chipdock.gpui ]] || {
+      expected_id="$(python3 -c 'import json; print(json.load(open("linux/nsh.json"))["id"])')"
+      [[ "$existing_id" == "$expected_id" ]] || {
         echo "Output already contains a different application: $output/ChipDock.app" >&2; exit 1
       }
     fi
