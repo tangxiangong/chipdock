@@ -281,33 +281,6 @@ pub fn workbench(
     }
     let mode = signal("flash");
     cx.methods(WorkbenchApi { store });
-    let main = nsh_core::element::desktop::main_window();
-    let mut attributes = nsh_core::desktop::WindowAttributes::default();
-    attributes.min_size = Some(Some(Size {
-        width: px(900.),
-        height: px(652.),
-    }));
-    attributes.close_on_press = Some(false);
-    main.set(attributes);
-    let closing = main.clone();
-    main.on_close_press(move |_| {
-        if store.file_dialog.get_untracked() {
-            return;
-        }
-        if store.modal.get_untracked() {
-            if store.tool.get_untracked().is_some() {
-                tools::close(store);
-            }
-            return;
-        }
-        if store.read(Workbench::can_quit) {
-            if store.save_before_exit() {
-                closing.close();
-            }
-        } else {
-            store.report("任务或采集正在运行，请先停止再退出");
-        }
-    });
     let appearance = store.read(|s| s.preferences.theme.clone());
     set_appearance(&appearance);
     set_interval(Duration::from_millis(100), move || {
@@ -553,6 +526,27 @@ pub struct WorkbenchApi {
 
 #[methods]
 impl WorkbenchApi {
+    /// Handles the main window's close request after checking active work and saving preferences.
+    pub fn close_workbench(&self) {
+        let store = self.store;
+        if store.file_dialog.get_untracked() {
+            return;
+        }
+        if store.modal.get_untracked() {
+            if store.tool.get_untracked().is_some() {
+                tools::close(store);
+            }
+            return;
+        }
+        if store.read(Workbench::can_quit) {
+            if store.save_before_exit() {
+                nsh_core::element::desktop::quit();
+            }
+        } else {
+            store.report("任务或采集正在运行，请先停止再退出");
+        }
+    }
+
     /// Dismisses the active serial tool and releases its modal guard.
     pub fn close_tool(&self) {
         tools::close(self.store);

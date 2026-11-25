@@ -604,7 +604,7 @@ fn guard_modal_close_button(application: &NSApplication) {
                 && let Some(window) = application
                     .windows()
                     .iter()
-                    .find(|window| window.title().to_string() == "ChipDock")
+                    .find(|window| window.isVisible() && window.title().to_string() == "ChipDock")
                 && let Some(button) = window.standardWindowButton(NSWindowButton::CloseButton)
                 && button.isEnabled()
             {

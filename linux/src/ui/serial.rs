@@ -1047,7 +1047,7 @@ pub(super) fn terminal(store: Store) -> View {
     let copy_selected = move || {
         let selection = selected.get_untracked();
         if let Some(value) = records.with_untracked(|rows| selection_text(rows, &selection)) {
-            set_clipboard(value);
+            drop(set_clipboard(value));
         }
     };
     let select_all = move || {

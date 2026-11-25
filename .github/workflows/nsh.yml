@@ -38,8 +38,26 @@ concurrency:
   cancel-in-progress: ${{ github.event_name != 'release' }}
 
 jobs:
+  toolchain:
+    name: Resolve the latest stable NSH
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+    steps:
+      - id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          releases=https://github.com/longbridge/nsh/releases
+          release="$(curl --fail --silent --show-error --head --location --retry 3 \
+            --output /dev/null --write-out '%{url_effective}' "$releases/latest")"
+          [[ "$release" == "$releases/tag/"?* ]]
+          printf 'tag=%s\n' "${release#"$releases/tag/"}" >> "$GITHUB_OUTPUT"
+
   compatibility:
     name: NSH compatibility (${{ matrix.os }})
+    needs: toolchain
     strategy:
       fail-fast: false
       matrix:
@@ -50,22 +68,27 @@ jobs:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - &setup-nsh
-        name: Set up NSH 0.6.1
+        name: Set up the latest stable NSH
         shell: bash
+        env:
+          NSH_TAG: ${{ needs.toolchain.outputs.tag }}
         run: |
           set -euo pipefail
           case "$RUNNER_OS-$RUNNER_ARCH" in
-            Linux-X64)   asset=nsh-linux-x86_64.tar.gz; digest=9a7ac692f1c229df476be8ff83a3c5912d271453b644e313f02cb19d18696070 ;;
-            Linux-ARM64) asset=nsh-linux-arm64.tar.gz; digest=d7d54b8a62aa8bd4a9fb73fcc0abce8cc565185926f226aa90f48622f3e410a3 ;;
-            macOS-ARM64) asset=nsh-macos-arm64.tar.gz; digest=ee1aed2a4d111fe90e6cceca4b9d5f834c9e11cfda525f8be984261a329c06de ;;
-            macOS-X64)   asset=nsh-macos-x86_64.tar.gz; digest=23ccbfa71f50eb312e57862b7b843a15b23c1b9a9464cfc30735b1c07a18e324 ;;
-            Windows-X64) asset=nsh-windows-x86_64.zip; digest=7952c84b165e13515bd2ad2787ef22622e49ce88cb8d877825e40b40f3aff4be ;;
+            Linux-X64)   asset=nsh-linux-x86_64.tar.gz ;;
+            Linux-ARM64) asset=nsh-linux-arm64.tar.gz ;;
+            macOS-ARM64) asset=nsh-macos-arm64.tar.gz ;;
+            macOS-X64)   asset=nsh-macos-x86_64.tar.gz ;;
+            Windows-X64) asset=nsh-windows-x86_64.zip ;;
             *) echo "Unsupported NSH host: $RUNNER_OS-$RUNNER_ARCH" >&2; exit 1 ;;
           esac
           tools_dir="$(mktemp -d)"
           cd "$tools_dir"
+          url="https://github.com/longbridge/nsh/releases/download/${NSH_TAG:?}/$asset"
+          curl --fail --silent --show-error --location --retry 3 "$url" -o "$asset"
           curl --fail --silent --show-error --location --retry 3 \
-            "https://github.com/longbridge/nsh/releases/download/v0.6.1/$asset" -o "$asset"
+            "$url.sha256" -o "$asset.sha256"
+          digest="$(awk 'NR == 1 {print $1}' "$asset.sha256")"
           test "$(openssl dgst -sha256 "$asset" | awk '{print $NF}')" = "$digest"
           if [[ "$RUNNER_OS" == Windows ]]; then
             unzip -q "$asset"
@@ -88,6 +111,7 @@ jobs:
 
   build:
     name: Linux packages (${{ matrix.arch }})
+    needs: toolchain
     strategy:
       fail-fast: false
       matrix:
@@ -133,7 +157,7 @@ jobs:
 
   release:
     if: github.event_name == 'release' && !github.event.release.prerelease && startsWith(github.event.release.tag_name, 'v')
-    needs: [build, compatibility]
+    needs: [toolchain, build, compatibility]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     environment: release

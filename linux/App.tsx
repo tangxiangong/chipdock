@@ -1,4 +1,5 @@
 import { effect, mount, signal, View } from "nsh";
+import { Application, currentWindow } from "nsh/desktop";
 import { startInterfaceUpdates } from "./ota/automatic";
 import { WorkbenchHost, type WorkbenchHostRef } from "chipdock/native";
 import { Firmware } from "./pages/Firmware";
@@ -14,6 +15,10 @@ import { UpdateWindow } from "./pages/UpdateWindow";
 function App() {
   let host: WorkbenchHostRef;
   const ready = signal(false);
+  currentWindow().on("closePress", () => {
+    if (ready()) host.closeWorkbench();
+    else Application.quit();
+  });
   effect(() => {
     if (ready()) startInterfaceUpdates();
   });

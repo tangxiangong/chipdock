@@ -1,7 +1,7 @@
 //! Native application menus. Availability and dispatch share the same live guards.
 use super::*;
 use nsh_core::desktop::MenuRole;
-use nsh_core::element::desktop::{MenuItem as M, current_window, set_application_menu};
+use nsh_core::element::desktop::{MenuItem as M, WindowRef, current_window, set_application_menu};
 use std::rc::Rc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -429,6 +429,7 @@ pub(super) fn install(store: Store, mode: Signal<&'static str>) {
         effect(move || super::commands_macos::set_main_modal(modal.get()));
     }
     watch_window(store, "main", Some(store.search));
+    let workbench_window = current_window();
     follow_menu_state(
         move || menu_key(store, mode, store.command_context.get()),
         move || {
@@ -658,7 +659,7 @@ pub(super) fn install(store: Store, mode: Signal<&'static str>) {
                 M::submenu("显示", view),
                 M::submenu("目标", target),
                 M::submenu("操作", actions),
-                window_menu(store),
+                window_menu(store, workbench_window.clone()),
                 M::submenu(
                     "帮助",
                     [
@@ -696,12 +697,12 @@ fn follow_menu_state<T: PartialEq + 'static>(
     });
 }
 
-fn window_menu(store: Store) -> M {
+fn window_menu(store: Store, workbench_window: WindowRef) -> M {
     let items = vec![
         role(MenuRole::Minimize),
         role(MenuRole::Zoom),
         M::separator(),
-        M::new("ChipDock").on_select(|| nsh_core::element::desktop::main_window().focus()),
+        M::new("ChipDock").on_select(move || workbench_window.focus()),
         M::new("活动日志").on_select(move || auxiliary::open(store, auxiliary::Panel::Logs)),
         M::new("目标内存").on_select(move || auxiliary::open(store, auxiliary::Panel::Memory)),
     ];
@@ -936,7 +937,9 @@ fn log_actions(store: Store) -> Vec<M> {
         )
         .checked(store.flag("follow_logs")),
         item(store, "复制全部日志", has_logs, |store| {
-            set_clipboard(store.read(|s| s.logs.iter().cloned().collect::<Vec<_>>().join("\n")));
+            drop(set_clipboard(store.read(|s| {
+                s.logs.iter().cloned().collect::<Vec<_>>().join("\n")
+            })));
         }),
         item(store, "清空日志", has_logs, |store| {
             store.change(|s| s.logs.clear())

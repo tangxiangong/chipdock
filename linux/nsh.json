@@ -2,11 +2,12 @@
   "name": "ChipDock",
   "id": "com.tangxiangong.chipdock",
   "version": "0.3.0",
-  "build": 1,
+  "build": 5,
   "rust": ".",
   "theme": "theme.json",
   "appearance": "system",
   "window": {
+    "title": "ChipDock",
     "titleBar": {
       "style": "hidden",
       "height": 52,
@@ -34,7 +35,7 @@
     "updater"
   ],
   "updater": {
-    "url": "https://raw.githubusercontent.com/tangxiangong/chipdock/chipdock-ota/abi-1/com.tangxiangong.chipdock/latest.json",
+    "url": "https://raw.githubusercontent.com/tangxiangong/chipdock/chipdock-ota/abi-2/com.tangxiangong.chipdock/latest.json",
     "publicKey": "zMpNaedxM1LE3v4uf5/ZfBHUAPCeeUAIQhJLvOi0UtI=",
     "packages": {
       "roots": [

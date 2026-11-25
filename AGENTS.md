@@ -102,7 +102,7 @@ cargo run --locked -p chipdock-release-notes -- linux ReleaseNotes.md .build/not
 
 ## NSH client
 
-- `linux/` is the cross-platform mixed Rust/TSX NSH client, published as the Linux frontend. The standard NSH runner loads `App.tsx` and the `chipdock/native` Rust module. Pages and dialog composition live in `linux/pages/` and `linux/components/`. Use the CLI matching the resolved NSH crate version.
+- `linux/` is the cross-platform mixed Rust/TSX NSH client, published as the Linux frontend. The standard NSH runner loads `App.tsx` and the `chipdock/native` Rust module. Pages and dialog composition live in `linux/pages/` and `linux/components/`. For local work, use the CLI matching the resolved NSH crate version. CI resolves the latest stable NSH release once per run and verifies the published SHA-256 for each CLI archive.
 - `src/ui/` contains the retained NSH views and app-owned controls. `workbench.rs` owns persistent preferences, sessions, result reconciliation and polling; `backend.rs` dispatches probe, per-session serial, plot, file and update work on independent workers. `model.rs`, `presentation.rs` and `serial.rs` retain shared validation, storage, filtering and request semantics. `platform/windows/` uses typed `windows` SetupAPI and WinUSB calls, without a .NET helper.
 - `ui/commands.rs` derives native menu state before installing handlers; unrelated polling must not dispose active menu handlers. App-owned file tasks use the workbench owner so menu refreshes cannot cancel them. `ui/commands_macos.rs` registers NSH menus with AppKit's system roles; `ui/file_dialogs.rs` preserves the native standalone panels and document sheets through public AppKit APIs. Other platforms keep NSH file dialogs. These bridges run in the desktop process.
 - `ui/tool_feedback.rs` owns each tool dialog's result/error state. Consume per-session `OperationResult` with the captured session, request action and revision; never infer dialog completion from the global activity message. Diagnostic results keep the native bounded GroupBox and workflow outcomes keep their native labels.
@@ -172,7 +172,7 @@ The mixed client checks its signed interface-package feed automatically after th
 Use the NSH CLI version pinned to the client. Build the two package identities into a fresh output directory with a strictly increasing OTA build number:
 
 ```sh
-python3 linux/ota/build.py 2 dist/ota-build-2
+python3 linux/ota/build.py 6 dist/ota-build-6
 ```
 
 The output is a branch tree with one directory per host ABI and application ID. Publish its contents together in one fast-forward commit to the `chipdock-ota` branch. Keep existing immutable numbered packages and other ABI directories. Before publication compare both current manifests on that branch and select a build higher than either published build. A package-only publication leaves the application version and its release feeds intact.

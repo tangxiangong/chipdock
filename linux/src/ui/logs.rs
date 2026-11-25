@@ -145,9 +145,9 @@ pub fn LogActions() -> impl IntoElement {
                     || false,
                     move || store.read(|s| s.logs.is_empty()),
                     move || {
-                        set_clipboard(
-                            store.read(|s| s.logs.iter().cloned().collect::<Vec<_>>().join("\n")),
-                        )
+                        drop(set_clipboard(store.read(|s| {
+                            s.logs.iter().cloned().collect::<Vec<_>>().join("\n")
+                        })));
                     },
                 ))
                 .child(log_tool(

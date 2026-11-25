@@ -41,13 +41,13 @@ ihex = "3.0"
 interoptopus = "0.16"
 interoptopus_csharp = "0.16"
 libc = "0.2"
-nsh-updater = "0.6"
-nsh-core = "0.6"
-nsh-base = { version = "0.6", default-features = false, features = [
+nsh-updater = "0.7"
+nsh-core = "0.7"
+nsh-base = { version = "0.7", default-features = false, features = [
     "editor",
     "plot",
 ] }
-nsh-platform-macos = { version = "0.6", default-features = false, features = [
+nsh-platform-macos = { version = "0.7", default-features = false, features = [
     "editor",
     "plot",
 ] }

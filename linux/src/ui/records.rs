@@ -251,14 +251,14 @@ pub fn SerialRecordTable() -> impl IntoElement {
                             .disabled(!has_selection)
                             .on_select(move || {
                                 if let Some(frame) = selected() {
-                                    set_clipboard(frame.copy_text());
+                                    drop(set_clipboard(frame.copy_text()));
                                 }
                             }),
                         MenuItem::new("复制记录详情")
                             .disabled(!has_selection)
                             .on_select(move || {
                                 if let Some(frame) = selected() {
-                                    set_clipboard(frame.detail);
+                                    drop(set_clipboard(frame.detail));
                                 }
                             }),
                         MenuItem::separator(),
@@ -319,7 +319,7 @@ pub fn SerialRecordAction(props: RecordActionProps) -> impl IntoElement {
             move || selected().is_none(),
             move || {
                 if let Some(frame) = selected() {
-                    set_clipboard(frame.copy_text());
+                    drop(set_clipboard(frame.copy_text()));
                 }
             },
         )

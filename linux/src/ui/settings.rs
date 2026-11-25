@@ -806,7 +806,7 @@ pub(crate) fn preview_available(
         store: None,
         notes: computed(move || feed.notes.clone()),
     });
-    let window = nsh_core::element::desktop::main_window();
+    let window = nsh_core::element::desktop::current_window();
     let mut attributes = nsh_core::desktop::WindowAttributes::default();
     let mut titlebar = nsh_core::desktop::TitleBarOptions::default();
     titlebar.style = nsh_core::desktop::TitleBarStyle::Hidden;
