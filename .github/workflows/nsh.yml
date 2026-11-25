@@ -187,7 +187,8 @@ jobs:
           Path(sys.argv[1]).write_bytes(base64.b64encode(raw[:32]))
           PYKEY
           dir=dist/gpui
-          nsh update-manifest --entry linux --key "$key" --notes "$dir/notes-linux.md" -o "$dir" "$dir"/*.tar.gz
+          python3 linux/ota/entry.py shell .build/NSHShellFeed
+          nsh update-manifest --entry .build/NSHShellFeed --key "$key" --notes "$dir/notes-linux.md" -o "$dir" "$dir"/*.tar.gz
           existing="$(gh release view "$RELEASE_TAG" --json assets)"
           version="${RELEASE_TAG#v}"
           files=()

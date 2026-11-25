@@ -1,4 +1,5 @@
-import { mount, signal, View } from "nsh";
+import { effect, mount, signal, View } from "nsh";
+import { startInterfaceUpdates } from "./ota/automatic";
 import { WorkbenchHost, type WorkbenchHostRef } from "chipdock/native";
 import { Firmware } from "./pages/Firmware";
 import { Serial } from "./pages/Serial";
@@ -12,11 +13,15 @@ import { UpdateWindow } from "./pages/UpdateWindow";
 
 function App() {
   let host: WorkbenchHostRef;
+  const ready = signal(false);
+  effect(() => {
+    if (ready()) startInterfaceUpdates();
+  });
   const layout = signal({ mode: "flash", sidebar: true, composer: true, modal: false, targetSetup: false, empty: true });
   const dialog = signal<{ tool: string | null; nativeSheet: boolean }>({ tool: null, nativeSheet: false });
   return (
     <WorkbenchHost ref={ref => { host = ref; }} class="flex-1 bg-background text-foreground"
-      onStateChanged={layout.set}
+      onStateChanged={state => { layout.set(state); ready.set(true); }}
       onToolChange={dialog.set} renderSettings={version => <Settings version={version} />}
       renderAuxiliary={kind => kind === "logs" ? <Logs /> : kind === "memory" ? <Memory /> : <Plot />}
       renderUpdate={surface => <UpdateWindow surface={surface} />}>

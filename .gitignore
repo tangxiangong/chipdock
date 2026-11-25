@@ -26,3 +26,6 @@ windows/**/obj/
 
 # NSH generated hosts, declarations and bundles
 **/.nsh/
+
+# Local OTA signing keys
+/.chipdock-ota-keys/

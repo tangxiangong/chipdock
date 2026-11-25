@@ -234,8 +234,9 @@ fn historical_linux_release_verifies_signature_and_binary_digest() {
 
 #[test]
 fn linux_updaters_and_sparkle_embed_the_same_release_public_key() {
-    let config: Value = serde_json::from_str(include_str!("../../linux/nsh.json")).unwrap();
-    assert_eq!(config["updater"]["publicKey"], legacy_linux::PUBLIC_KEY);
+    let config: Value =
+        serde_json::from_str(include_str!("../../linux/shell-updater.json")).unwrap();
+    assert_eq!(config["publicKey"], legacy_linux::PUBLIC_KEY);
     assert_eq!(
         UpdateKeys::from_project().unwrap().sparkle,
         legacy_linux::PUBLIC_KEY

@@ -34,10 +34,12 @@
     "updater"
   ],
   "updater": {
-    "url": "https://app-release-1302963684.cos.ap-guangzhou.myqcloud.com/chipdock/updates/latest.json",
-    "publicKey": "NgorrvaZPObmbOUEmKbbCvPbPqcD+kcw7E2NRTfxlKI=",
-    "channels": {
-      "github": "https://github.com/tangxiangong/chipdock/releases/latest/download/latest.json"
+    "url": "https://raw.githubusercontent.com/tangxiangong/chipdock/chipdock-ota/abi-1/com.tangxiangong.chipdock/latest.json",
+    "publicKey": "zMpNaedxM1LE3v4uf5/ZfBHUAPCeeUAIQhJLvOi0UtI=",
+    "packages": {
+      "roots": [
+        "yecn3tF8p5jZsfeefrT8NoPnyAxIgr/y2MWStMe2vGc="
+      ]
     }
   },
   "capabilities": {

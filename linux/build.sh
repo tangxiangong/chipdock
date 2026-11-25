@@ -6,6 +6,7 @@ mkdir -p "$output"
 version="$(python3 -c 'import json; print(json.load(open("linux/nsh.json"))["version"])')"
 package_id="$(cargo pkgid --locked -p chipdock-nsh)"
 [[ "$version" == "${package_id##*@}" ]] || { echo 'NSH and Cargo versions differ' >&2; exit 1; }
+desktop_entry=.build/NSHDesktopEntry
 case "$(uname -s)" in
   Darwin)
     if [[ -e "$output/ChipDock.app" ]]; then
@@ -17,7 +18,8 @@ case "$(uname -s)" in
     assets="$(mktemp -d)"
     trap 'rm -rf "$assets"' EXIT
     bash linux/build-macos-assets.sh "$assets"
-    nsh package linux --target macos --id com.xiaoyu.chipdock.gpui --icon "$assets/ChipDock.png" -o "$output"
+    python3 linux/ota/entry.py desktop "$desktop_entry"
+    nsh package "$desktop_entry" --target macos --icon "$assets/ChipDock.png" -o "$output"
     bash linux/build-macos-assets.sh "$assets" "$output/ChipDock.app"
     codesign --force --sign - "$output/ChipDock.app"
     codesign --verify --strict "$output/ChipDock.app"
@@ -32,6 +34,8 @@ case "$(uname -s)" in
     nsh package linux --target linux -o "$stage"
     bash linux/package.sh "$stage/ChipDock" "$version" "$(uname -m)" "$output"
     ;;
-  CYGWIN*|MINGW*|MSYS*) nsh package linux --target windows --id com.xiaoyu.chipdock.gpui -o "$output" ;;
+  CYGWIN*|MINGW*|MSYS*)
+    python3 linux/ota/entry.py desktop "$desktop_entry"
+    nsh package "$desktop_entry" --target windows -o "$output" ;;
   *) echo "Unsupported NSH build host: $(uname -s)" >&2; exit 1 ;;
 esac

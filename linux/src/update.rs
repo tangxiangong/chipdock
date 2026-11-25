@@ -47,7 +47,12 @@ impl Package {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
             Err(error) => return Err(error.into()),
         };
-        let config = Config::parse(&bytes)?;
+        let shipped = Config::parse(&bytes)?;
+        let mut shell: serde_json::Value =
+            serde_json::from_str(include_str!("../shell-updater.json"))?;
+        shell["id"] = shipped.id.into();
+        shell["version"] = shipped.version.into();
+        let config = Config::parse(&serde_json::to_vec(&shell)?)?;
         ensure!(config.public_key.is_some(), "更新清单缺少签名公钥");
         if Installation::current(&config.id, &bytes).is_none() {
             return Ok(None);

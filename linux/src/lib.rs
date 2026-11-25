@@ -112,8 +112,9 @@ fn verified_update_preview() -> Option<Result<update::Feed, String>> {
                 .take(1024 * 1024 + 1)
                 .read_to_end(&mut bytes)?;
             anyhow::ensure!(bytes.len() <= 1024 * 1024, "更新清单超过 1 MiB");
-            let config: serde_json::Value = serde_json::from_str(include_str!("../nsh.json"))?;
-            let public = config["updater"]["publicKey"]
+            let config: serde_json::Value =
+                serde_json::from_str(include_str!("../shell-updater.json"))?;
+            let public = config["publicKey"]
                 .as_str()
                 .ok_or_else(|| anyhow::anyhow!("缺少更新公钥"))?;
             nsh_updater::verify(

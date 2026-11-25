@@ -132,7 +132,8 @@ shellcheck linux/*.sh linux/tests/*.sh
 
   ```sh
   bash linux/build-macos-assets.sh .build/NSHMacAssets
-  nsh package linux --target macos --id com.xiaoyu.chipdock.gpui --icon .build/NSHMacAssets/ChipDock.png -o .build/NSHPackage
+  python3 linux/ota/entry.py desktop .build/NSHDesktopEntry
+  nsh package .build/NSHDesktopEntry --target macos --icon .build/NSHMacAssets/ChipDock.png -o .build/NSHPackage
   bash linux/build-macos-assets.sh .build/NSHMacAssets .build/NSHPackage/ChipDock.app
   codesign --force --sign - .build/NSHPackage/ChipDock.app
   codesign --verify --strict .build/NSHPackage/ChipDock.app
@@ -163,3 +164,19 @@ Re-run native-host logic checks after changes. GUI, focus, keyboard dispatch, li
 
 - Linux uses NSH whole-app updates with the existing Ed25519 trust key. The version in nsh.json must match the release tag. Release CI runs nsh update-manifest over both portable archives. GitHub publishes latest.json, latest.json.sig and the packages. The COS mirror verifies the signed manifest and archive hashes before advancing the live feed.
 - DEB and RPM distribute the runner alongside its bytecode and assets under /usr/lib/chipdock. Preserve the package IDs, desktop ID and historical preferences. Portable updates replace the application directory as a unit.
+
+### NSH OTA interface packages
+
+The mixed client checks its signed interface-package feed automatically after the main workbench opens and once per day while running. NSH stages the verified package in the user's app data, tries it on the next normal launch, and manages health confirmation and rollback. Existing installations need a shell containing the OTA trust root and checker before they can receive packages.
+
+Use the NSH CLI version pinned to the client. Build the two package identities into a fresh output directory with a strictly increasing OTA build number:
+
+```sh
+python3 linux/ota/build.py 2 dist/ota-build-2
+```
+
+The output is a branch tree with one directory per host ABI and application ID. Publish its contents together in one fast-forward commit to the `chipdock-ota` branch. Keep existing immutable numbered packages and other ABI directories. Before publication compare both current manifests on that branch and select a build higher than either published build. A package-only publication leaves the application version and its release feeds intact.
+
+The local signing directory `.chipdock-ota-keys/` is Git-ignored. Back up the root private key offline. The build uses the certified release key for the package and its feed signature. A signing machine may pass `--key <release.secret>`. Renew the scoped certificate with `nsh certify` before it expires. Changing the feed signing key requires shipping the corresponding public key in the shell.
+
+Keep native exports compatible within each ABI feed. For an incompatible native change, choose a fresh ABI feed path in `linux/nsh.json` and raise the shipped `build` above all packages previously published for the application ID so cached packages cannot override the new shell. `linux/shell-updater.json` owns the separate whole-app feed configuration.

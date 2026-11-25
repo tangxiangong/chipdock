@@ -1,0 +1,7 @@
+{
+  "url": "https://app-release-1302963684.cos.ap-guangzhou.myqcloud.com/chipdock/updates/latest.json",
+  "publicKey": "NgorrvaZPObmbOUEmKbbCvPbPqcD+kcw7E2NRTfxlKI=",
+  "channels": {
+    "github": "https://github.com/tangxiangong/chipdock/releases/latest/download/latest.json"
+  }
+}
