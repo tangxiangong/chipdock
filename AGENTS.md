@@ -138,7 +138,7 @@ shellcheck linux/*.sh linux/tests/*.sh
   codesign --force --sign - .build/NSHPackage/ChipDock.app
   codesign --verify --strict .build/NSHPackage/ChipDock.app
   ```
-- Run `bash linux/build.sh` on the target platform. NSH packages the runner, bundle and resources together. Linux then stages the entire app for DEB, RPM and the user-installable archive. The default output directory is `dist/gpui`. The macOS source package retains its separate identity and canonical icons.
+- Run `bash linux/build.sh` on the target platform. NSH packages the runner, bundle and resources together. Linux then stages the entire app for DEB, RPM and the user-installable archive. The default output directory is `dist/gpui`. The macOS source package uses the shared NSH identity and retains its canonical icons.
 - Ubuntu 24.04 native build packages: `python3 pkg-config clang cmake libudev-dev libgtk-4-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libssl-dev`. Packaging also requires `dpkg-dev rpm cpio desktop-file-utils shellcheck`. The Linux backend requires GTK 4.14 and links GStreamer, GStreamer App and GStreamer Audio even with the app's optional UI features reduced. Use a graphical Wayland or X11 session for Linux runtime acceptance. A Vulkan driver is no longer an application requirement.
 - DEB uses `dpkg-shlibdeps`; RPM keeps automatic ELF dependencies. Both additionally require GTK >= 4.14, GStreamer base plugins and the system icon theme. Both install under `/usr` with a package-managed marker; updates must use the package manager. Portable archives retain their user installer.
 - `.github/workflows/nsh.yml` validates the cross-platform NSH client: it builds Linux x86_64 and aarch64 packages and checks the shared source on native macOS and Windows runners. It validates extracted package metadata, GTK/GStreamer requirements, desktop resources and exact runner and bytecode bytes without installing packages, launching the GUI or accessing devices. Local host checks are not CI, installer, other-platform, GUI or hardware acceptance.
@@ -169,13 +169,14 @@ Re-run native-host logic checks after changes. GUI, focus, keyboard dispatch, li
 
 The mixed client checks its signed interface-package feed automatically after the main workbench opens and once per day while running. NSH stages the verified package in the user's app data, tries it on the next normal launch, and manages health confirmation and rollback. Existing installations need a shell containing the OTA trust root and checker before they can receive packages.
 
-Use the NSH CLI version pinned to the client. Build the two package identities into a fresh output directory with a strictly increasing OTA build number:
+Use the NSH CLI version pinned to the client. Desktop and Linux share the application ID in `linux/nsh.json` and one OTA feed per ABI. Install the Python preflight dependency, then check a candidate build without signing or producing output:
 
 ```sh
-python3 linux/ota/build.py 6 dist/ota-build-6
+python3 -m pip install -r linux/ota/requirements.txt
+python3 linux/ota/build.py 6 dist/ota-build-6 --dry-run
 ```
 
-The output is a branch tree with one directory per host ABI and application ID. Publish its contents together in one fast-forward commit to the `chipdock-ota` branch. Keep existing immutable numbered packages and other ABI directories. Before publication compare both current manifests on that branch and select a build higher than either published build. A package-only publication leaves the application version and its release feeds intact.
+For a confirmed first publication only, add `--first-release`. A missing manifest on an existing branch is an error unless a fresh ABI is explicitly requested with `--new-abi` and the shipped build exceeds previous ABI packages. After reviewing native compatibility, remove `--dry-run` and add `--abi-reviewed` to build locally. The preflight checks the signed manifest, package and reachable numbered package history. Keep immutable packages and other ABI directories; publish only in one fast-forward commit based on the reported branch head, after rechecking that head. A package-only publication leaves the application version and its release feeds intact. Run offline tests with `python3 -m unittest discover -s linux/ota -p 'test_*.py'`.
 
 The local signing directory `.chipdock-ota-keys/` is Git-ignored. Back up the root private key offline. The build uses the certified release key for the package and its feed signature. A signing machine may pass `--key <release.secret>`. Renew the scoped certificate with `nsh certify` before it expires. Changing the feed signing key requires shipping the corresponding public key in the shell.
 
