@@ -263,6 +263,7 @@ fn all_platforms_include_linux_packages_and_reject_altered_installers() {
 pub(crate) fn nsh_fixture(tag: &str) -> (tempfile::TempDir, UpdateKeys) {
     let (directory, keys) = fixture(tag);
     let value = tag.strip_prefix('v').unwrap();
+    let config: Value = serde_json::from_str(NSH_PROJECT_CONFIG).unwrap();
     let mut platforms = serde_json::Map::new();
     for arch in ["x86_64", "aarch64"] {
         let platform = format!("linux-{arch}");
@@ -281,13 +282,20 @@ pub(crate) fn nsh_fixture(tag: &str) -> (tempfile::TempDir, UpdateKeys) {
         }
     }
     let manifest = serde_json::to_vec(&json!({
-        "id": "com.xiaoyu.chipdock", "version": value, "platforms": platforms
+        "id": config["id"].as_str().unwrap(), "version": value, "platforms": platforms
     }))
     .unwrap();
     let signature = nsh_updater::sign(&STANDARD.encode([17; 32]), &manifest).unwrap();
     fs::write(directory.path().join("latest.json"), manifest).unwrap();
     fs::write(directory.path().join("latest.json.sig"), signature).unwrap();
     (directory, keys)
+}
+
+#[test]
+fn nsh_manifest_rejects_the_desktop_launcher_id() {
+    let bytes = br#"{"id":"com.xiaoyu.chipdock","version":"0.3.1","platforms":{}}"#;
+    let error = nsh_identity(bytes).unwrap_err();
+    assert_eq!(error.to_string(), "Unexpected NSH application ID");
 }
 
 #[test]

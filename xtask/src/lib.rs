@@ -24,6 +24,7 @@ use xml::parse_xml;
 pub type Result<T> = std::result::Result<T, Box<dyn Error + Send + Sync>>;
 pub const REPOSITORY: &str = "tangxiangong/chipdock";
 const SPARKLE: &str = "http://www.andymatuschak.org/xml-namespaces/sparkle";
+const NSH_PROJECT_CONFIG: &str = include_str!("../../linux/nsh.json");
 
 fn ensure(value: bool, message: &str) -> Result<()> {
     if value { Ok(()) } else { Err(message.into()) }
@@ -473,10 +474,11 @@ pub fn download_release(tag: &str, platform: Platform, directory: &Path) -> Resu
 
 fn nsh_identity(bytes: &[u8]) -> Result<Identity> {
     let manifest: nsh_updater::Manifest = serde_json::from_slice(bytes)?;
-    ensure(
-        manifest.id == "com.xiaoyu.chipdock",
-        "Unexpected NSH application ID",
-    )?;
+    let config: Value = serde_json::from_str(NSH_PROJECT_CONFIG)?;
+    let app_id = config["id"]
+        .as_str()
+        .ok_or("Missing application ID in linux/nsh.json")?;
+    ensure(manifest.id == app_id, "Unexpected NSH application ID")?;
     Ok(Identity {
         version: manifest.version,
         build: None,
