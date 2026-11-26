@@ -24,10 +24,10 @@ use crate::{
 use components::*;
 use nsh_base::theme;
 use nsh_core::prelude::*;
-use std::time::Duration;
+use std::{collections::VecDeque, time::Duration};
 
 #[derive(Clone, PartialEq)]
-struct StorageFailure {
+struct WorkbenchFailure {
     message: String,
     detail: String,
     recovery: String,
@@ -49,7 +49,7 @@ pub(super) struct Store {
     modal: Signal<bool>,
     file_dialog: Signal<bool>,
     native_sheet: Signal<bool>,
-    storage_failure: Signal<Option<StorageFailure>>,
+    pending_failures: Signal<VecDeque<WorkbenchFailure>>,
     failure_visible: Signal<bool>,
     terminal_state: Stored<std::collections::BTreeMap<u64, serial::TerminalState>>,
     tool: Signal<Option<&'static str>>,
@@ -131,11 +131,13 @@ impl Store {
             s.error(&detail);
             s.message = detail.clone();
         });
-        self.storage_failure.set(Some(StorageFailure {
-            message: response.message,
-            detail,
-            recovery: response.recovery,
-        }));
+        self.pending_failures.update(|queue| {
+            queue.push_back(WorkbenchFailure {
+                message: response.message,
+                detail,
+                recovery: response.recovery,
+            })
+        });
     }
     fn spawn(&self, future: impl std::future::Future<Output = ()> + 'static) {
         self.owner.run(|| {
@@ -221,7 +223,7 @@ pub fn workbench(
         modal: signal(false),
         file_dialog: signal(false),
         native_sheet: signal(false),
-        storage_failure: signal(None),
+        pending_failures: signal(VecDeque::new()),
         failure_visible: signal(false),
         terminal_state: stored(std::collections::BTreeMap::new()),
         tool: signal(None),
@@ -285,7 +287,17 @@ pub fn workbench(
     set_appearance(&appearance);
     set_interval(Duration::from_millis(100), move || {
         let changed = store.data.with(Workbench::tick);
-        if changed {
+        let removed = store.data.with(Workbench::check_probe_removal);
+        if removed {
+            store.pending_failures.update(|queue| {
+                queue.push_back(WorkbenchFailure {
+                    message: "烧录器已断开连接".into(),
+                    detail: String::new(),
+                    recovery: "请重新插入烧录器，再连接目标。".into(),
+                })
+            });
+        }
+        if changed || removed {
             store.revision.update(|n| *n += 1);
         }
         let (restart, plot) = store.data.with(|s| (s.restart, s.plot_request.take()));
@@ -336,8 +348,10 @@ pub fn workbench(
         if store.modal.get() || store.file_dialog.get() || store.failure_visible.get() {
             return;
         }
-        if let Some(failure) = store.storage_failure.get() {
-            store.storage_failure.set(None);
+        if let Some(failure) = store.pending_failures.with(|queue| queue.front().cloned()) {
+            store.pending_failures.update(|queue| {
+                queue.pop_front();
+            });
             store.failure_visible.set(true);
             store.modal.set(true);
             store.spawn(async move {

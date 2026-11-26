@@ -51,6 +51,7 @@ nsh-platform-macos = { version = "0.7", default-features = false, features = [
     "editor",
     "plot",
 ] }
+futures-core = "0.3"
 nusb = "0.2"
 object = "0.41"
 objc2 = { version = "0.6", default-features = false, features = ["std"] }

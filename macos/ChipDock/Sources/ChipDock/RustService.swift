@@ -18,6 +18,9 @@ final class RustService: @unchecked Sendable {
         }
     }
 
+    func probeRemoved() -> Bool { core.probeRemoved() }
+    func clearProbeWatch() { core.clearProbeWatch() }
+
     func takeEvents() -> [ProgressEvent] { core.takeEvents() }
 }
 

@@ -558,6 +558,7 @@ dependencies = [
  "chrono",
  "encoding_rs",
  "esp-idf-part",
+ "futures-core",
  "ihex",
  "interoptopus",
  "nusb",

@@ -25,6 +25,14 @@ impl ChipDockCore {
         self.service.list_probes()
     }
 
+    pub fn probe_removed(&self) -> bool {
+        self.service.probe_removed()
+    }
+
+    pub fn clear_probe_watch(&self) {
+        self.service.clear_probe_watch()
+    }
+
     pub fn connect_target(&self, request: ConnectRequest) -> Result<ConnectionInfo, CoreError> {
         self.service.connect_target(request)
     }

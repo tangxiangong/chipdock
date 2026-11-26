@@ -24,6 +24,7 @@ extension WorkbenchStore {
         speed = String(result.speedKhz ?? validSpeed ?? 4000)
         connectUnderReset = result.connectUnderReset
         connection = result
+        monitorConnectedProbe()
         targetInformation = result.targetInformation
         targetCandidates = []
         status = "\(targetName) 已就绪"

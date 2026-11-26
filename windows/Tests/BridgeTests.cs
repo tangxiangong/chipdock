@@ -9,6 +9,9 @@ internal static class BridgeTests
     {
         Check.That(System.Text.RegularExpressions.Regex.IsMatch(RustCore.Version(), @"^\d+\.\d+\.\d+$"), "core version crosses the bridge");
 
+        Interop.clear_probe_watch();
+        Check.That(!Interop.probe_removed(), "an inactive USB watch reports no removal");
+
         await SerialBridgeTests.Run();
 
         var chips = await RustCore.SearchChips("STM32F103C8", 10);

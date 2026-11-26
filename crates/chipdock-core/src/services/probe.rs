@@ -49,15 +49,68 @@ pub fn require_probe(identifier: Option<&str>) -> Result<String> {
     select_probe_identifier(identifier, &probes)
 }
 
+/// Tracks the physical USB attachment, including unplug/replug of the same probe.
+pub struct ProbeWatch {
+    events: nusb::hotplug::HotplugWatch,
+    device: nusb::DeviceId,
+}
+
+impl ProbeWatch {
+    fn new(identifier: &str) -> Option<Self> {
+        use nusb::MaybeFuture;
+        let mut selector: DebugProbeSelector = identifier.parse().ok()?;
+        // Driver channel numbers select a debug interface, not a physical device.
+        selector.interface = None;
+        let events = nusb::watch_devices().ok()?;
+        let mut matches = nusb::list_devices()
+            .wait()
+            .ok()?
+            .filter(|d| selector.matches(d));
+        let device = matches.next()?.id();
+        matches.next().is_none().then_some(Self { events, device })
+    }
+
+    pub fn removed(&mut self) -> bool {
+        use futures_core::Stream;
+        use std::{
+            pin::Pin,
+            task::{Context, Poll, Waker},
+        };
+        let mut cx = Context::from_waker(Waker::noop());
+        while let Poll::Ready(Some(event)) = Pin::new(&mut self.events).poll_next(&mut cx) {
+            if matches!(event, nusb::hotplug::HotplugEvent::Disconnected(id) if id == self.device) {
+                return true;
+            }
+        }
+        false
+    }
+}
+
 /// 打开探针会话以验证目标连接参数。
 pub fn connect_target(request: ConnectRequest) -> Result<ConnectionInfo> {
+    let identifier = connection_probe(&request)?;
+    attach_target(request, identifier)
+}
+
+pub fn connect_target_with_watch(
+    request: ConnectRequest,
+) -> Result<(ConnectionInfo, Option<ProbeWatch>)> {
+    let identifier = connection_probe(&request)?;
+    let watch = ProbeWatch::new(&identifier);
+    Ok((attach_target(request, identifier)?, watch))
+}
+
+fn connection_probe(request: &ConnectRequest) -> Result<String> {
     if request.target.speed_khz == Some(0) {
         return Err(AppError::InvalidUserInput {
             detail: "烧录速度必须大于 0 kHz".to_string(),
         });
     }
 
-    let probe_identifier = require_probe(request.probe.as_deref())?;
+    require_probe(request.probe.as_deref())
+}
+
+fn attach_target(request: ConnectRequest, probe_identifier: String) -> Result<ConnectionInfo> {
     let target_selector = request
         .target
         .chip

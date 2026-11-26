@@ -9,6 +9,7 @@ namespace ChipDock;
 internal sealed partial class WorkbenchStore
 {
     private readonly DispatcherQueue dispatcher = DispatcherQueue.GetForCurrentThread();
+    private DispatcherQueueTimer? probeWatchTimer;
     private bool didStart, notificationPending;
     private CancellationTokenSource? analysisCancellation;
     private int analysisRevision;
@@ -158,8 +159,28 @@ internal sealed partial class WorkbenchStore
 
     internal void RefreshRecentFileAvailability() => recentHistory.RefreshAvailability();
 
+    private void MonitorConnectedProbe()
+    {
+        if (probeWatchTimer is null)
+        {
+            probeWatchTimer = dispatcher.CreateTimer();
+            probeWatchTimer.Interval = TimeSpan.FromMilliseconds(500);
+            probeWatchTimer.Tick += (_, _) =>
+            {
+                if (Connection is null || IsBusy || !Interop.probe_removed()) return;
+                InvalidateConnection();
+                SetStatus("烧录器已断开连接");
+                AppendLog("连接", Status);
+                Failed?.Invoke(new UserFacingError(Status, "", "请重新插入烧录器，再连接目标。"));
+            };
+        }
+        probeWatchTimer.Start();
+    }
+
     internal void InvalidateConnection()
     {
+        probeWatchTimer?.Stop();
+        if (Connection is not null) Interop.clear_probe_watch();
         Connection = null;
         TargetInformation = null;
         TargetCandidates = [];

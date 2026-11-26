@@ -519,14 +519,16 @@ impl Workbench {
         };
         let is_preview = preview_request.is_some();
         let is_workbench = workbench_action.is_some();
+        if connect_request.is_some() {
+            // Release the previous watch before the worker can install the new one.
+            self.invalidate_target();
+        }
         match self.worker.sender.send(command) {
             Ok(()) => {
                 if let Some((id, action)) = workbench_action {
                     self.pending_workbench.insert(id, action);
                 }
                 if let Some(request) = connect_request {
-                    self.invalidate_target();
-                    self.chips.clear();
                     self.connect_request = Some(request);
                 }
                 if let Some(request) = preview_request {
@@ -574,9 +576,6 @@ impl Workbench {
                         });
                     }
                     return;
-                }
-                if connect_request.is_some() {
-                    self.invalidate_target();
                 }
                 if preview_request.is_some() {
                     let message = e.to_string();
@@ -959,6 +958,7 @@ impl Workbench {
             .as_ref()
             .is_some_and(|key| key != &self.preferences.target_key())
         {
+            self.worker.core.clear_probe_watch();
             return;
         }
         let was_installing = self.installing && lane == Lane::Update;
@@ -1364,7 +1364,20 @@ impl Workbench {
             self.message = "已发送".into();
         }
     }
+    pub fn check_probe_removal(&mut self) -> bool {
+        if self.target.is_none() || self.lane_busy(Lane::Probe) || !self.worker.core.probe_removed()
+        {
+            return false;
+        }
+        self.invalidate_target();
+        self.report("烧录器已断开连接");
+        true
+    }
+
     fn invalidate_target(&mut self) {
+        if self.target.is_some() {
+            self.worker.core.clear_probe_watch();
+        }
         self.chips.clear();
         self.identified = None;
         self.partial_target_information = None;

@@ -72,6 +72,24 @@ final class CoreIntegrationTests: XCTestCase {
     }
 
     @MainActor
+    func testProbeRemovalClearsTargetOnceAndPreservesFirmware() {
+        let store = WorkbenchStore()
+        store.connection = ConnectionInfo(probe: "probe", chip: "STM32F103VE", protocol: .swd,
+                                          speedKhz: 1000, connectUnderReset: false, targetInformation: nil)
+        let firmware = URL(fileURLWithPath: "/tmp/example.hex")
+        store.firmwareURL = firmware
+        store.handleProbeRemoval()
+        XCTAssertNil(store.connection)
+        XCTAssertFalse(store.canErase)
+        XCTAssertEqual(store.firmwareURL, firmware)
+        XCTAssertEqual(store.failure?.message, "烧录器已断开连接")
+
+        store.failure = nil
+        store.handleProbeRemoval()
+        XCTAssertNil(store.failure)
+    }
+
+    @MainActor
     func testFailedReconnectClearsPreviousConnectionBeforeReportingError() async {
         let store = WorkbenchStore()
         store.connection = ConnectionInfo(probe: "test-probe", chip: "STM32F103VE", protocol: .swd,

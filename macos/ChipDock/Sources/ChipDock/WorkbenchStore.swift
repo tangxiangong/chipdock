@@ -10,6 +10,7 @@ enum WorkbenchOperation: String {
 final class WorkbenchStore {
     @ObservationIgnored let rust = RustService()
     @ObservationIgnored var didStart = false
+    @ObservationIgnored var probeWatchTask: Task<Void, Never>?
     @ObservationIgnored var analysisTask: Task<Void, Never>?
     @ObservationIgnored var analysisRevision = UUID()
     @ObservationIgnored var recentFilesUpdateTask: Task<Void, Error>?
@@ -149,7 +150,31 @@ final class WorkbenchStore {
         })
     }
 
+    func monitorConnectedProbe() {
+        probeWatchTask?.cancel()
+        probeWatchTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .milliseconds(500)) } catch { return }
+                guard let self, connection != nil else { return }
+                guard !isBusy, rust.probeRemoved() else { continue }
+                handleProbeRemoval()
+                return
+            }
+        }
+    }
+
+    func handleProbeRemoval() {
+        guard connection != nil else { return }
+        invalidateConnection()
+        status = "烧录器已断开连接"
+        appendLog("连接", status)
+        failure = UserFacingError(message: status, detail: "", recovery: "请重新插入烧录器，再连接目标。")
+    }
+
     func invalidateConnection() {
+        probeWatchTask?.cancel()
+        probeWatchTask = nil
+        if connection != nil { rust.clearProbeWatch() }
         connection = nil
         targetInformation = nil
         targetCandidates = []

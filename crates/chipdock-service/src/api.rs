@@ -31,6 +31,7 @@ fn try_hardware_guard(lock: &Mutex<()>) -> Result<MutexGuard<'_, ()>> {
 #[derive(Default)]
 pub struct ChipDockCore {
     events: JobEvents,
+    probe_watch: Mutex<Option<services::probe::ProbeWatch>>,
 }
 
 impl ChipDockCore {
@@ -55,7 +56,23 @@ impl ChipDockCore {
 
     pub fn connect_target(&self, request: ConnectRequest) -> Result<ConnectionInfo> {
         let _guard = self.hardware_guard()?;
-        Ok(services::probe::connect_target(request)?)
+        self.clear_probe_watch();
+        let (info, watch) = services::probe::connect_target_with_watch(request)?;
+        *self.probe_watch.lock().unwrap_or_else(|e| e.into_inner()) = watch;
+        Ok(info)
+    }
+
+    pub fn probe_removed(&self) -> bool {
+        let mut watch = self.probe_watch.lock().unwrap_or_else(|e| e.into_inner());
+        if watch.as_mut().is_some_and(|w| w.removed()) {
+            *watch = None;
+            return true;
+        }
+        false
+    }
+
+    pub fn clear_probe_watch(&self) {
+        *self.probe_watch.lock().unwrap_or_else(|e| e.into_inner()) = None;
     }
 
     pub fn search_chips(&self, query: String, limit: u32) -> Result<Vec<String>> {

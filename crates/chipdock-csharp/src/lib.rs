@@ -310,6 +310,16 @@ pub fn list_probes() -> ffi::Result<Wire<ProbesResponse>, BridgeError> {
 }
 
 #[ffi]
+pub fn probe_removed() -> bool {
+    CORE.probe_removed()
+}
+
+#[ffi]
+pub fn clear_probe_watch() {
+    CORE.clear_probe_watch();
+}
+
+#[ffi]
 pub fn connect_target(
     input: Wire<ConnectRequest>,
 ) -> ffi::Result<Wire<ConnectionResponse>, BridgeError> {
@@ -482,6 +492,8 @@ pub fn inventory() -> RustInventory {
         .register(function!(serial::chipdock_serial_session_set_line))
         .register(function!(version))
         .register(function!(list_probes))
+        .register(function!(probe_removed))
+        .register(function!(clear_probe_watch))
         .register(function!(connect_target))
         .register(function!(search_chips))
         .register(function!(target_memory_map))

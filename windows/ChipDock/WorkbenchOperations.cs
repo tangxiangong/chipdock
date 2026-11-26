@@ -48,6 +48,7 @@ internal sealed partial class WorkbenchStore
         Speed = (result.speed_khz ?? ValidSpeed ?? 4000).ToString();
         ConnectUnderReset = result.connect_under_reset;
         Connection = result;
+        MonitorConnectedProbe();
         TargetInformation = result.target_information;
         TargetCandidates = [];
         SetStatus($"{TargetName} 已就绪");
