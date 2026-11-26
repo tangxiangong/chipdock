@@ -531,14 +531,14 @@ dependencies = [
 
 [[package]]
 name = "chipdock-bindgen"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "uniffi",
 ]
 
 [[package]]
 name = "chipdock-control"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "chipdock-core",
  "libc",
@@ -552,7 +552,7 @@ dependencies = [
 
 [[package]]
 name = "chipdock-core"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -579,7 +579,7 @@ dependencies = [
 
 [[package]]
 name = "chipdock-csharp"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "chipdock-core",
  "chipdock-service",
@@ -591,7 +591,7 @@ dependencies = [
 
 [[package]]
 name = "chipdock-csharp-bindgen"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "chipdock-csharp",
  "interoptopus_csharp",
@@ -599,7 +599,7 @@ dependencies = [
 
 [[package]]
 name = "chipdock-ffi"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "chipdock-core",
  "chipdock-service",
@@ -608,7 +608,7 @@ dependencies = [
 
 [[package]]
 name = "chipdock-nsh"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "anyhow",
  "base64 0.23.1",
@@ -638,7 +638,7 @@ dependencies = [
 
 [[package]]
 name = "chipdock-release-notes"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "anyhow",
  "tempfile",
@@ -646,7 +646,7 @@ dependencies = [
 
 [[package]]
 name = "chipdock-service"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "anyhow",
  "chipdock-control",
@@ -660,7 +660,7 @@ dependencies = [
 
 [[package]]
 name = "chipdock-tools"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "anyhow",
  "chipdock-control",
@@ -5619,7 +5619,7 @@ dependencies = [
 
 [[package]]
 name = "xtask"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "anyhow",
  "base64 0.23.1",
