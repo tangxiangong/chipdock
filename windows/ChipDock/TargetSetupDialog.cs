@@ -36,7 +36,7 @@ internal sealed class TargetSetupDialog : ContentDialog
 
     private bool ValidSpeed => uint.TryParse(speed.Text.Trim(), out var value) && value > 0;
     private bool ValidBaseAddress => string.IsNullOrWhiteSpace(baseAddress.Text) || ParseAddress(baseAddress.Text) is not null;
-    private bool CanConnect => !store.IsBusy && ValidSpeed && ValidBaseAddress && (!store.HasScanned || store.Probes.Count > 0);
+    private bool CanConnect => !store.IsBusy && ValidSpeed && ValidBaseAddress;
 
     internal TargetSetupDialog(WorkbenchStore store)
     {

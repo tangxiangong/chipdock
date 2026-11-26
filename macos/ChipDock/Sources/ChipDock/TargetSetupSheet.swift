@@ -8,7 +8,7 @@ struct TargetSetupSheet: View {
 
     private let speedPresets: [UInt32] = [100, 1000, 4000, 10000, 24000]
     private var canConnect: Bool {
-        !store.isBusy && draft.validSpeed != nil && validBaseAddress && (!store.hasScanned || !store.probes.isEmpty)
+        !store.isBusy && draft.validSpeed != nil && validBaseAddress
     }
 
     private var validBaseAddress: Bool {

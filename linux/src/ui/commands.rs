@@ -190,11 +190,7 @@ fn can_connect_target(store: Store) -> bool {
     if target_sheet(store) {
         target::can_connect_from_menu(store)
     } else {
-        probe_idle(store)
-            && store.read(|state| {
-                state.preferences.target().is_ok()
-                    && (!state.probes_scanned || !state.probes.is_empty())
-            })
+        probe_idle(store) && store.read(|state| state.preferences.target().is_ok())
     }
 }
 fn can_read(store: Store) -> bool {
@@ -369,8 +365,6 @@ fn menu_key(store: Store, mode: Signal<&'static str>, context: Context) -> MenuK
                 state.can_quit(),
                 state.lane_busy(Lane::Discovery),
                 state.lane_busy(Lane::Update),
-                state.probes_scanned,
-                state.probes.is_empty(),
                 state
                     .active_session()
                     .is_some_and(|session| session.records().next().is_some()),

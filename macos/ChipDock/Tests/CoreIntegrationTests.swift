@@ -34,6 +34,17 @@ final class CoreIntegrationTests: XCTestCase {
     }
 
     @MainActor
+    func testConnectRemainsAvailableAfterEmptyProbeScan() {
+        let store = WorkbenchStore()
+        store.hasScanned = true
+        store.probes = []
+        store.speed = "1000"
+        XCTAssertTrue(store.canConnect)
+        store.speed = "0"
+        XCTAssertFalse(store.canConnect)
+    }
+
+    @MainActor
     func testConnectionFailureIsPresentedInTargetSetupWithoutLosingConfiguration() async throws {
         let store = WorkbenchStore()
         store.showTargetSetup = true

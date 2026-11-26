@@ -69,7 +69,7 @@ final class WorkbenchStore {
     var effectiveChip: String { connection?.chip ?? chip }
     var targetName: String { targetInformation?.deviceType ?? connection?.chip ?? (chip.isEmpty ? "自动识别" : chip) }
     var validSpeed: UInt32? { UInt32(speed).flatMap { $0 > 0 ? $0 : nil } }
-    var canConnect: Bool { !isBusy && validSpeed != nil && (!hasScanned || !probes.isEmpty) }
+    var canConnect: Bool { !isBusy && validSpeed != nil }
     var canFlash: Bool {
         !isBusy && connection != nil && firmwareUsage != nil && firmwareError == nil && !analyzingFirmware
             && (!isBin || binBaseAddress.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || parseAddress(binBaseAddress) != nil)

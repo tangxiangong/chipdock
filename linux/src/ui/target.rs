@@ -99,9 +99,7 @@ pub(super) fn can_connect_from_menu(store: Store) -> bool {
     store
         .target_draft
         .with(|draft| draft.is_some_and(|draft| draft.with(valid_target)))
-        && store.read(|state| {
-            !state.lane_busy(Lane::Probe) && (!state.probes_scanned || !state.probes.is_empty())
-        })
+        && store.read(|state| !state.lane_busy(Lane::Probe))
 }
 
 pub(super) fn connect_from_menu(store: Store) -> bool {

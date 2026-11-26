@@ -105,7 +105,7 @@ internal sealed partial class WorkbenchStore
     internal string EffectiveChip => Connection?.chip ?? Chip;
     internal string TargetName => TargetInformation?.device_type ?? Connection?.chip ?? (Chip.Length == 0 ? "自动识别" : Chip);
     internal uint? ValidSpeed => uint.TryParse(Speed, out var value) && value > 0 ? value : null;
-    internal bool CanConnect => !IsBusy && ValidSpeed is not null && (!HasScanned || Probes.Count > 0);
+    internal bool CanConnect => !IsBusy && ValidSpeed is not null;
 
     internal bool CanFlash =>
         !IsBusy && Connection is not null && FirmwareUsage is not null && FirmwareError is null && !AnalyzingFirmware
