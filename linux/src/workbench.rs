@@ -371,6 +371,11 @@ impl Workbench {
         if !self.installing {
             let changed = self.preferences.flag(key) != value;
             self.preferences.flags.insert(key.into(), value);
+            if matches!(key, "verify" | "reset") {
+                self.preferences
+                    .flags
+                    .insert(format!("default_{key}"), value);
+            }
             if changed && key == "under_reset" {
                 self.invalidate_target();
             }
@@ -1590,6 +1595,25 @@ mod tests {
         state.worker.sender = sender;
         (state, commands)
     }
+    #[test]
+    fn saved_flash_options_include_defaults_for_the_next_launch() {
+        let (mut state, _commands) = state();
+        state.set("erase", "skip".into());
+        state.flag("dry_run", true);
+        state.flag("verify", false);
+        state.flag("reset", false);
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("prefs.json");
+        state.path = Some(path.clone());
+        state.save().unwrap();
+        let saved = Preferences::load(&path).unwrap();
+        assert!(saved.options().skip_erase && saved.options().dry_run);
+        for key in ["verify", "reset", "default_verify", "default_reset"] {
+            assert!(!saved.flag(key), "{key}");
+        }
+    }
+
     fn status(generation: u64, connected: bool) -> SerialStatus {
         serde_json::from_value(json!({
             "connected": connected, "jobDone": 0, "jobTotal": 0, "uptimeMs": 0,

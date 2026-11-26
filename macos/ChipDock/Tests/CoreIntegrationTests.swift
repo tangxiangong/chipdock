@@ -11,6 +11,31 @@ final class CoreIntegrationTests: XCTestCase {
         XCTAssertTrue(support.path.hasPrefix(home + "/"), "Application storage must remain inside the XCTest home")
     }
 
+    @MainActor
+    func testFlashOptionsPersistAcrossWorkbenches() {
+        let defaults = UserDefaults.standard
+        let keys = ["defaultVerify", "defaultReset", "flashDryRun", "flashEraseStrategy"]
+        let previous = keys.map { defaults.object(forKey: $0) }
+        defer {
+            for (key, value) in zip(keys, previous) { defaults.set(value, forKey: key) }
+        }
+        for key in keys { defaults.removeObject(forKey: key) }
+        defaults.set("unknown", forKey: "flashEraseStrategy")
+        let store = WorkbenchStore()
+        XCTAssertEqual(store.eraseStrategy, .automatic)
+        store.eraseStrategy = .skip
+        store.verify = false
+        store.resetAfter = false
+        store.dryRun = true
+
+        let restored = WorkbenchStore().flashOptions
+        XCTAssertTrue(restored.skipErase)
+        XCTAssertFalse(restored.allowEraseAll)
+        XCTAssertFalse(restored.verify)
+        XCTAssertFalse(restored.resetAfter)
+        XCTAssertTrue(restored.dryRun)
+    }
+
     func testGeneratedBindingsSearchAndMemoryMap() throws {
         let core = ChipDockCore()
         XCTAssertEqual(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String, core.version())

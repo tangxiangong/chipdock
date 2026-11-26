@@ -32,6 +32,19 @@ internal static class AppSettings
         set => Set("defaultReset", value.ToString());
     }
 
+    internal static bool FlashDryRun
+    {
+        get => bool.TryParse(Values.GetValueOrDefault("flashDryRun"), out var value) && value;
+        set => Set("flashDryRun", value.ToString());
+    }
+
+    internal static EraseStrategy FlashEraseStrategy
+    {
+        get => Enum.TryParse<EraseStrategy>(Values.GetValueOrDefault("flashEraseStrategy"), out var value)
+            && Enum.IsDefined(value) ? value : EraseStrategy.Automatic;
+        set => Set("flashEraseStrategy", value.ToString());
+    }
+
     // Like Sparkle's SUEnableAutomaticChecks and SUAutomaticallyUpdate on macOS, both default to on.
     internal static bool AutomaticUpdateChecks
     {

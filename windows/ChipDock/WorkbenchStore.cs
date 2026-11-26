@@ -89,10 +89,60 @@ internal sealed partial class WorkbenchStore
         set { if (field != value) { field = value; if (FirmwarePath is not null) ScheduleFirmwareAnalysis(); Notify(); } }
     } = "";
 
-    internal bool Verify { get; set { field = value; Notify(); } } = AppSettings.DefaultVerify;
-    internal bool ResetAfter { get; set { field = value; Notify(); } } = AppSettings.DefaultReset;
-    internal bool DryRun { get; set { field = value; Notify(); } }
-    internal EraseStrategy EraseStrategy { get; set { field = value; Notify(); } }
+    internal bool Verify
+    {
+        get;
+        set
+        {
+            if (field == value && AppSettings.DefaultVerify == value) return;
+            field = value;
+            SaveFlashOption(() => AppSettings.DefaultVerify = value);
+        }
+    } = AppSettings.DefaultVerify;
+
+    internal bool ResetAfter
+    {
+        get;
+        set
+        {
+            if (field == value && AppSettings.DefaultReset == value) return;
+            field = value;
+            SaveFlashOption(() => AppSettings.DefaultReset = value);
+        }
+    } = AppSettings.DefaultReset;
+
+    internal bool DryRun
+    {
+        get;
+        set
+        {
+            if (field == value && AppSettings.FlashDryRun == value) return;
+            field = value;
+            SaveFlashOption(() => AppSettings.FlashDryRun = value);
+        }
+    } = AppSettings.FlashDryRun;
+
+    internal EraseStrategy EraseStrategy
+    {
+        get;
+        set
+        {
+            if (field == value && AppSettings.FlashEraseStrategy == value) return;
+            field = value;
+            SaveFlashOption(() => AppSettings.FlashEraseStrategy = value);
+        }
+    } = AppSettings.FlashEraseStrategy;
+
+    private void SaveFlashOption(Action save)
+    {
+        try { save(); }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            Report(error, "保存烧录选项");
+        }
+        Notify();
+    }
+
     internal List<ProfileRecord> Profiles { get; private set; } = [];
     internal List<RecentFirmwareRecord> RecentFiles => recentHistory.Files;
     internal HashSet<string> MissingRecentPaths => recentHistory.MissingPaths;

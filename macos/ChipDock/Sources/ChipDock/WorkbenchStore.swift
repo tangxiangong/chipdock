@@ -50,10 +50,18 @@ final class WorkbenchStore {
     var analyzingFirmware = false
     var firmwareError: String?
     var binBaseAddress = ""
-    var verify = UserDefaults.standard.object(forKey: "defaultVerify") as? Bool ?? true
-    var resetAfter = UserDefaults.standard.object(forKey: "defaultReset") as? Bool ?? true
-    var dryRun = false
-    var eraseStrategy: EraseStrategy = .automatic
+    var verify = UserDefaults.standard.object(forKey: "defaultVerify") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(verify, forKey: "defaultVerify") }
+    }
+    var resetAfter = UserDefaults.standard.object(forKey: "defaultReset") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(resetAfter, forKey: "defaultReset") }
+    }
+    var dryRun = UserDefaults.standard.bool(forKey: "flashDryRun") {
+        didSet { UserDefaults.standard.set(dryRun, forKey: "flashDryRun") }
+    }
+    var eraseStrategy = EraseStrategy(rawValue: UserDefaults.standard.string(forKey: "flashEraseStrategy") ?? "") ?? .automatic {
+        didSet { UserDefaults.standard.set(eraseStrategy.rawValue, forKey: "flashEraseStrategy") }
+    }
     var profiles: [SavedProfile] = []
     var recentFiles: [RecentFirmware] = [] {
         didSet { refreshRecentFileAvailability() }
